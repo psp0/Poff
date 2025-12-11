@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+  statuses: write
+  deployments: write
+  security-events: write
+
 env:
   NODE_VERSION: ${{ vars.NODE_VERSION }}
   TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}

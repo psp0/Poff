@@ -37,6 +37,10 @@ on:
         default: 'up'
         type: string
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   NODE_VERSION: ${{ vars.NODE_VERSION }}
