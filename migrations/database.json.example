@@ -1,0 +1,20 @@
+{
+  "dev": {
+    "driver": "mysql",
+    "host": "localhost",
+    "port": 3306,
+    "database": "pokemon_db",
+    "user": "your-username",
+    "password": "your-password",
+    "multipleStatements": true
+  },
+  "prod": {
+    "driver": "mysql",
+    "host": "localhost",
+    "port": 3306,
+    "database": "pokemon_db",
+    "user": "your-username",
+    "password": "your-password",
+    "multipleStatements": true
+  }
+}

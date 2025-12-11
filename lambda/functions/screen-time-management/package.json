@@ -1,0 +1,27 @@
+{
+  "name": "screen-time-management-lambda",
+  "version": "1.0.0",
+  "description": "Screen Time Management Lambda Function",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "build": "npm install --production",
+    "deploy": "zip -r screen-time-management.zip . -x '*.test.js' 'node_modules/.cache/*'"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "screen-time",
+    "digital-wellness",
+    "tracking"
+  ],
+  "author": "Pokemon Collection Team",
+  "license": "MIT"
+}

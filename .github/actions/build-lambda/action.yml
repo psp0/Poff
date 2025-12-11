@@ -1,0 +1,66 @@
+name: 'Build Lambda Packages'
+description: 'Builds and packages Lambda functions with shared dependencies'
+inputs:
+  node-version:
+    description: 'Node.js version to use'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+        cache-dependency-path: lambda/shared/package-lock.json
+
+    - name: Install shared dependencies
+      shell: bash
+      run: |
+        echo "Installing shared dependencies..."
+        cd lambda/shared
+        npm ci --production
+
+    - name: Build Lambda packages
+      shell: bash
+      run: |
+        cd lambda
+        
+        # Create deployment packages for each function
+        for dir in functions/*/; do
+          if [ -d "$dir" ]; then
+            function_name=$(basename "$dir")
+            echo "Building $function_name..."
+            
+            # Create package directory
+            mkdir -p "packages/$function_name"
+            
+            # Copy function code
+            cp -r "$dir"* "packages/$function_name/"
+            
+            # Create node_modules directory and install shared as a local package
+            mkdir -p "packages/$function_name/node_modules"
+            
+            # Copy shared modules to the appropriate location
+            # Lambda requires shared code accessible via require paths
+            cp -r shared/*.js "packages/$function_name/"
+            cp -r shared/node_modules/* "packages/$function_name/node_modules/" 2>/dev/null || true
+            
+            # Install function-specific dependencies
+            cd "packages/$function_name"
+            
+            if [ -f "package.json" ]; then
+              echo "Installing function dependencies..."
+              npm install --production --no-save
+            fi
+            
+            # Create ZIP package
+            zip -r "../${function_name}.zip" . \
+              -x "*.test.js" "*.spec.js" "test/*" "tests/*" \
+              -x "package-lock.json" "package.json"
+            
+            cd ../..
+          fi
+        done
+        echo "✅ Lambda packages built successfully"

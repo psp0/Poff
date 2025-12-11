@@ -1,0 +1,23 @@
+{
+    "name": "pokehabit-api-server",
+    "version": "1.0.0",
+    "description": "Local development API server for Pokehabit",
+    "main": "server.js",
+    "scripts": {
+        "dev": "nodemon src/server.js",
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "express": "^4.18.2",
+        "mysql2": "^3.6.5",
+        "cors": "^2.8.5",
+        "dotenv": "^16.3.1",
+        "jsonwebtoken": "^9.0.2",
+        "web-push": "^3.6.6",
+        "bcryptjs": "^2.4.3",
+        "joi": "^17.11.0"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.1"
+    }
+}

@@ -1,0 +1,20 @@
+{
+    "name": "pokemon-seeder",
+    "version": "1.0.0",
+    "description": "Pokemon data seeder for both local MySQL and RDS MySQL",
+    "main": "index.js",
+    "scripts": {
+        "seed": "node index.js",
+        "seed:local": "NODE_ENV=development node index.js",
+        "seed:rds": "NODE_ENV=production node index.js",
+        "seed:holidays": "node holiday-seeder.js",
+        "seed:holidays:local": "NODE_ENV=development node holiday-seeder.js",
+        "seed:holidays:rds": "NODE_ENV=production node holiday-seeder.js"
+    },
+    "dependencies": {
+        "mysql2": "^3.6.0",
+        "aws-sdk": "^2.1491.0",
+        "dotenv": "^16.3.1",
+        "axios": "^1.6.0"
+    }
+}

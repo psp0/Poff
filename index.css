@@ -1,0 +1,6167 @@
+/* Pokemon Font */
+@font-face {
+  font-family: 'Pokemon';
+  src: url('fonts/pokemon-bw.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Modern Color Palette (Inter/Tailwind inspired) */
+  --primary-color: #4F46E5;
+  /* Indigo 600 */
+  --primary-hover: #4338CA;
+  /* Indigo 700 */
+  --secondary-color: #10B981;
+  /* Emerald 500 */
+  --accent-color: #F59E0B;
+  /* Amber 500 */
+  --danger-color: #EF4444;
+  /* Red 500 */
+
+  /* Backgrounds */
+  --bg-app: #F3F4F6;
+  /* Gray 100 */
+  --bg-card: #FFFFFF;
+  --bg-input: #F9FAFB;
+  /* Gray 50 */
+
+  /* Text */
+  --text-primary: #111827;
+  /* Gray 900 */
+  --text-secondary: #4B5563;
+  /* Gray 600 */
+  --text-tertiary: #9CA3AF;
+  /* Gray 400 */
+
+  /* Borders */
+  --border-color: #E5E7EB;
+  /* Gray 200 */
+
+  /* Spacing & Layout */
+  --safe-area-top: env(safe-area-inset-top);
+  --safe-area-bottom: env(safe-area-inset-bottom);
+  --header-height: 60px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Tab Bar */
+  --tab-bar-height: 60px;
+
+  /* Safe Areas */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* App Container */
+#app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.full-height-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Tab Views */
+#tab-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.tab-view {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background-color: var(--bg-app);
+  display: none;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tab-view.active {
+  display: block;
+  opacity: 1;
+  z-index: 1;
+}
+
+/* Home Tab Specific Styles */
+#view-home,
+#view-eggs,
+#view-screentime,
+#view-exercise {
+  background-color: #CD5C5C;
+  /* IndianRed */
+  overflow-x: hidden;
+}
+
+/* Tab Bar */
+#tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: calc(var(--tab-bar-height) + var(--safe-area-bottom));
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 0.5px solid rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  padding-top: 0;
+  padding-bottom: var(--safe-area-bottom);
+  box-sizing: border-box;
+  z-index: 1000;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: var(--tab-bar-height);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.tab-item.active {
+  color: var(--primary-color);
+}
+
+.tab-icon {
+  margin-top: 0;
+}
+
+.tab-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Components */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin-top: 0;
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+h2 {
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+h3 {
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="tel"],
+select,
+textarea {
+  width: 100%;
+  padding: 12px 16px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* iOS에서 select 박스가 얇아지는 문제 해결 */
+select {
+  min-height: 44px;
+  line-height: 1.5;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234B5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+button {
+  width: 100%;
+  padding: 12px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+}
+
+.btn-success {
+  background-color: var(--secondary-color);
+  color: white;
+}
+
+.btn-danger {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+/* Adapted Existing Styles */
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  /* Adjusted for mobile */
+  gap: 12px;
+}
+
+
+
+
+
+/* 기본 스타일 */
+/* Removed duplicate body styles */
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* 로그인 섹션 - 기본 스타일 (새 스타일로 대체됨: 파일 하단 참조) */
+/* .auth-section {
+  background: var(--bg-card);
+  padding: 40px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  margin-bottom: 30px;
+  border: 1px solid var(--border-color);
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+} */
+
+.auth-section h2 {
+  text-align: center;
+  margin-bottom: 25px;
+  color: #4a5568;
+  font-size: 24px;
+}
+
+.auth-section input {
+  width: 100%;
+  padding: 12px 16px;
+  margin: 8px 0;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+}
+
+.auth-section input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* 콘텐츠 섹션 */
+.content-section {
+  background: var(--bg-card);
+  padding: 24px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 24px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  /* For absolute positioning of children */
+}
+
+.content-section h2,
+.content-section h3 {
+  color: #4a5568;
+  margin-bottom: 20px;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 컬렉션 필터 */
+.collection-filters {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #4a5568;
+  margin: 0;
+}
+
+.filter-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* Card Box Style (replaces inline styles) */
+.card-box {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+  position: relative;
+  /* For absolute positioning of children */
+}
+
+.refresh-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+
+.refresh-btn.corner-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  margin: 0;
+  z-index: 10;
+  background-color: white;
+  /* Ensure it stands out */
+}
+
+.refresh-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+.refresh-btn:hover {
+  background-color: var(--bg-input);
+  color: var(--primary-color);
+  transform: rotate(180deg);
+  border-color: var(--primary-color);
+  box-shadow: none;
+}
+
+.refresh-btn.refreshing {
+  animation: spin-refresh 0.8s linear infinite;
+  pointer-events: none;
+}
+
+/* 포켓몬 컬렉션 그리드 */
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+  overflow: visible;
+}
+
+/* 내 포켓몬 도감 아이콘 그리드 (조밀하게 배치) */
+#iconCollectionGrid {
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 2px;
+}
+
+.pokemon-card {
+  background: white;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.pokemon-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-color);
+}
+
+.pokemon-card img {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  margin-bottom: 12px;
+  transition: transform 0.3s ease;
+}
+
+.pokemon-card:hover img {
+  transform: scale(1.1);
+}
+
+.pokemon-card .name {
+  font-weight: 700;
+  font-size: 16px;
+  color: #2d3748;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.pokemon-card .types {
+  color: #718096;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.pokemon-card .shiny-badge {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+  color: #2d3748;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  display: inline-block;
+}
+
+.pokemon-card .date {
+  color: #a0aec0;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.pokemon-card .reason {
+  color: #4a5568;
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* 아이콘 카드 스타일 */
+.icon-card {
+  background: white;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.icon-card.complete {
+  border-color: var(--accent-color);
+  background: #FFFBEB;
+  /* Amber 50 */
+}
+
+.icon-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.icon-card img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  margin-bottom: 8px;
+  transition: transform 0.3s ease;
+  image-rendering: pixelated;
+}
+
+.icon-card:hover img {
+  transform: scale(1.15);
+}
+
+.icon-card .badges {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  min-height: 20px;
+}
+
+.icon-card .complete-badge {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+  color: #2d3748;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-block;
+}
+
+.icon-card .shiny-complete-badge {
+  background: linear-gradient(135deg, #e91e63 0%, #9c27b0 100%);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-block;
+}
+
+.icon-card .progress-container {
+  margin-top: 8px;
+  background: #e2e8f0;
+  border-radius: 10px;
+  height: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.icon-card .progress-bar {
+  height: 100%;
+  background-color: var(--primary-color);
+  border-radius: 10px;
+  transition: width 0.5s ease;
+  position: relative;
+}
+
+.icon-card .progress-bar.complete {
+  background: var(--accent-color);
+}
+
+.icon-card .progress-text {
+  font-size: 11px;
+  color: #4a5568;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* 스크린타임 섹션 */
+.screen-time-section {
+  background: white;
+  border: 1px solid var(--border-color);
+}
+
+.screen-time-form {
+  background: white;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 날짜 선택 행 */
+.screen-time-date-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+}
+
+.screen-time-date-row input[type="date"] {
+  padding: 10px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 15px;
+  color: #374151;
+  background: #f9fafb;
+  transition: all 0.2s ease;
+}
+
+.screen-time-date-row input[type="date"]:focus {
+  outline: none;
+  border-color: #4F46E5;
+  background: white;
+}
+
+.date-hint {
+  font-size: 13px;
+  color: #9CA3AF;
+}
+
+/* 어제 날짜 고정 표시 */
+.date-display {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 12px;
+  border: 1px solid #bae6fd;
+}
+
+/* 시간 입력 영역 */
+.screen-time-input-area {
+  text-align: center;
+}
+
+/* 스크린타임 코드 입력 (휴대폰 인증코드 스타일) */
+.screen-time-code-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.screen-time-code-container input {
+  font-size: 23px;
+}
+
+.screen-time-digit {
+  width: 52px;
+  height: 64px;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f9fafb;
+  color: #111827;
+  transition: all 0.2s ease;
+  caret-color: #4F46E5;
+}
+
+.screen-time-digit:focus {
+  outline: none;
+  border-color: #4F46E5;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.screen-time-digit:not(:placeholder-shown) {
+  background: white;
+  border-color: #4F46E5;
+}
+
+.screen-time-digit::placeholder {
+  color: #d1d5db;
+  font-weight: 400;
+}
+
+.screen-time-preview {
+  text-align: center;
+  font-size: 15px;
+  color: #4F46E5;
+  font-weight: 600;
+  min-height: 24px;
+  margin: 12px;
+}
+
+/* 10시간 이상 토글 스위치 */
+.screen-time-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.screen-time-toggle:hover {
+  background: #f1f5f9;
+}
+
+.screen-time-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: #d1d5db;
+  border-radius: 12px;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggle-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.screen-time-toggle input:checked+.toggle-slider {
+  background: #4F46E5;
+}
+
+.screen-time-toggle input:checked+.toggle-slider::after {
+  transform: translateX(20px);
+}
+
+.toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.toggle-label small {
+  color: #9CA3AF;
+  font-weight: 400;
+}
+
+/* Skeleton Loading */
+.skeleton {
+  background: #f0f0f0;
+  background-image: linear-gradient(90deg,
+      #f0f0f0 0px,
+      #e0e0e0 50%,
+      #f0f0f0 100%);
+  background-size: 200px 100%;
+  background-repeat: no-repeat;
+  display: inline-block;
+  border-radius: 4px;
+  animation: skeleton-loading 1.5s infinite ease-in-out;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200px 0;
+  }
+
+  100% {
+    background-position: calc(100% + 200px) 0;
+  }
+}
+
+/* Image Transitions */
+.pokemon-sprite-image {
+  transition: opacity 0.3s ease-in-out;
+  opacity: 0;
+}
+
+.pokemon-sprite-image.loaded {
+  opacity: 1;
+}
+
+/* Content Fade Transition */
+.pokemon-display-area {
+  transition: opacity 0.2s ease-in-out;
+  opacity: 1;
+}
+
+.pokemon-display-area.fading {
+  opacity: 0;
+  pointer-events: none;
+  /* 로딩 중 클릭 방지 */
+}
+
+/* Evolution Tree Skeleton */
+.evolution-skeleton-level {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+}
+
+.evolution-skeleton-item {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #e2e8f0;
+}
+
+.evolution-skeleton-text {
+  width: 50px;
+  height: 10px;
+  margin-top: 5px;
+  background-color: #e2e8f0;
+  border-radius: 4px;
+}
+
+.evolution-level.skeleton-level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+}
+
+/* 저장 버튼 */
+.screen-time-form .submit-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  margin-top: 4px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.form-group input[type="date"],
+.form-group input[type="number"] {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.checkbox-group:hover {
+  background: #edf2f7;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+  color: white;
+  border: none;
+  padding: 14px 28px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+/* 게스트 모드 비활성화 버튼 */
+.submit-btn.guest-disabled {
+  background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.submit-btn.guest-disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.submit-btn.guest-disabled::after {
+  content: ' (체험모드)';
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* 게스트 모드 안내 배너 */
+.guest-mode-banner {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 12px;
+  display: none;
+}
+
+.guest-mode-banner.visible {
+  display: block;
+}
+
+/* 검증 섹션 */
+.validation-section {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+}
+
+.validate-btn {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+  border: none;
+  padding: 14px 28px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.validate-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+/* 결과 메시지 */
+.result-message {
+  padding: 16px;
+  border-radius: 8px;
+  margin-top: 15px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.result-success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.result-warning {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+}
+
+.result-error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.result-info {
+  background: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #bee5eb;
+}
+
+/* 모달 */
+body.modal-open {
+  overflow: hidden;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 2000;
+  backdrop-filter: blur(5px);
+  animation: fade-in 0.2s ease-out;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 500px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: modal-fade-in 0.2s ease-out;
+  word-break: keep-all;
+}
+
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0;
+}
+
+.close-btn {
+  background: #e2e8f0;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 23px;
+  color: #4a5568;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background: #cbd5e0;
+  transform: scale(1.1);
+}
+
+.favorite-section {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.favorite-btn {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.favorite-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+}
+
+.favorite-status {
+  font-size: 14px;
+  color: #718096;
+  font-weight: 500;
+}
+
+.modal-images {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 20px;
+}
+
+.image-container {
+  text-align: center;
+}
+
+.image-container p {
+  margin: 10px 0 15px 0;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.modal-images img {
+  width: 160px;
+  height: 160px;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+
+
+/* 운동 진행률 대시보드 스타일 */
+.progress-stat-card {
+  background: white;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.progress-stat-number {
+  font-size: 24px;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 5px;
+}
+
+.progress-stat-label {
+  font-size: 12px;
+  color: #718096;
+  font-weight: 600;
+}
+
+.muscle-progress-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+.muscle-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.muscle-progress-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 16px;
+}
+
+.muscle-progress-status {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-loss {
+  background: #e2e8f0;
+  color: #4a5568;
+}
+
+.badge-maintenance {
+  background: #fefcbf;
+  color: #b7791f;
+}
+
+.badge-stimulation {
+  background: #c6f6d5;
+  color: #2f855a;
+}
+
+.badge-optimal {
+  background: #e9d8fd;
+  color: #6b46c1;
+}
+
+.badge-limit {
+  background: #feebc8;
+  color: #dd6b20;
+}
+
+.badge-excess {
+  background: #fed7d7;
+  color: #c53030;
+}
+
+.progress-bar-container {
+  background: #e2e8f0;
+  border-radius: 10px;
+  height: 8px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.5s ease;
+}
+
+.progress-bar.status-loss {
+  background: #cbd5e0;
+}
+
+.progress-bar.status-maintenance {
+  background: #ecc94b;
+}
+
+.progress-bar.status-stimulation {
+  background: #48bb78;
+}
+
+.progress-bar.status-optimal {
+  background: #9f7aea;
+}
+
+.progress-bar.status-limit {
+  background: #ed8936;
+}
+
+.progress-bar.status-excess {
+  background: #f56565;
+}
+
+.progress-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #718096;
+}
+
+/* 로그아웃 버튼 */
+.logout-btn {
+  background-color: var(--danger-color);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.logout-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(229, 62, 62, 0.3);
+}
+
+/* 진화도 다이어그램 모달 */
+.pokemon-detail-content {
+  max-width: 900px;
+  width: 95%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Prevent entire modal from scrolling */
+}
+
+
+
+.pokemon-detail-content .pokemon-display-area {
+  flex-shrink: 0;
+  /* Pokemon display stays fixed */
+}
+
+.pokemon-detail-content .pokedex-description {
+  flex-shrink: 0;
+  /* Description info stays fixed */
+}
+
+/* 해시태그 스타일 */
+.pokemon-hashtags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hashtag {
+  background-color: #f1f5f9;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 20px;
+  transition: all 0.2s ease;
+  font-family: 'Pokemon', sans-serif;
+}
+
+.hashtag:hover {
+  background-color: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+.hashtag.legendary {
+  background: linear-gradient(135deg, #fcd34d 0%, #fbbf24 100%);
+  color: #92400e;
+}
+
+.hashtag.mythical {
+  background: linear-gradient(135deg, #f472b6 0%, #db2777 100%);
+  color: #831843;
+}
+
+.hashtag.ultrabeast {
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+  color: #312e81;
+}
+
+.hashtag.paradox {
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  color: #4c1d95;
+}
+
+/* 진화 섹션 */
+.evolution-section {
+  margin-top: 24px;
+  background: #ffffff;
+  border-radius: 16px;
+}
+
+.evolution-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px 8px 4px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 12px;
+}
+
+.evolution-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.evolution-progress-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.evolution-progress-wrapper .progress-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.evolution-progress-wrapper .progress-container {
+  width: 100px;
+  height: 8px;
+  background-color: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.evolution-progress-wrapper .progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 999px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.evolution-progress-wrapper .progress-bar.complete {
+  background: linear-gradient(90deg, #10B981 0%, #34D399 100%);
+}
+
+/* 도감 설명 (하단 배치, 심플하게) */
+.pokedex-description {
+  margin-top: 10px;
+  padding: 16px;
+  background-color: #f8fafc;
+  border-radius: 12px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+  border: 1px solid #e2e8f0;
+}
+
+.evolution-diagram {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-evenly;
+  /* 레벨들을 균등하게 배치 */
+  overflow-x: auto;
+  overflow-y: auto;
+  height: 270px;
+  /* Limit height to force scrolling */
+  flex: 1;
+  /* Take remaining space and scroll */
+  /* SVG 화살표 절대 위치 기준점 */
+  padding-top: 10px;
+}
+
+.evolution-level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex: 1;
+  /* 동일한 비율로 공간 차지 */
+  /* 세로 중앙 정렬 (스크롤 시 잘림 방지) */
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+.evolution-arrow {
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 24px;
+  color: #cbd5e0;
+  font-weight: bold;
+}
+
+.evolution-arrow-indicator {
+  display: none;
+  /* 데이터 저장용, 시각적으로 표시 안함 */
+}
+
+.evolution-arrow-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.level-label {
+  font-size: 11px;
+  color: #a0aec0;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.forms-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.evolution-pokemon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  width: 84px;
+  /* 너비 고정: 텍스트가 길어도 늘어나지 않음 */
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  /* 화살표 절대 위치 기준점 */
+}
+
+.evolution-pokemon:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #667eea;
+}
+
+.evolution-pokemon.owned {
+  border-color: var(--secondary-color);
+  background: #ECFDF5;
+  /* Emerald 50 */
+}
+
+.evolution-pokemon.not-owned {
+  opacity: 0.6;
+  background: #f7fafc;
+}
+
+.evolution-pokemon.not-owned .pokemon-sprite {
+  animation: none !important;
+  opacity: 0.7 !important;
+  filter: grayscale(100%);
+}
+
+.evolution-pokemon .pokemon-sprite {
+  width: 48px;
+  height: 48px;
+  scale: 1.3;
+  margin-bottom: 4px;
+  margin-top: 4px;
+  image-rendering: pixelated;
+  background-size: auto 48px;
+  background-repeat: no-repeat;
+  background-position: left top;
+}
+
+.evolution-pokemon .pokemon-name {
+  /* font-family: 'Pokemon', -apple-system, BlinkMacSystemFont, sans-serif; */
+  font-size: 10px;
+  font-weight: 600;
+  color: #2d3748;
+  text-align: center;
+  margin-bottom: 4px;
+  word-wrap: break-word;
+  /* 긴 단어 줄바꿈 */
+  overflow-wrap: break-word;
+  /* 최신 브라우저 지원 */
+  max-width: 100%;
+  /* 부모 너비 초과 방지 */
+  line-height: 1.3;
+  /* 줄 간격 조정 */
+  hyphens: auto;
+  /* 하이픈 자동 추가 (선택사항) */
+  letter-spacing: 0.3px;
+}
+
+
+.pokemon-icon {
+  padding: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  background: white;
+  border-radius: 12px;
+  overflow: visible;
+}
+
+.pokemon-icon img {
+  width: 60px;
+  height: 30px;
+  object-fit: contain;
+}
+
+
+
+/* 일반 수집 프로그래스 바 (위쪽) */
+.collection-progress-bg {
+  position: absolute;
+  bottom: 1px;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.collection-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+  border-radius: 2px;
+  width: var(--collection-progress-width, 0%);
+  transition: width 0.3s ease;
+}
+
+/* 100% 완료 시 표시되는 볼 아이콘 */
+.progress-complete-icon {
+  position: absolute;
+  top: 93%;
+  left: -2%;
+  scale: 0.8;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.progress-complete-icon.visible {
+  opacity: 1;
+}
+
+.progress-complete-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+/* 즐겨찾기 아이콘 오버레이 */
+.favorite-icon-overlay {
+  position: absolute;
+  top: -1px;
+  left: -5px;
+  width: 16px;
+  height: 16px;
+  z-index: 10;
+}
+
+.favorite-icon-overlay img {
+  width: 50%;
+  height: 50%;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+/* 이로치 수집 프로그래스 바 (아래쪽) */
+.shiny-progress-bg {
+  position: absolute;
+  bottom: 0px;
+  left: 4px;
+  right: 4px;
+  height: 1px;
+  background: #f3f4f6;
+  border-radius: 2px;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.shiny-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+  border-radius: 2px;
+  width: var(--shiny-progress-width, 0%);
+  transition: width 0.3s ease;
+}
+
+
+
+
+
+/* 기존 배틀필드 스타일 유지 */
+.background {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.background::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--background-image, none) no-repeat center/cover, linear-gradient(180deg, #8fb6a8 0%, #6aa28f 100%);
+  clip-path: ellipse(50% 50% at 50% 50%);
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%,
+      rgba(0, 0, 0, 1) 0%,
+      rgba(0, 0, 0, 1) 85%,
+      rgba(0, 0, 0, 0) 100%);
+  -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%,
+      rgba(0, 0, 0, 1) 0%,
+      rgba(0, 0, 0, 1) 85%,
+      rgba(0, 0, 0, 0) 100%);
+  z-index: 0;
+}
+
+.background::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%, rgba(0, 0, 0, 0.2) 100%),
+    radial-gradient(circle at 50% 60%, rgba(255, 255, 255, 0.9), transparent 100%);
+  clip-path: ellipse(50% 50% at 50% 50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pokemon-flipper {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  transform: translate(-50%, -50%);
+  transform-style: preserve-3d;
+  transform-origin: 50% 50%;
+  cursor: grab;
+  z-index: 2;
+  user-select: none;
+  transition: transform 0.6s ease;
+  scale: 1.5;
+}
+
+.pokemon-flipper:active {
+  cursor: grabbing;
+}
+
+.background .pokemon-wrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: auto;
+  backface-visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.background .pokemon-wrap.front-face {
+  transform: translate(-50%, -50%) rotateY(0deg);
+}
+
+.background .pokemon-wrap.back-face {
+  transform: translate(-50%, -50%) rotateY(180deg);
+}
+
+
+
+.background .sprite {
+  image-rendering: pixelated;
+  margin: 0;
+}
+
+.sprite {
+  width: 64px;
+  height: 64px;
+  background-size: auto 64px;
+  image-rendering: pixelated;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.paused {
+  animation-play-state: paused !important;
+}
+
+.welcome-section {
+  text-align: center;
+  margin: 20px 0;
+}
+
+
+
+#authMessage {
+  margin-top: 10px;
+  color: #333;
+}
+
+/* 포켓몬 상세 디스플레이 영역 */
+.pokemon-display-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.pokemon-name-display {
+  font-family: 'Pokemon', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #2d3748;
+  text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.1);
+  letter-spacing: 1px;
+  min-height: 36px;
+  /* Prevent layout shift */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.display-container {
+  position: relative;
+  width: 100%;
+  max-width: 512px;
+  aspect-ratio: 512 / 288;
+  /* 타원 비율 유지 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto;
+  /* 중앙 정렬 */
+}
+
+/* UI 요소 공통 스타일 */
+.ui-element {
+  position: absolute;
+  z-index: 10;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.ui-element:hover {
+  transform: scale(1.1);
+}
+
+/* 위치 지정 - 모바일 화면(타원형)에 맞춰 배치 */
+.ui-element.top-left {
+  top: 12%;
+  left: 7%;
+}
+
+.ui-element.top-right {
+  top: 7%;
+  right: 5%;
+}
+
+.ui-element.bottom-left {
+  bottom: 7%;
+  left: 7%;
+  cursor: default;
+  /* 타입은 클릭 안됨 */
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  align-items: center;
+}
+
+.ui-element.bottom-left:hover {
+  transform: none;
+}
+
+.ui-element.bottom-right {
+  bottom: 5%;
+  right: 6%;
+}
+
+.ui-element.center-left {
+  top: 50%;
+  left: -7%;
+  transform: translateY(-50%);
+}
+
+.ui-element.center-right {
+  top: 50%;
+  right: -7%;
+  transform: translateY(-50%);
+}
+
+.nav-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: bold;
+  color: #4a5568;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  user-select: none;
+  opacity: 0.2;
+}
+
+.nav-arrow:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: scale(1.1);
+  color: #2d3748;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 하트 아이콘 */
+.heart-icon {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  user-select: none;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.heart-icon:hover {
+  opacity: 1;
+}
+
+.heart-icon.empty {
+  background-image: url('/assets/custom/img/ui/favorite_empty.png');
+}
+
+.heart-icon.filled {
+  background-image: url('/assets/custom/img/ui/favorite.png');
+}
+
+/* 이로치 아이콘 */
+.shiny-icon {
+  font-size: 25px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  animation: pulse-shine 2s infinite;
+  /* 클릭 시 노란색 하이라이트 제거 */
+  user-select: none;
+}
+
+@keyframes pulse-shine {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 타입 배지 */
+.type-badge {
+  display: inline-block;
+  padding: 2px 16px;
+  border-radius: 4px;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.type-grass {
+  background-color: #78C850;
+}
+
+.type-water {
+  background-color: #6890F0;
+}
+
+.type-bug {
+  background-color: #A8B820;
+}
+
+.type-normal {
+  background-color: #A8A878;
+}
+
+.type-flying {
+  background-color: #A890F0;
+}
+
+/* 필요한 다른 타입 색상 추가 가능 */
+
+/* 타입 이미지 */
+#display-types .type-image {
+  display: inline-block;
+  width: 25px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px !important;
+  overflow: hidden;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* 회전 아이콘 */
+.rotate-icon {
+  font-size: 21px;
+  color: #4a5568;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  font-weight: bold;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* 카테고리 */
+.pokemon-category {
+  font-family: 'Pokemon', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px;
+  color: #718096;
+  font-weight: 600;
+  background: #f7fafc;
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  letter-spacing: 0.5px;
+}
+
+/* 포켓몬 도감 설명 */
+.pokemon-description {
+  font-size: 18px;
+  color: #334155;
+  line-height: 1;
+  margin: 0;
+  word-break: keep-all;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  min-height: 30px;
+  font-family: 'Pokemon', sans-serif;
+  font-weight: bold;
+  /* Prevent layout shift */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* 1. 기본 스타일 (모바일) - 미디어 쿼리 없음 */
+.egg-modal-content {
+  width: 100%;
+}
+
+.incubator-section {
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+
+
+.collection-grid {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+#iconCollectionGrid {
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 8px;
+}
+
+
+
+/* 3. 태블릿 이상 (모바일 우선 = min-width 사용) */
+@media (min-width: 481px) {
+  .collection-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+  }
+}
+
+/* 4. 데스크톱 */
+@media (min-width: 768px) {
+  .egg-modal-content {
+    max-width: 500px;
+    width: auto;
+  }
+
+  .incubator-section {
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .search-box button:hover {
+    background: #5568d3;
+  }
+
+  .egg-result-item:hover {
+    background: #edf2f7;
+  }
+}
+
+/* Egg System Modal - Mobile First */
+.egg-modal-content {
+  width: 100%;
+  max-width: 600px;
+  background: #f8f9fa;
+  box-sizing: border-box;
+}
+
+.incubator-section {
+  background: white;
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+
+.incubator-container {
+  display: flex;
+  justify-content: space-around;
+  gap: 6px;
+}
+
+.incubator-slot {
+  flex: 1;
+  max-width: 90px;
+  height: 120px;
+  background: #f1f5f9;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #cbd5e0;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.incubator-slot.occupied {
+  background: #e6fffa;
+  border: 2px solid #38b2ac;
+}
+
+.incubator-slot.empty {
+  opacity: 0.7;
+}
+
+.egg-img {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.egg-img.gray {
+  filter: grayscale(100%) opacity(0.6);
+}
+
+.egg-timer {
+  font-size: 11px;
+  font-weight: bold;
+  color: #2d3748;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 2px 4px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.charm-count-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  margin-left: auto;
+  gap: 6px;
+  padding: 6px 12px;
+  margin-bottom: 16px;
+  background: #FFFBEB;
+  /* amber-50 */
+  border-radius: 9999px;
+  /* Pill shape */
+  border: 1px solid #FDE68A;
+  /* amber-200 */
+  font-weight: 600;
+  font-size: 14px;
+  color: #B45309;
+  /* amber-700 */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.charm-count-display img {
+  width: 20px;
+  height: 20px;
+}
+
+
+/* Egg Search Section - Mobile First */
+.egg-search-section {
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  min-width: 0;
+  /* Allow flex shrinking */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.egg-search-section h4 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #4a5568;
+  font-size: 16px;
+}
+
+.search-box {
+  display: flex;
+  flex-wrap: nowrap;
+  /* 버튼이 다음 줄로 내려가지 않도록 */
+  gap: 8px;
+  margin-bottom: 15px;
+  align-items: center;
+  /* 높이 늘어남 방지 */
+}
+
+.search-box input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  height: 44px;
+  line-height: 1.5;
+  box-sizing: border-box;
+  margin-bottom: 0;
+}
+
+.search-box button {
+  width: auto !important;
+  /* 전역 button width: 100% 오버라이드 */
+  padding: 0 16px;
+  height: 44px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.search-box button:hover {
+  background: #4338CA;
+}
+
+.search-box button:active {
+  background: #3730A3;
+}
+
+.egg-results-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.egg-result-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  flex-wrap: nowrap;
+  /* Prevent wrapping */
+}
+
+.egg-result-item:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
+}
+
+.egg-result-item:active {
+  background: #F9FAFB;
+  transform: scale(0.98);
+}
+
+.egg-result-item .pokemon-sprite {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  background-size: auto 48px;
+  background-repeat: no-repeat;
+  background-position: left top;
+  image-rendering: pixelated;
+}
+
+.egg-result-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  /* Allow text truncation */
+}
+
+.egg-result-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 15px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.egg-result-time {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.acquire-btn {
+  background: transparent;
+  border: 1.5px solid var(--primary-color);
+  color: var(--primary-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  width: auto;
+  /* 버튼이 내용에 맞게 크기 조정 */
+}
+
+.acquire-btn:hover {
+  background: var(--primary-color);
+  color: white;
+}
+
+.acquire-btn:active {
+  transform: scale(0.95);
+}
+
+/* 비활성화된 상태 (이미 보유/알 보유중) */
+.acquire-btn.disabled,
+.acquire-btn:disabled {
+  background: #e2e8f0;
+  border-color: #cbd5e0;
+  color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.acquire-btn.disabled:hover,
+.acquire-btn:disabled:hover {
+  background: #e2e8f0;
+  color: #a0aec0;
+  transform: none;
+}
+
+/* 포켓몬 스프라이트 그레이스케일 */
+.pokemon-sprite.grayscale {
+  filter: grayscale(100%);
+  opacity: 0.5;
+}
+
+/* 알 결과 아이템 상태 표시 */
+.egg-result-status {
+  font-size: 11px;
+  color: #718096;
+  margin-top: 2px;
+  font-weight: 500;
+  font-style: italic;
+}
+
+
+
+/* Google Login Button */
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: #ffffff;
+  color: #757575;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  padding: 12px 16px;
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+.google-btn:hover {
+  background-color: #f7f8f8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-color: #d2e3fc;
+}
+
+.google-btn:active {
+  background-color: #f1f3f4;
+}
+
+.google-btn img {
+  width: 18px;
+  height: 18px;
+}
+
+/* ================= 설정 화면 스타일 ================= */
+
+/* 설정 화면 슬라이드 애니메이션 */
+.settings-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100vh;
+  background: #f8fafc;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.slide-hidden {
+  transform: translateX(100%);
+}
+
+.slide-visible {
+  transform: translateX(0);
+}
+
+/* 설정 헤더 */
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.settings-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0;
+}
+
+.settings-close-btn {
+  background: transparent;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  color: #718096;
+  transition: color 0.2s;
+  width: auto;
+}
+
+.settings-close-btn:hover {
+  color: #2d3748;
+}
+
+.close-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* 설정 콘텐츠 */
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-content::-webkit-scrollbar {
+  display: none;
+}
+
+/* 섹션 타이틀 */
+.settings-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  margin-left: 4px;
+}
+
+/* 설정 박스 */
+.settings-box {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  transition: background-color 0.2s;
+}
+
+.settings-item:last-child {
+  border-bottom: none;
+}
+
+.settings-item.clickable {
+  cursor: pointer;
+}
+
+.settings-item.clickable:hover {
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.settings-item-label {
+  color: #2d3748;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.settings-item-value {
+  color: #718096;
+  font-size: 14px;
+}
+
+/* 토글 스위치 */
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  background: #cbd5e0;
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.toggle-switch.active {
+  background: #48bb78;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s;
+}
+
+.toggle-switch.active .toggle-knob {
+  transform: translateX(20px);
+}
+
+/* 화살표 아이콘 */
+.chevron-right {
+  width: 20px;
+  height: 20px;
+  color: #a0aec0;
+}
+
+/* 면책고지 박스 */
+.disclaimer-box {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.disclaimer-title {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0 0 16px 0;
+}
+
+.warning-icon {
+  width: 16px;
+  height: 16px;
+  color: #ed8936;
+  margin-right: 8px;
+}
+
+.disclaimer-content {
+  font-size: 13px;
+  color: #718096;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.disclaimer-content p {
+  margin-bottom: 5px;
+}
+
+.disclaimer-content-en {
+  font-size: 11px;
+  color: #a0aec0;
+  line-height: 1.6;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+  margin-bottom: 12px;
+}
+
+.disclaimer-content-en p {
+  margin-bottom: 5px;
+}
+
+.disclaimer-subtitle {
+  font-weight: 600;
+  color: #9ca3af;
+  margin-bottom: 5px;
+}
+
+/* Text utility classes for disclaimer */
+.text-danger {
+  color: #ef4444;
+}
+
+.text-warning {
+  color: #F59E0B;
+}
+
+.text-success {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.inspiration-credit {
+  font-size: 11px;
+  color: #718096;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.inspiration-credit p {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+.inspiration-credit svg {
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+
+.inspiration-by {
+  color: #9ca3af;
+}
+
+.inspiration-name {
+  color: #c4b5fd;
+  margin-left: 4px;
+  font-weight: 600;
+}
+
+/* 크레딧 박스 */
+.credits-box {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-size: 12px;
+}
+
+.credit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+}
+
+.credit-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.credit-label {
+  color: #718096;
+  font-size: 13px;
+}
+
+.credit-value {
+  color: #2d3748;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.credit-section {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.credit-section-title {
+  color: #4a5568;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.credit-list {
+  padding-left: 8px;
+}
+
+.credit-detail {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.credit-gen {
+  color: #718096;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.credit-author {
+  color: #a0aec0;
+  font-size: 11px;
+  padding-left: 8px;
+}
+
+/* 설정 푸터 */
+.settings-footer {
+  text-align: center;
+  margin-top: 32px;
+  padding-bottom: 32px;
+}
+
+.delete-account-btn {
+  background: transparent;
+  color: #e53e3e;
+  text-decoration: underline;
+  font-size: 12px;
+  padding: 8px;
+  border: none;
+  cursor: pointer;
+  width: auto;
+}
+
+.delete-account-btn:hover {
+  color: #c53030;
+}
+
+.server-info {
+  font-size: 10px;
+  color: #a0aec0;
+  margin-top: 8px;
+}
+
+
+/* 아이콘 상태 메시지 스타일 */
+.icon-status-message {
+  display: none;
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+  font-size: 16px;
+}
+
+/* Evolution Unlock Styles */
+.evolution-pokemon.unlockable {
+  cursor: pointer;
+  border: 2px dashed var(--primary-color);
+  background-color: rgba(79, 70, 229, 0.05);
+}
+
+.evolution-pokemon.unlockable:hover {
+  background-color: rgba(79, 70, 229, 0.1);
+  transform: translateY(-2px);
+}
+
+.evolution-pokemon.locked {
+  cursor: not-allowed;
+  opacity: 0.6;
+  filter: grayscale(100%);
+}
+
+.unlock-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  animation: bounce 2s infinite;
+}
+
+.unlock-badge.evolution {
+  background-color: #9ca0ce;
+  /* Blue */
+  color: white;
+}
+
+.unlock-badge.form {
+  background-color: #8fc3b8;
+  /* Purple */
+  color: white;
+}
+
+@keyframes bounce {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* Unowned Pokemon Styles (Gray & Stopped) */
+.evolution-pokemon.not-owned {
+  opacity: 0.7;
+}
+
+.evolution-pokemon.not-owned .pokemon-sprite {
+  filter: grayscale(100%);
+  animation: none !important;
+  /* Stop animation */
+}
+
+/* Unlockable overrides - Keep gray/stopped but make clickable */
+.evolution-pokemon.unlockable {
+  cursor: pointer;
+  border: 2px dashed var(--primary-color);
+  background-color: rgba(79, 70, 229, 0.05);
+  transition: all 0.2s ease;
+}
+
+.evolution-pokemon.unlockable:hover {
+  opacity: 1;
+  /* Brighten on hover */
+  background-color: rgba(79, 70, 229, 0.1);
+  transform: translateY(-2px);
+}
+
+.evolution-pokemon.unlockable:hover .pokemon-sprite {
+  filter: grayscale(80%);
+}
+
+/* Locked overrides */
+.evolution-pokemon.locked {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ==========================================
+   INFO MODAL STYLES - TABBED UI
+   ========================================== */
+
+/* Info Modal Content */
+.info-modal-content {
+  max-width: 520px;
+  max-height: 85vh;
+  overflow: hidden;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tab Navigation */
+.info-tabs {
+  display: flex;
+  background: #f3f4f6;
+  padding: 6px;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.info-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.info-tab:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.info-tab.active {
+  background: white;
+  color: var(--primary-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Info Modal Body */
+.info-modal-body {
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tab Content */
+.info-tab-content {
+  display: none;
+  padding: 20px;
+}
+
+.info-tab-content.active {
+  display: block;
+}
+
+/* ============ OVERVIEW TAB ============ */
+.overview-hero {
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+  border-radius: 16px;
+  margin-bottom: 20px;
+}
+
+.overview-main-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero-icon {
+  font-size: 48px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.overview-main-message p {
+  font-size: 16px;
+  color: #374151;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.highlight-pokemon {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  font-size: 20px;
+}
+
+/* Quick Summary Grid */
+.quick-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.summary-card {
+  padding: 14px 12px;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid;
+  transition: transform 0.2s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+}
+
+.summary-card.best {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: #fbbf24;
+}
+
+.summary-card.good {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  border-color: #60a5fa;
+}
+
+.summary-card.normal {
+  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+  border-color: #818cf8;
+}
+
+.summary-card.minimal {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border-color: #34d399;
+}
+
+.summary-icon {
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.summary-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.summary-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+/* Overview Warning */
+.overview-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.overview-warning .warning-icon {
+  font-size: 18px;
+}
+
+.overview-warning span {
+  font-size: 13px;
+  color: #dc2626;
+}
+
+/* Overview Tip */
+.overview-tip {
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+/* ============ REWARDS TAB (ACCORDION) ============ */
+.reward-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.accordion-group {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.accordion-group-header {
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accordion-group-header.success {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #047857;
+}
+
+.accordion-group-header.warning {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #dc2626;
+}
+
+.accordion-item {
+  border-top: 1px solid #e5e7eb;
+}
+
+.accordion-item:first-of-type {
+  border-top: none;
+}
+
+.accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.accordion-header:hover {
+  background: #f9fafb;
+}
+
+.accordion-header.best-tier {
+  background: linear-gradient(135deg, #064e3b, #065f46);
+  /* 아주 진한 녹색 */
+  color: white;
+}
+
+.accordion-header.best-tier .tier-condition,
+.accordion-header.best-tier .accordion-arrow,
+.accordion-header.best-tier .tier-badge-mini {
+  color: white;
+}
+
+.accordion-header.high-tier {
+  background: linear-gradient(135deg, #059669, #10b981);
+  /* 중간 녹색 */
+  color: white;
+}
+
+.accordion-header.high-tier .tier-condition,
+.accordion-header.high-tier .accordion-arrow,
+.accordion-header.high-tier .tier-badge-mini {
+  color: white;
+}
+
+.accordion-header.mid-tier {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  /* 연한 녹색 */
+  color: #064e3b;
+}
+
+.accordion-header.mid-tier .tier-condition {
+  color: #065f46;
+}
+
+.accordion-header.low-tier {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+}
+
+.accordion-header.worst-tier {
+  background: linear-gradient(135deg, #fef2f2, #fecaca);
+}
+
+.accordion-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tier-badge-mini {
+  font-size: 16px;
+}
+
+.tier-condition {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.accordion-arrow {
+  font-size: 10px;
+  color: #9ca3af;
+  transition: transform 0.2s ease;
+}
+
+.accordion-item.open .accordion-arrow {
+  transform: rotate(180deg);
+}
+
+.accordion-content {
+  display: none;
+  padding: 12px 16px;
+  background: #fafafa;
+  border-top: 1px solid #e5e7eb;
+}
+
+.accordion-item.open .accordion-content {
+  display: block;
+}
+
+/* Reward Grid */
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.reward-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.reward-item.pokemon {
+  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+  color: #4338ca;
+}
+
+.reward-item.item {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.reward-item.no-pokemon {
+  background: #fee2e2;
+  color: #dc2626;
+  grid-column: span 2;
+  justify-content: center;
+}
+
+.reward-emoji {
+  font-size: 14px;
+}
+
+/* ============ EVENTS TAB ============ */
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.event-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid;
+  transition: transform 0.2s ease;
+}
+
+.event-card:hover {
+  transform: translateX(4px);
+}
+
+.event-card.saturday {
+  background: linear-gradient(135deg, #fef3c770, #fde68a50);
+  border-color: #fbbf24;
+}
+
+.event-card.holiday {
+  background: linear-gradient(135deg, #fce7f370, #fbcfe850);
+  border-color: #ec4899;
+}
+
+.event-card.pokemon-day {
+  background: linear-gradient(135deg, #e0e7ff70, #c7d2fe50);
+  border-color: #6366f1;
+}
+
+.event-icon {
+  font-size: 32px;
+}
+
+.event-info {
+  flex: 1;
+}
+
+.event-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.event-desc {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.event-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.1);
+  color: #374151;
+}
+
+.events-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 10px;
+}
+
+.events-note .note-icon {
+  font-size: 18px;
+}
+
+.events-note span {
+  font-size: 13px;
+  color: #166534;
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 768px) {
+  .info-modal-content {
+    max-width: 95%;
+    max-height: 90vh;
+  }
+
+  .info-tab {
+    padding: 8px 8px;
+    font-size: 12px;
+  }
+
+  .info-tab-content {
+    padding: 16px;
+  }
+
+  .quick-summary-grid {
+    gap: 8px;
+  }
+
+  .summary-card {
+    padding: 12px 8px;
+  }
+
+  .summary-value {
+    font-size: 11px;
+  }
+
+  .reward-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reward-item.no-pokemon {
+    grid-column: span 1;
+  }
+}
+
+/* ============================================
+   약관 동의 모달 스타일
+   ============================================ */
+
+/* 약관 모달 기본 레이아웃 */
+#terms-modal .modal-content {
+  max-width: 600px;
+  max-height: 90vh;
+  width: 90%;
+  margin: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#terms-modal .modal-header {
+  flex-shrink: 0;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+#terms-modal .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+#terms-modal .modal-footer {
+  flex-shrink: 0;
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: white;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* 약관 소개 텍스트 */
+.terms-intro {
+  color: #6b7280;
+  margin-bottom: 20px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+/* 전체 동의 박스 */
+.terms-all-agree-box {
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  margin-bottom: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.terms-all-agree-box:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e0;
+}
+
+.terms-all-agree-box label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  pointer-events: none;
+  margin: 0;
+}
+
+.terms-all-agree-box label span {
+  font-weight: 700;
+  color: #111827;
+  font-size: 16px;
+}
+
+.terms-all-agree-box p {
+  font-size: 10px;
+  color: #6b7280;
+  margin: 8px 0 0 32px;
+  line-height: 1.4;
+}
+
+/* 약관 구분선 */
+.terms-divider {
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+  margin: 20px 0;
+}
+
+/* 약관 리스트 컨테이너 */
+.terms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 약관 아이템 */
+.terms-item {
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.terms-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* 약관 항목 행 (체크박스 + 라벨 + 보기 버튼) */
+.terms-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+/* 약관 라벨 (체크박스 + 텍스트) */
+.terms-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.terms-label span {
+  flex: 1;
+  color: #374151;
+  font-size: 15px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.terms-label strong {
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.terms-label .terms-required {
+  color: #2563eb;
+}
+
+/* 체크박스 스타일 */
+.terms-item input[type="checkbox"],
+#terms-check-all {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #667eea;
+}
+
+/* 보기 버튼 */
+.terms-toggle-btn {
+  width: auto;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  color: #9ca3af;
+  font-size: 13px;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+}
+
+.terms-toggle-btn:hover {
+  color: #374151;
+}
+
+/* 약관 상세 내용 박스 */
+.terms-detail {
+  display: none;
+  margin-top: 12px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.7;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+}
+
+.terms-detail.show {
+  display: block;
+}
+
+.terms-detail strong {
+  color: #1f2937;
+  display: block;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+
+/* 시작하기 버튼 */
+#terms-submit-btn {
+  flex: 1;
+  padding: 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 16px;
+  border: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#terms-submit-btn:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
+  border: 1px solid #e5e7eb;
+}
+
+#terms-submit-btn:not(:disabled) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+#terms-submit-btn:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+#terms-submit-btn:not(:disabled):active {
+  transform: translateY(0);
+}
+
+/* 동의 거부 버튼 */
+.terms-refuse-btn {
+  flex: 1;
+  padding: 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 16px;
+  border: 2px solid #e5e7eb;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.terms-refuse-btn::before {
+  content: '←';
+  margin-right: 6px;
+  font-size: 18px;
+  transition: transform 0.3s ease;
+  display: inline-block;
+}
+
+.terms-refuse-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.terms-refuse-btn:hover::before {
+  transform: translateX(-4px);
+}
+
+.terms-refuse-btn:active {
+  transform: translateY(0);
+  background: #f3f4f6;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  #terms-modal .modal-content {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  #terms-modal .modal-header,
+  #terms-modal .modal-body,
+  #terms-modal .modal-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .terms-row {
+    align-items: flex-start;
+  }
+
+  .terms-label span {
+    font-size: 14px;
+  }
+
+  .terms-all-agree-box {
+    padding: 14px;
+  }
+
+  .terms-all-agree-box p {
+    margin-left: 0;
+    margin-top: 8px;
+  }
+
+  #terms-submit-btn {
+    padding: 14px;
+    font-size: 15px;
+  }
+
+  .terms-toggle-btn {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+}
+
+/* 스타터 환영 모달 */
+#starter-welcome-modal .modal-content {
+  max-width: 700px;
+  width: 90%;
+  text-align: center;
+}
+
+/* Starter Welcome Modal */
+.starter-modal {
+  display: none;
+  z-index: 2200;
+}
+
+.starter-modal-content {
+  max-width: 680px;
+  text-align: center;
+}
+
+.starter-modal-header {
+  border: none;
+  padding-bottom: 0;
+}
+
+.starter-modal-title {
+  font-size: 20px;
+  color: #667eea;
+}
+
+.starter-intro {
+  font-size: 16px;
+  color: #4a5568;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+.starter-highlight {
+  color: #667eea;
+}
+
+/* Pokemon Grid */
+.starter-pokemon-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 11px;
+  margin: 30px 0;
+  max-width: 100%;
+}
+
+/* 반응형: 작은 화면에서는 3열로 */
+@media (max-width: 768px) {
+  .starter-pokemon-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 7px;
+  }
+}
+
+/* 반응형: 더 작은 화면에서는 2열로 */
+@media (max-width: 480px) {
+  .starter-pokemon-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+  }
+}
+
+.starter-pokemon-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.starter-pokemon-visual {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.starter-pokemon-visual:hover {
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.starter-pokemon-visual.grass {
+  background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+}
+
+.starter-pokemon-visual.electric {
+  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+}
+
+.starter-pokemon-visual.normal {
+  background: linear-gradient(135deg, #fff2ef 0%, #ffc7b9 100%);
+}
+
+.starter-pokemon-visual.fire {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+}
+
+.starter-pokemon-visual.water {
+  background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+}
+
+.starter-pokemon-visual.grass {
+  background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+}
+
+.starter-pokemon-visual.electric {
+  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+}
+
+.starter-pokemon-visual.ice {
+  background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
+}
+
+.starter-pokemon-visual.fighting {
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+}
+
+.starter-pokemon-visual.poison {
+  background: linear-gradient(135deg, #df89b5 0%, #bfd9fe 100%);
+}
+
+.starter-pokemon-visual.ground {
+  background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+}
+
+.starter-pokemon-visual.flying {
+  background: linear-gradient(135deg, #e2ebf0 0%, #cfd9df 100%);
+}
+
+.starter-pokemon-visual.psychic {
+  background: linear-gradient(135deg, #ffdde1 0%, #ee9ca7 100%);
+}
+
+.starter-pokemon-visual.bug {
+  background: linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%);
+}
+
+.starter-pokemon-visual.rock {
+  background: linear-gradient(135deg, #c2e9fb 0%, #a1c4fd 100%);
+}
+
+.starter-pokemon-visual.ghost {
+  background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+}
+
+.starter-pokemon-visual.dragon {
+  background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+}
+
+.starter-pokemon-visual.steel {
+  background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+}
+
+.starter-pokemon-visual.fairy {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+}
+
+.starter-pokemon-image {
+  width: 70%;
+  height: 70%;
+  scale: 0.8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.starter-pokemon-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.1));
+}
+
+.starter-pokemon-info {
+  text-align: center;
+  width: 100%;
+}
+
+.starter-pokemon-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 2px;
+  word-break: keep-all;
+  line-height: 1.2;
+}
+
+.starter-pokemon-type {
+  font-size: 11px;
+  color: #718096;
+  font-weight: 500;
+  line-height: 1.2;
+  word-break: keep-all;
+}
+
+@media (max-width: 480px) {
+  .starter-pokemon-name {
+    font-size: 11px;
+    margin-bottom: 1px;
+  }
+
+  .starter-pokemon-type {
+    font-size: 9px;
+    letter-spacing: -0.5px;
+  }
+
+  .starter-pokemon-grid {
+    gap: 4px;
+  }
+}
+
+/* Tip Box */
+.starter-tip-box {
+  background: #f7fafc;
+  padding: 20px;
+  border-radius: 12px;
+  margin-top: 20px;
+  border-left: 4px solid #667eea;
+}
+
+.starter-tip-box p {
+  font-size: 14px;
+  color: #4a5568;
+  line-height: 1.6;
+  margin: 0;
+  word-break: keep-all;
+}
+
+/* Start Button */
+.starter-modal-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  font-weight: bold;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  margin-top: 30px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.starter-modal-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+/* Segmented Control for Reps/RPE Toggle */
+.segmented-control {
+  display: flex;
+  background: #e2e8f0;
+  padding: 4px;
+  border-radius: 8px;
+  position: relative;
+  width: fit-content;
+}
+
+.segmented-control input[type="radio"] {
+  display: none;
+}
+
+.segmented-control label {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  z-index: 1;
+  text-align: center;
+  min-width: 60px;
+  margin: 0 !important;
+  /* Override default label margin */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.segmented-control input[type="radio"]:checked+label {
+  background: white;
+  color: var(--primary-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   운동 목록 스타일
+   ============================================ */
+
+.exercise-group {
+  margin-bottom: 20px;
+}
+
+.exercise-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 12px;
+}
+
+.exercise-group-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: #2d3748;
+}
+
+.exercise-group-count {
+  font-size: 12px;
+  color: #718096;
+  background: #edf2f7;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.exercise-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exercise-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.exercise-item:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transform: translateX(2px);
+}
+
+.exercise-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.exercise-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #2d3748;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exercise-details {
+  font-size: 13px;
+  color: #718096;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exercise-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.exercise-action-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.exercise-action-btn.edit {
+  background: #eef2ff;
+  color: #667eea;
+}
+
+.exercise-action-btn.edit:hover {
+  background: #667eea;
+  color: white;
+  transform: scale(1.05);
+}
+
+.exercise-action-btn.delete {
+  background: #fef2f2;
+  color: #e53e3e;
+}
+
+.exercise-action-btn.delete:hover {
+  background: #e53e3e;
+  color: white;
+  transform: scale(1.05);
+}
+
+.exercise-action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ============================================
+   운동 섹션 헤더 & 추가 버튼
+   ============================================ */
+
+.exercise-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.exercise-section-header h3 {
+  margin: 0;
+}
+
+.add-exercise-floating-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.add-exercise-floating-btn:hover {
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.45);
+}
+
+.add-exercise-floating-btn:active {
+  transform: scale(0.95);
+}
+
+.add-exercise-floating-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* ============================================
+   새 운동 등록 모달
+   ============================================ */
+
+.add-exercise-modal-content {
+  max-width: 480px;
+  width: 90%;
+  padding: 0;
+  overflow: hidden;
+}
+
+.add-exercise-modal-content .modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.add-exercise-modal-content .modal-title {
+  font-size: 18px;
+}
+
+.add-exercise-modal-body {
+  padding: 24px;
+}
+
+.add-exercise-modal-body .form-group {
+  margin-bottom: 20px;
+}
+
+.add-exercise-modal-body .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 14px;
+}
+
+.add-exercise-modal-body .form-group input,
+.add-exercise-modal-body .form-group select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 15px;
+  transition: all 0.2s ease;
+  background: #fafafa;
+}
+
+.add-exercise-modal-body .form-group input:focus,
+.add-exercise-modal-body .form-group select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.exercise-form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.exercise-form-row .form-group {
+  flex: 1;
+}
+
+.intensity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.intensity-header label {
+  margin-bottom: 0 !important;
+}
+
+.rpe-helper {
+  display: none;
+  color: #718096;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.rpe-helper.visible {
+  display: block;
+}
+
+.add-exercise-modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.add-exercise-modal-actions button {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.add-exercise-modal-actions .cancel-btn {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.add-exercise-modal-actions .cancel-btn:hover {
+  background: #e2e8f0;
+}
+
+/* 모달 열릴 때 애니메이션 */
+#add-exercise-modal .modal-content,
+#exercise-list-modal .modal-content {
+  animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -45%) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* ============================================
+   등록된 운동 목록 요약 카드 (햄버거 버튼)
+   ============================================ */
+
+.exercise-list-summary-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+}
+
+.exercise-list-summary-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.exercise-list-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.exercise-list-summary-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.exercise-list-icon {
+  font-size: 20px;
+}
+
+.exercise-list-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.exercise-list-count {
+  background: var(--primary-color);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.exercise-list-menu-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: white;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.exercise-list-menu-btn:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+  transform: scale(1.05);
+}
+
+.exercise-list-menu-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* ============================================
+   등록된 운동 목록 모달
+   ============================================ */
+
+.exercise-list-modal-content {
+  max-width: 520px;
+  width: 90%;
+  max-height: 80vh;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.exercise-list-modal-content .modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  flex-shrink: 0;
+}
+
+.exercise-list-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.exercise-list-modal-header .modal-title {
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.exercise-list-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.exercise-list-header-btn {
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.exercise-list-header-btn:hover {
+  background: var(--bg-input);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.exercise-list-header-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.exercise-list-header-btn.refreshing {
+  animation: spin-refresh 0.8s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spin-refresh {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.exercise-list-modal-header .close-btn {
+  position: static;
+}
+
+.exercise-list-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1;
+  background: #f8fafc;
+}
+
+/* 모달 내 운동 그룹 스타일 조정 */
+.exercise-list-modal-body .exercise-group {
+  margin-bottom: 16px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.exercise-list-modal-body .exercise-group:last-child {
+  margin-bottom: 0;
+}
+
+.exercise-list-modal-body .exercise-group-header {
+  position: sticky;
+  top: -20px;
+  background: var(--bg-input);
+  padding: 12px 16px;
+  z-index: 1;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.exercise-list-modal-body .exercise-group-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.exercise-list-modal-body .exercise-item {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.15s ease;
+}
+
+.exercise-list-modal-body .exercise-item:last-child {
+  border-bottom: none;
+}
+
+.exercise-list-modal-body .exercise-item:hover {
+  background: #f8fafc;
+}
+
+.exercise-list-modal-body .exercise-info {
+  flex: 1;
+}
+
+.exercise-list-modal-body .exercise-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.exercise-list-modal-body .exercise-details {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.exercise-list-modal-body .exercise-details span {
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.exercise-list-modal-body .exercise-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.exercise-list-modal-body .exercise-actions button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  font-size: 14px;
+}
+
+.exercise-list-modal-body .edit-exercise-btn {
+  background: var(--bg-input);
+  color: var(--text-secondary);
+}
+
+.exercise-list-modal-body .edit-exercise-btn:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.exercise-list-modal-body .delete-exercise-btn {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.exercise-list-modal-body .delete-exercise-btn:hover {
+  background: #fecaca;
+}
+
+/* 운동이 없을 때 빈 상태 */
+.exercise-list-empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-tertiary);
+  background: white;
+  border-radius: 12px;
+}
+
+.exercise-list-empty-icon {
+  font-size: 52px;
+  margin-bottom: 16px;
+}
+
+.exercise-list-empty-text {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ============================================
+   포켓몬 필터 모달 스타일
+   ============================================ */
+
+/* 필터 버튼 헤더 그룹 */
+.collection-header-btns {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.collection-header-btns .corner-btn {
+  position: static;
+  margin: 0;
+}
+
+/* 필터 버튼 */
+.filter-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.filter-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+.filter-btn:hover {
+  background-color: var(--bg-input);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.filter-btn.active {
+  background-color: rgba(79, 70, 229, 0.1);
+  color: var(--primary-color);
+  border-color: rgba(79, 70, 229, 0.3);
+}
+
+/* 필터 활성화 배지 - 숨김 (버튼 색상으로 표시) */
+.filter-active-badge {
+  display: none !important;
+}
+
+/* 필터 모달 */
+.filter-modal-content {
+  max-width: 100%;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  top: auto;
+  transform: none;
+  border-radius: 24px 24px 0 0;
+  margin: 0;
+  animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Drag Handle */
+.filter-modal-content::before {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 4px;
+  background-color: #e2e8f0;
+  border-radius: 2px;
+  margin: 12px auto 4px auto;
+}
+
+.filter-modal-content .modal-header {
+  padding: 10px 20px 16px 20px;
+  border-bottom: none;
+  background: white;
+  position: relative;
+}
+
+.filter-modal-content .modal-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.filter-modal-content .close-btn {
+  display: none;
+}
+
+.filter-modal-body {
+  padding: 0 20px 20px 20px;
+  max-height: 65vh;
+  overflow-y: auto;
+  background: white;
+}
+
+/* 필터 섹션 */
+.filter-section {
+  margin-bottom: 20px;
+}
+
+.filter-section:last-child {
+  margin-bottom: 0;
+}
+
+.filter-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-section-title .filter-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+
+
+/* 필터 칩 그룹 */
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.type-filter-chips {
+  max-height: 170px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 필터 칩 버튼 */
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 13px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: auto;
+}
+
+.filter-chip:hover {
+  background: #f1f5f9;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.filter-chip.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+/* 타입별 칩 색상 (활성화 시) */
+.filter-chip.type-chip[data-value="노말"].active {
+  background: #A8A878;
+  border-color: #A8A878;
+}
+
+.filter-chip.type-chip[data-value="불꽃"].active {
+  background: #F08030;
+  border-color: #F08030;
+}
+
+.filter-chip.type-chip[data-value="물"].active {
+  background: #6890F0;
+  border-color: #6890F0;
+}
+
+.filter-chip.type-chip[data-value="풀"].active {
+  background: #78C850;
+  border-color: #78C850;
+}
+
+.filter-chip.type-chip[data-value="전기"].active {
+  background: #F8D030;
+  border-color: #F8D030;
+  color: #333;
+}
+
+.filter-chip.type-chip[data-value="얼음"].active {
+  background: #98D8D8;
+  border-color: #98D8D8;
+  color: #333;
+}
+
+.filter-chip.type-chip[data-value="격투"].active {
+  background: #C03028;
+  border-color: #C03028;
+}
+
+.filter-chip.type-chip[data-value="독"].active {
+  background: #A040A0;
+  border-color: #A040A0;
+}
+
+.filter-chip.type-chip[data-value="땅"].active {
+  background: #E0C068;
+  border-color: #E0C068;
+  color: #333;
+}
+
+.filter-chip.type-chip[data-value="비행"].active {
+  background: #A890F0;
+  border-color: #A890F0;
+}
+
+.filter-chip.type-chip[data-value="에스퍼"].active {
+  background: #F85888;
+  border-color: #F85888;
+}
+
+.filter-chip.type-chip[data-value="벌레"].active {
+  background: #A8B820;
+  border-color: #A8B820;
+}
+
+.filter-chip.type-chip[data-value="바위"].active {
+  background: #B8A038;
+  border-color: #B8A038;
+}
+
+.filter-chip.type-chip[data-value="고스트"].active {
+  background: #705898;
+  border-color: #705898;
+}
+
+.filter-chip.type-chip[data-value="드래곤"].active {
+  background: #7038F8;
+  border-color: #7038F8;
+}
+
+.filter-chip.type-chip[data-value="악"].active {
+  background: #705848;
+  border-color: #705848;
+}
+
+.filter-chip.type-chip[data-value="강철"].active {
+  background: #B8B8D0;
+  border-color: #B8B8D0;
+  color: #333;
+}
+
+.filter-chip.type-chip[data-value="페어리"].active {
+  background: #EE99AC;
+  border-color: #EE99AC;
+}
+
+/* 필터 모달 푸터 */
+.filter-modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+  background: white;
+  border-top: 1px solid #f1f5f9;
+}
+
+.filter-reset-btn {
+  flex: 1;
+  padding: 14px;
+  background: white;
+  border: 1px solid #10B981;
+  color: #10B981;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-reset-btn::before {
+  content: '↻';
+  font-size: 18px;
+}
+
+.filter-reset-btn:hover {
+  background: #f0fdf4;
+}
+
+.filter-apply-btn {
+  flex: 2;
+  padding: 14px;
+  background: #10B981;
+  border: none;
+  color: white;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-apply-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+/* 필터 결과 없음 표시 */
+.no-filter-results {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-tertiary);
+}
+
+.no-filter-results-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.no-filter-results-text {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+
+.filter-icon-wrapper {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.filter-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.filter-icon-wrapper.heart-bg {
+  background-color: #fee2e2;
+  color: #ef4444;
+}
+
+/* 세대별 구분선 */
+.generation-divider {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.generation-divider::before,
+.generation-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.generation-divider span {
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  min-width: 24px;
+  text-align: center;
+}
+
+/* 트레이드 숍 모달 스타일 */
+.shop-modal-content {
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 보유 아이템 한줄 표시 */
+.my-items-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.my-items-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.my-items-list {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.my-item-inline {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.my-item-inline img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.my-item-inline span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.shop-modal-body {
+  padding: 14px 0px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.shop-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.shop-item-card {
+  display: flex;
+  align-items: center;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: all 0.2s ease;
+  min-height: 64px;
+}
+
+.shop-item-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-color: var(--primary-color);
+}
+
+.shop-item-icon {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.shop-item-icon img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.item-count-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  background: var(--primary-color);
+  color: white;
+  font-size: 9px;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.shop-item-info {
+  flex: 1;
+  min-width: 0;
+  margin-right: 8px;
+}
+
+.shop-item-info h4 {
+  margin: 0 0 2px 0;
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.shop-item-desc {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.shop-item-price {
+  margin: 0 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.price-row {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.shop-buy-btn {
+  width: auto;
+  padding: 6px 12px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.shop-buy-btn:hover {
+  background: var(--primary-hover);
+}
+
+.shop-buy-btn:active {
+  transform: scale(0.98);
+}
+
+.shop-buy-btn.disabled {
+  background: #d1d5db;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.shop-buy-btn.disabled:hover {
+  background: #d1d5db;
+}
+
+.shop-item-card.insufficient {
+  opacity: 0.7;
+  background: #f9fafb;
+}
+
+.shop-item-card.insufficient:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--border-color);
+}
+
+/* Pokedex Home Design */
+/* Pokedex Home Design */
+.pokedex-container {
+  background-color: #CD5C5C;
+  /* IndianRed - Muted, desaturated, and eye-friendly */
+  min-height: 100vh;
+
+  /* Full viewport width breakout */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  margin-top: -20px;
+  /* Counteract container top padding */
+  margin-bottom: -20px;
+  /* Counteract container bottom padding */
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  overflow-x: hidden;
+
+  /* Safe area padding */
+  padding-top: calc(30px + env(safe-area-inset-top));
+}
+
+/* Home Tab Specific Styles */
+#view-home {
+  background-color: #CD5C5C;
+  /* IndianRed */
+  overflow-x: hidden;
+  padding: env(safe-area-inset-top) 0 calc(var(--tab-bar-height) + var(--safe-area-bottom) + 20px) 0;
+  /* Custom padding, keep bottom for tab bar */
+}
+
+/* Header Wrapper */
+.pokedex-header {
+  position: absolute;
+  top: env(safe-area-inset-top);
+  /* Push down by safe area */
+  left: 0;
+  width: 100%;
+  height: 60px;
+  /* Reduced height */
+  /* z-index removed to allow children to interleave with screen */
+  pointer-events: none;
+}
+
+/* The Black Dome */
+/* The Black Dome */
+/* The Black Dome */
+.pokedex-curve-bg {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  /* Scaled down */
+  height: 35px;
+  /* Scaled down */
+  background: #363636;
+  border-radius: 35px 35px 0 0;
+  z-index: 1;
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Eyes Container */
+.pokedex-eyes-container {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 50px;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+}
+
+/* Individual Eyes */
+.pokedex-eye {
+  width: 24px;
+  /* Scaled down */
+  height: 40px;
+  /* Scaled down */
+  background: #185888;
+  /* Darker, more muted blue */
+  border-radius: 50%;
+  position: absolute;
+  /* Use inset shadow for border so the line can overlap it */
+  box-shadow: inset 0 0 0 4px white, 0 2px 4px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.pokedex-eye.left {
+  left: 25px;
+  top: 5px;
+  transform: rotate(-25deg);
+}
+
+.pokedex-eye.right {
+  right: 25px;
+  top: 5px;
+  transform: rotate(25deg);
+}
+
+/* The Line inside the Eye */
+.pokedex-eye-line {
+  position: absolute;
+  top: 50%;
+  left: -20%;
+  width: 140%;
+  height: 1px;
+  /* Thinner line */
+  background: #185888;
+  transform: rotate(0deg);
+}
+
+/* The White Screen */
+.pokedex-screen {
+  background: #F2F2F2;
+  width: 96%;
+  max-width: 600px;
+  min-height: calc(95vh - 60px);
+  border-radius: 20px;
+  /* Smaller radius */
+  position: relative;
+  z-index: 5;
+  padding: 30px 20px 100px 20px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  margin: 30px auto 20px auto;
+  /* Push down to show header */
+  /* Center horizontally */
+}
+
+/* The White Hump at the top of the screen */
+.pokedex-screen::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  /* Scaled down */
+  height: 20px;
+  /* Scaled down */
+  background: #F2F2F2;
+  border-radius: 50% 50% 0 0;
+  z-index: 6;
+}
+
+/* ============================================
+   개선된 로그인 화면 스타일
+   ============================================ */
+
+/* 로그인 화면이 보일 때 배경 스크롤 방지 */
+body:has(.auth-section[style*="display: block"]),
+body:has(.auth-section:not([style*="display: none"])) {
+  overflow: hidden;
+}
+
+/* 로그인 섹션 - 화면 전체 꽉 채우기 */
+.auth-section {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+  max-width: 100%;
+  margin: 0;
+  text-align: center;
+  overflow: hidden;
+  z-index: 100;
+  /* 터치 스크롤 완전 차단 */
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+/* 로고 */
+.auth-logo {
+  margin-bottom: 16px;
+}
+
+.auth-logo-img {
+  width: 80px;
+  height: 80px;
+  animation: bounce-slow 2s ease-in-out infinite;
+}
+
+/* 로그인 화면 포켓몬 컨테이너 */
+.auth-pokemon-container {
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.15));
+}
+
+.auth-pokemon-container .sprite {
+  image-rendering: pixelated;
+  /* 테두리 뿌옇게 처리 */
+  mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 60%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 60%, transparent 100%);
+  scale: 2;
+}
+
+@keyframes bounce-slow {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* 앱 이름 */
+.auth-app-name {
+  font-size: 36px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.5px;
+}
+
+/* 한 줄 설명 */
+.auth-tagline {
+  font-size: 16px;
+  color: #64748b;
+  margin: 0 0 40px 0;
+  font-weight: 500;
+}
+
+/* 버튼 컨테이너 */
+.auth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+}
+
+/* Google 로그인 버튼 개선 */
+.auth-section .google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: #ffffff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  border-radius: 24px;
+  padding: 14px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.auth-section .google-btn:hover {
+  background-color: #f8f9fa;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border-color: #c6c9cc;
+}
+
+.auth-section .google-btn:active {
+  background-color: #f1f3f4;
+  transform: scale(0.98);
+}
+
+.auth-section .google-btn img {
+  width: 20px;
+  height: 20px;
+}
+
+/* 둘러보기 버튼 */
+.guest-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #64748b;
+  border: none;
+  padding: 14px 24px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.guest-btn:hover {
+  color: #475569;
+  background: rgba(100, 116, 139, 0.08);
+  border-radius: 12px;
+  text-decoration: none;
+}
+
+.guest-btn:active {
+  transform: scale(0.98);
+}
+
+/* ============================================
+   PWA 설치 배너 스타일
+   ============================================ */
+
+.pwa-install-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  transform: translateY(100%);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0 16px 16px 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+.pwa-install-banner.visible {
+  transform: translateY(-50px);
+}
+
+.pwa-install-banner.hidden {
+  transform: translateY(100%);
+}
+
+.pwa-install-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.pwa-install-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.pwa-install-icon img {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.pwa-install-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pwa-install-text strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pwa-install-text span {
+  font-size: 13px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pwa-install-btn {
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: auto;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.pwa-install-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.pwa-install-btn:active {
+  transform: scale(0.96);
+}
+
+.pwa-install-close {
+  flex-shrink: 0;
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pwa-install-close:hover {
+  color: #64748b;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 400px) {
+  .pwa-install-content {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .pwa-install-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .pwa-install-icon img {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+  }
+
+  .pwa-install-text strong {
+    font-size: 14px;
+  }
+
+  .pwa-install-text span {
+    font-size: 12px;
+  }
+
+  .pwa-install-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}
+
+/* ============================================
+   초기 스크린타임 입력 모달 (온보딩)
+   ============================================ */
+
+.initial-screentime-modal {
+  display: none;
+  z-index: 2150;
+}
+
+.initial-screentime-content {
+  max-width: 450px;
+  width: 90%;
+  text-align: center;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 24px;
+  animation: modalBounceIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalBounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.initial-screentime-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px 20px 20px;
+  border-bottom: none;
+}
+
+.initial-screentime-title {
+  color: white !important;
+  font-size: 22px;
+  margin: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.initial-screentime-body {
+  padding: 24px;
+}
+
+/* 보상 미리보기 카드 */
+.reward-preview {
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+  border: 2px dashed #ffc107;
+  position: relative;
+  overflow: hidden;
+}
+
+.reward-preview::before {
+  content: "✨";
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-size: 16px;
+  animation: sparkle 1.5s ease-in-out infinite;
+}
+
+.reward-preview::after {
+  content: "✨";
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  font-size: 16px;
+  animation: sparkle 1.5s ease-in-out infinite 0.75s;
+}
+
+@keyframes sparkle {
+
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+.reward-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  animation: giftBounce 2s ease-in-out infinite;
+}
+
+@keyframes giftBounce {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+
+  50% {
+    transform: translateY(-8px) rotate(3deg);
+  }
+}
+
+.reward-text {
+  margin: 0;
+  font-size: 16px;
+  color: #5d4037;
+  line-height: 1.6;
+}
+
+.reward-text strong {
+  color: #e65100;
+}
+
+.reward-text .highlight {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  font-size: 20px;
+  margin-top: 4px;
+}
+
+/* 스크린타임 입력 섹션 */
+.screentime-input-section {
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.screentime-input-label {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 8px;
+}
+
+.screentime-hint {
+  font-size: 13px;
+  color: #718096;
+  margin: 0 0 16px 0;
+}
+
+.initial-screentime-input-area {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.time-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-input {
+  width: 72px;
+  height: 56px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  color: #2d3748;
+  transition: all 0.2s;
+}
+
+.time-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.time-input::placeholder {
+  color: #cbd5e0;
+}
+
+.time-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.time-preview {
+  font-size: 18px;
+  font-weight: 600;
+  color: #667eea;
+  margin: 12px 0 0 0;
+  min-height: 27px;
+}
+
+/* 액션 버튼 */
+.initial-screentime-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.initial-screentime-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.initial-screentime-btn.primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.initial-screentime-btn.primary:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+.initial-screentime-btn.primary:disabled {
+  background: #e2e8f0;
+  color: #a0aec0;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.initial-screentime-btn.secondary {
+  background: transparent;
+  color: #718096;
+  border: 1px solid #e2e8f0;
+}
+
+.initial-screentime-btn.secondary:hover {
+  background: #f7fafc;
+  color: #4a5568;
+}
+
+.info-note {
+  font-size: 12px;
+  color: #a0aec0;
+  margin: 16px 0 0 0;
+}
+
+/* 반응형 */
+@media (max-width: 480px) {
+  .initial-screentime-content {
+    width: 95%;
+    border-radius: 20px;
+  }
+
+  .initial-screentime-header {
+    padding: 20px 16px 16px;
+  }
+
+  .initial-screentime-title {
+    font-size: 18px;
+  }
+
+  .initial-screentime-body {
+    padding: 20px 16px;
+  }
+
+  .reward-preview {
+    padding: 16px;
+  }
+
+  .reward-icon {
+    font-size: 40px;
+  }
+
+  .reward-text {
+    font-size: 14px;
+  }
+
+  .reward-text .highlight {
+    font-size: 18px;
+  }
+
+  .time-input {
+    width: 64px;
+    height: 48px;
+    font-size: 20px;
+  }
+
+  .initial-screentime-btn {
+    padding: 14px;
+    font-size: 15px;
+  }
+}
+
+/* Screen Time Reward Rules Modal Styles */
+.reward-tier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.reward-tier-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.reward-tier-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.reward-tier-item.best-tier {
+  border-color: #805ad5;
+  background-color: #faf5ff;
+}
+
+.reward-tier-item.best-tier .tier-header {
+  background-color: #805ad5;
+  color: white;
+}
+
+.reward-tier-item.high-tier {
+  border-color: #4299e1;
+  background-color: #ebf8ff;
+}
+
+.reward-tier-item.high-tier .tier-header {
+  background-color: #4299e1;
+  color: white;
+}
+
+.reward-tier-item.mid-tier {
+  border-color: #38a169;
+  background-color: #f0fff4;
+}
+
+.reward-tier-item.mid-tier .tier-header {
+  background-color: #38a169;
+  color: white;
+}
+
+.reward-tier-item.low-tier {
+  border-color: #cbd5e0;
+  background-color: #f7fafc;
+}
+
+.reward-tier-item.low-tier .tier-header {
+  background-color: #cbd5e0;
+  color: #4a5568;
+}
+
+.tier-header {
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tier-badge {
+  background-color: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  margin-right: 8px;
+}
+
+.tier-rewards {
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reward-tag {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.reward-tag.pokemon {
+  background-color: #fff;
+  border: 1px solid #fc8181;
+  color: #c53030;
+}
+
+.reward-tag.item {
+  background-color: #fff;
+  border: 1px solid #63b3ed;
+  color: #2b6cb0;
+}
+
+.reward-tag.no-pokemon {
+  background-color: #edf2f7;
+  color: #718096;
+  text-decoration: line-through;
+}

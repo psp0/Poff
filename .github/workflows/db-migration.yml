@@ -1,0 +1,310 @@
+name: Database Migration with db-migrate
+
+on:
+  push:
+    paths:
+      - 'migrations/**'
+    branches: [ develop, main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+      migration_action:
+        description: 'Migration action'
+        required: true
+        default: 'up'
+        type: choice
+        options:
+          - up        # Run pending migrations
+          - down      # Rollback last migration
+          - reset     # Rollback all migrations
+          - status    # Show migration status
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: string
+      migration_action:
+        description: 'Migration action'
+        required: false
+        default: 'up'
+        type: string
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  NODE_VERSION: ${{ vars.NODE_VERSION }}
+  TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
+
+jobs:
+  determine-environment:
+    name: Determine Target Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      migration_action: ${{ steps.env.outputs.migration_action }}
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          # Determine environment based on trigger
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+            ACTION="${{ github.event.inputs.migration_action }}"
+          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
+            ENV="${{ inputs.environment }}"
+            ACTION="${{ inputs.migration_action }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ENV="prod"
+            ACTION="up"
+          else
+            # Default to dev for develop branch
+            ENV="dev"
+            ACTION="up"
+          fi
+          
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "migration_action=${ACTION:-up}" >> $GITHUB_OUTPUT
+          echo "Environment: $ENV, Action: ${ACTION:-up}"
+
+  migrate:
+    name: Run Database Migration
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    environment: ${{ needs.determine-environment.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Set environment variables
+        id: set-env
+        run: |
+          ENV="${{ needs.determine-environment.outputs.environment }}"
+          ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+          echo "env_upper=$ENV_UPPER" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-db-migration
+          role-skip-session-tagging: true
+
+      - name: Assume execution role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-db-migration-exec
+          role-chaining: true
+          role-skip-session-tagging: true
+
+      - name: Get infrastructure details from SSM
+        id: infra
+        run: |
+          ENV="${{ needs.determine-environment.outputs.environment }}"
+          echo "Fetching infrastructure details from SSM for environment: $ENV"
+          
+          # Fetch all parameters at once
+          PARAMS=$(aws ssm get-parameters \
+            --names \
+              "/pokehabit/$ENV/infrastructure/nat_instance_id" \
+              "/pokehabit/$ENV/infrastructure/rds_endpoint" \
+              "/pokehabit/$ENV/infrastructure/rds_port" \
+              "/pokehabit/$ENV/infrastructure/database_name" \
+            --query "Parameters[*].{Name:Name,Value:Value}" \
+            --output json)
+          
+          # Function to get value by name suffix
+          get_param() {
+            echo "$PARAMS" | jq -r --arg name "/pokehabit/$ENV/infrastructure/$1" '.[] | select(.Name == $name) | .Value'
+          }
+          
+          NAT_INSTANCE_ID=$(get_param "nat_instance_id")
+          RDS_ENDPOINT=$(get_param "rds_endpoint")
+          RDS_PORT=$(get_param "rds_port")
+          DATABASE_NAME=$(get_param "database_name")
+          
+          # Fallback for rds_port if not found (during transition)
+          if [ -z "$RDS_PORT" ] || [ "$RDS_PORT" = "null" ]; then
+            echo "Warning: rds_port not found in SSM, defaulting to 3306"
+            RDS_PORT="3306"
+          fi
+          
+          echo "nat_instance_id=$NAT_INSTANCE_ID" >> $GITHUB_OUTPUT
+          echo "rds_endpoint=$RDS_ENDPOINT" >> $GITHUB_OUTPUT
+          echo "rds_port=$RDS_PORT" >> $GITHUB_OUTPUT
+          echo "database_name=$DATABASE_NAME" >> $GITHUB_OUTPUT
+          
+          echo "Using database: $DATABASE_NAME on $RDS_ENDPOINT:$RDS_PORT"
+
+      - name: Setup SSM Port Forwarding
+        uses: ./.github/actions/setup-ssm-tunnel
+        with:
+          nat-instance-id: ${{ steps.infra.outputs.nat_instance_id }}
+          rds-endpoint: ${{ steps.infra.outputs.rds_endpoint }}
+          rds-port: ${{ steps.infra.outputs.rds_port }}       
+
+      - name: Fetch database credentials from Secrets Manager
+        id: db-creds
+        run: |
+          ENV="${{ needs.determine-environment.outputs.environment }}"
+          SECRET_ID="pokehabit/${ENV}/database/credentials"
+          
+          echo "Fetching credentials from secret: $SECRET_ID"
+          
+          # Fetch credentials from AWS Secrets Manager
+          SECRET_JSON=$(aws secretsmanager get-secret-value \
+            --secret-id "$SECRET_ID" \
+            --query SecretString \
+            --output text)
+          
+          # Extract username and password
+          DB_USER=$(echo "$SECRET_JSON" | jq -r .username)
+          DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r .password)
+          
+          # Set as masked output to prevent exposure in logs
+          echo "::add-mask::$DB_USER"
+          echo "::add-mask::$DB_PASSWORD"
+          echo "db_user=$DB_USER" >> $GITHUB_OUTPUT
+          echo "db_password=$DB_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Test database connectivity
+        run: |
+          # Install MySQL client for testing
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          
+          # Test connection through SSM tunnel
+          echo "Testing MySQL database connectivity through SSM Port Forwarding..."
+          mysql -h 127.0.0.1 -P 3307 -u "${{ steps.db-creds.outputs.db_user }}" -p"${{ steps.db-creds.outputs.db_password }}" \
+            -D "${{ steps.infra.outputs.database_name }}" \
+            -e "SELECT VERSION();" || {
+            echo "ERROR: Database connection failed!"
+            echo "Endpoint: ${{ steps.infra.outputs.rds_endpoint }}:${{ steps.infra.outputs.rds_port }}"
+            echo "Database: ${{ steps.infra.outputs.database_name }}"
+            exit 1
+          }
+          echo "Database connection successful!"
+
+      - name: Create db-migrate configuration
+        run: |
+          cd migrations
+          cat > database.json <<EOF
+          {
+            "${{ needs.determine-environment.outputs.environment }}": {
+              "driver": "mysql",
+              "host": "127.0.0.1",
+              "port": 3307,
+              "database": "${{ steps.infra.outputs.database_name }}",
+              "user": "${{ steps.db-creds.outputs.db_user }}",
+              "password": "${{ steps.db-creds.outputs.db_password }}",
+              "multipleStatements": true
+            }
+          }
+          EOF
+          echo "Database configuration created for MySQL"
+          echo "Database: ${{ steps.infra.outputs.database_name }}"
+
+      - name: Install migrations dependencies
+        run: |
+          cd migrations
+          npm ci
+
+      - name: Run db-migrate Migration
+        env:
+          MIGRATION_ACTION: ${{ needs.determine-environment.outputs.migration_action }}
+          DB_ENV: ${{ needs.determine-environment.outputs.environment }}
+        run: |
+          cd migrations
+          echo "Running db-migrate through SSM Port Forwarding..."
+          echo "Migration action: $MIGRATION_ACTION"
+          echo "Environment: $DB_ENV"
+          echo "Migrations directory: files/"
+          
+          case "${MIGRATION_ACTION:-up}" in
+            "up")
+              echo "Running all pending migrations..."
+              npx db-migrate up -e $DB_ENV -m files
+              ;;
+            "down")
+              echo "Rolling back last migration..."
+              npx db-migrate down -e $DB_ENV -m files
+              ;;
+            "reset")
+              echo "WARNING: This will rollback all migrations!"
+              npx db-migrate reset -e $DB_ENV -m files
+              ;;
+            "status")
+              echo "Checking migration status..."
+              npx db-migrate status -e $DB_ENV -m files
+              ;;
+            *)
+              echo "Unknown migration action: $MIGRATION_ACTION"
+              exit 1
+              ;;
+          esac
+          
+          echo ""
+          echo "Current migration status:"
+          npx db-migrate status -e $DB_ENV -m files
+          echo ""
+          echo "Migration completed successfully!"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Cleaning up resources..."
+          
+          # Remove database config with credentials
+          rm -f migrations/database.json
+          
+          # Kill SSM session processes
+          pkill -f "session-manager-plugin" || true
+          
+          echo "Cleanup completed"
+
+      - name: Notify Slack on Success
+        if: success()
+        continue-on-error: true
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#pokehabit-deployments'
+          text: |
+            ✅ Database migration completed successfully!
+            Environment: ${{ needs.determine-environment.outputs.environment }}
+            Action: ${{ github.event.inputs.migration_action || 'up' }}
+            Commit: ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
+
+      - name: Notify Slack on Failure
+        if: failure()
+        continue-on-error: true
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#pokehabit-alerts'
+          text: |
+            ❌ Database migration failed!
+            Environment: ${{ needs.determine-environment.outputs.environment }}
+            Action: ${{ github.event.inputs.migration_action || 'up' }}
+            Commit: ${{ github.sha }}
+            Check the logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}
