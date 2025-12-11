@@ -1,0 +1,32 @@
+# ============================================================================
+# assets-manifest.txt - List of info files to upload to S3
+# ============================================================================
+# Only files listed here will be uploaded from base/info/ directories.
+# Lines starting with # are comments and will be ignored.
+# Paths are relative to pokehabit-assets/
+# ============================================================================
+
+# Korean Core Text Files
+base/info/Text_kor_core/SPECIES_NAMES.txt
+base/info/Text_kor_core/SPECIES_CATEGORIES.txt
+base/info/Text_kor_core/POKEDEX_ENTRIES.txt
+base/info/Text_kor_core/SPECIES_FORM_NAMES.txt
+base/info/Text_kor_core/TYPE_NAMES.txt
+
+# Korean Game Text Files
+base/info/Text_kor_game/SPECIES_NAMES.txt
+base/info/Text_kor_game/SPECIES_CATEGORIES.txt
+base/info/Text_kor_game/POKEDEX_ENTRIES.txt
+base/info/Text_kor_game/SPECIES_FORM_NAMES.txt
+base/info/Text_kor_game/TYPE_NAMES.txt
+
+# PBS Pokemon Data Files
+base/info/PBS/pokemon.txt
+base/info/PBS/pokemon_forms.txt
+base/info/PBS/pokemon_forms_pikachu_caps.txt
+base/info/PBS/pokemon_forms_gmax.txt
+base/info/PBS/pokemon_metrics.txt
+base/info/PBS/pokemon_metrics_Gen_9_Pack.txt
+base/info/PBS/pokemon_metrics_female.txt
+base/info/PBS/pokemon_metrics_forms.txt
+base/info/PBS/pokemon_metrics_gmax.txt

@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # 1. GitHub Actions (CI/CD 도구 업데이트는 중요함)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly" # 매주 -> 매월로 변경하여 노이즈 감소
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # 2. Frontend / Root (메인 앱)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      frontend-deps:
+        patterns:
+          - "*"
+
+  # 3. Lambda Shared (공통 모듈 - 파급력이 크므로 관리 필요)
+  - package-ecosystem: "npm"
+    directory: "/lambda/shared"
+    schedule:
+      interval: "monthly"
+    groups:
+      lambda-shared-deps:
+        patterns:
+          - "*"

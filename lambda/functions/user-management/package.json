@@ -1,0 +1,27 @@
+{
+    "name": "user-management-lambda",
+    "version": "1.0.0",
+    "description": "User Management Lambda Function",
+    "main": "index.js",
+    "scripts": {
+        "test": "jest",
+        "build": "npm install --production",
+        "deploy": "zip -r user-management.zip . -x '*.test.js' 'node_modules/.cache/*'"
+    },
+    "dependencies": {},
+    "devDependencies": {
+        "jest": "^29.7.0"
+    },
+    "engines": {
+        "node": ">=24.0.0"
+    },
+    "keywords": [
+        "aws",
+        "lambda",
+        "user",
+        "management",
+        "authentication"
+    ],
+    "author": "Pokemon Collection Team",
+    "license": "MIT"
+}

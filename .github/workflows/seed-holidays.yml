@@ -1,0 +1,31 @@
+name: Seed Holidays to RDS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - dev
+          - prod
+  schedule:
+    # Run every Jan 1st and Jul 1st at 00:00 UTC
+    - cron: '0 0 1 1,7 *'
+
+# Prevent concurrent runs for the same environment
+concurrency:
+  group: seed-holidays-${{ github.event.inputs.environment || 'prod' }}
+  cancel-in-progress: false
+
+jobs:
+  seed-holidays:
+    name: Seed Holidays (${{ github.event.inputs.environment || 'prod' }})
+    uses: ./.github/workflows/seed-rds.yml
+    with:
+      environment: ${{ github.event.inputs.environment || 'prod' }}
+      seed_pokemon: false
+      seed_holidays: true
+    secrets: inherit

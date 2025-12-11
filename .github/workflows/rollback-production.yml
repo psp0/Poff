@@ -1,0 +1,402 @@
+name: Production Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      rollback_type:
+        description: "Rollback type"
+        required: true
+        type: choice
+        options:
+          - frontend-only    # S3/CloudFront만 롤백
+          - full            # 인프라 + 프론트엔드 전체 롤백
+      target_tag:
+        description: "Target release tag (e.g., v2025.12.02-45)"
+        required: true
+        type: string
+      reason:
+        description: "Reason for rollback"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  NODE_VERSION: ${{ vars.NODE_VERSION }}
+  TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_WORKING_DIR: terraform/environments/prod
+  TF_STATE_KEY: environments/prod/terraform.tfstate
+  TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
+  TF_VAR_datadog_app_key: ${{ secrets.DATADOG_APP_KEY }}
+  TF_VAR_lambda_package_dir: "../../../lambda/packages"
+  TF_VAR_aws_infra_role_arn: ${{ secrets.AWS_INFRA_DNS_MANAGEMENT_ROLE_ARN }}
+
+jobs:
+  validate-rollback:
+    name: Validate Rollback Request
+    runs-on: ubuntu-latest
+    outputs:
+      valid_tag: ${{ steps.validate.outputs.valid_tag }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate target tag exists
+        id: validate
+        run: |
+          TARGET_TAG="${{ github.event.inputs.target_tag }}"
+          
+          if git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
+            echo "✅ Tag $TARGET_TAG exists"
+            echo "valid_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Tag $TARGET_TAG does not exist"
+            echo "valid_tag=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Log rollback request
+        run: |
+          echo "🔄 Rollback Request"
+          echo "==================="
+          echo "Target: ${{ github.event.inputs.target_tag }}"
+          echo "Type: ${{ github.event.inputs.rollback_type }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Requested by: @${{ github.actor }}"
+          echo "Time: $(date -u)"
+
+  rollback-frontend:
+    name: Rollback Frontend
+    runs-on: ubuntu-latest
+    needs: [validate-rollback, rollback-infrastructure]
+    if: |
+      always() &&
+      needs.validate-rollback.outputs.valid_tag == 'true' &&
+      (github.event.inputs.rollback_type == 'frontend-only' || needs.rollback-infrastructure.result == 'success')
+    
+    steps:
+      - name: Checkout target version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_tag }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PROD_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-rollback
+          role-skip-session-tagging: true
+
+      - name: Assume execution role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PROD_EXECUTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-rollback-exec
+          role-chaining: true
+          role-skip-session-tagging: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+        run: |
+          cat > backend-ci.hcl << EOF
+          bucket         = "${{ env.TF_STATE_BUCKET }}"
+          key            = "${{ env.TF_STATE_KEY }}"
+          region         = "${{ env.AWS_REGION }}"
+          encrypt        = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
+          EOF
+          
+          terraform init -backend-config=backend-ci.hcl -input=false
+          
+          # Cleanup backend config
+          rm -f backend-ci.hcl
+
+      - name: Get Infrastructure Details
+        id: get-bucket
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          echo "Fetching infrastructure details from Terraform state..."
+          
+          S3_BUCKET=$(terraform output -raw s3_bucket)
+          CF_DIST_ID=$(terraform output -raw cloudfront_distribution_id)
+          
+          echo "s3_bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+          echo "cf_dist_id=$CF_DIST_ID" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Prepare Frontend Artifacts
+        run: |
+          TARGET_TAG="${{ github.event.inputs.target_tag }}"
+          S3_BUCKET="${{ env.TF_STATE_BUCKET }}"
+          S3_PATH="s3://${S3_BUCKET}/releases/${TARGET_TAG}/frontend/"
+          
+          echo "Checking for pre-built artifacts at $S3_PATH..."
+          
+          if aws s3 ls "$S3_PATH" > /dev/null 2>&1; then
+            echo "✅ Pre-built artifacts found. Downloading..."
+            mkdir -p dist
+            aws s3 sync "$S3_PATH" dist/
+            echo "✅ Frontend artifacts downloaded successfully"
+          else
+            echo "⚠️ No pre-built artifacts found. Falling back to build from source..."
+            
+            echo "Installing frontend dependencies..."
+            npm ci
+            echo "Building frontend with Vite..."
+            npm run build
+            echo "✅ Frontend build completed"
+          fi
+
+      - name: Backup current version
+        run: |
+          S3_BUCKET="${{ steps.get-bucket.outputs.s3_bucket }}"
+          BACKUP_PREFIX="rollback-backups/$(date +%Y%m%d-%H%M%S)"
+          
+          echo "📦 Backing up current version to $BACKUP_PREFIX..."
+          aws s3 sync "s3://${S3_BUCKET}/" "s3://${S3_BUCKET}/${BACKUP_PREFIX}/" \
+            --exclude "rollback-backups/*" \
+            --exclude "base/*" \
+            --exclude "custom/*" \
+            --exclude "external/*"
+
+      - name: Upload rollback version
+        run: |
+          S3_BUCKET="${{ steps.get-bucket.outputs.s3_bucket }}"
+          
+          echo "🔄 Uploading rollback version from dist/..."
+          
+          # Upload HTML file with short cache
+          aws s3 cp dist/index.html "s3://${S3_BUCKET}/" \
+            --content-type "text/html" \
+            --cache-control "max-age=300"
+          
+          # Upload hashed assets (JS, CSS) with long cache
+          if [ -d "dist/assets" ]; then
+            aws s3 sync dist/assets/ "s3://${S3_BUCKET}/assets/" \
+              --cache-control "max-age=31536000, immutable" \
+              --exclude "*.DS_Store" \
+              --delete
+          fi
+          
+          # Upload PWA files (manifest, service worker)
+          echo "Uploading PWA files..."
+          for file in dist/manifest.json dist/sw.js; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              aws s3 cp "$file" "s3://${S3_BUCKET}/${filename}" \
+                --cache-control "max-age=3600"
+            fi
+          done
+          
+          # Upload PWA icons
+          for icon in dist/icon-*.png; do
+            if [ -f "$icon" ]; then
+              filename=$(basename "$icon")
+              aws s3 cp "$icon" "s3://${S3_BUCKET}/${filename}" \
+                --cache-control "max-age=31536000"
+            fi
+          done
+          
+          # Upload fonts if they exist in dist
+          if [ -d "dist/fonts" ]; then
+            echo "Uploading fonts..."
+            aws s3 sync dist/fonts/ "s3://${S3_BUCKET}/fonts/" \
+              --cache-control "max-age=31536000" \
+              --exclude "*.DS_Store"
+          fi
+          
+          echo "✅ Rollback version uploaded successfully"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          CF_DIST_ID="${{ steps.get-bucket.outputs.cf_dist_id }}"
+          
+          if [ ! -z "$CF_DIST_ID" ]; then
+            echo "🔄 Invalidating CloudFront cache..."
+            aws cloudfront create-invalidation \
+              --distribution-id "$CF_DIST_ID" \
+              --paths "/*"
+          fi
+
+      - name: Verify rollback
+        run: |
+          echo "✅ Frontend rollback completed!"
+          echo "Version: ${{ github.event.inputs.target_tag }}"
+
+  rollback-infrastructure:
+    name: Rollback Infrastructure
+    runs-on: ubuntu-latest
+    needs: validate-rollback
+    if: needs.validate-rollback.outputs.valid_tag == 'true' && github.event.inputs.rollback_type == 'full'
+    
+    steps:
+      - name: Checkout target version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_tag }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PROD_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-rollback
+          role-skip-session-tagging: true
+
+      - name: Assume execution role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PROD_EXECUTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-rollback-exec
+          role-chaining: true
+          role-skip-session-tagging: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            lambda/shared/package-lock.json
+
+      - name: Prepare Lambda Artifacts
+        run: |
+          TARGET_TAG="${{ github.event.inputs.target_tag }}"
+          S3_BUCKET="${{ env.TF_STATE_BUCKET }}"
+          S3_PATH="s3://${S3_BUCKET}/releases/${TARGET_TAG}/lambda/"
+          
+          echo "Checking for pre-built artifacts at $S3_PATH..."
+          
+          if aws s3 ls "$S3_PATH" > /dev/null 2>&1; then
+            echo "✅ Pre-built artifacts found. Downloading..."
+            mkdir -p lambda/packages
+            aws s3 sync "$S3_PATH" lambda/packages/
+            echo "✅ Lambda artifacts downloaded successfully"
+          else
+            echo "⚠️ No pre-built artifacts found. Falling back to build from source..."
+            
+            cd lambda
+            
+            # First, install shared dependencies
+            echo "Installing shared dependencies..."
+            cd shared
+            npm ci --production
+            cd ..
+            
+            # Create deployment packages for each function
+            for dir in functions/*/; do
+              if [ -d "$dir" ]; then
+                function_name=$(basename "$dir")
+                echo "Building $function_name..."
+                
+                # Create package directory
+                mkdir -p "packages/$function_name"
+                
+                # Copy function code
+                cp -r "$dir"* "packages/$function_name/"
+                
+                # Create node_modules directory and install shared as a local package
+                mkdir -p "packages/$function_name/node_modules"
+                
+                # Copy shared modules to the appropriate location
+                cp -r shared/*.js "packages/$function_name/"
+                cp -r shared/node_modules/* "packages/$function_name/node_modules/" 2>/dev/null || true
+                
+                # Install function-specific dependencies
+                cd "packages/$function_name"
+                
+                if [ -f "package.json" ]; then
+                  echo "Installing function dependencies..."
+                  npm install --production --no-save
+                fi
+                
+                # Create ZIP package
+                zip -r "../${function_name}.zip" . \
+                  -x "*.test.js" "*.spec.js" "test/*" "tests/*" \
+                  -x "package-lock.json" "package.json"
+                
+                cd ../..
+              fi
+            done
+          fi
+
+      - name: Terraform Init & Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+        run: |
+          cat > backend-ci.hcl <<EOF
+          bucket         = "${{ env.TF_STATE_BUCKET }}"
+          key            = "${{ env.TF_STATE_KEY }}"
+          region         = "${{ env.AWS_REGION }}"
+          encrypt        = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
+          EOF
+          
+          terraform init -backend-config=backend-ci.hcl -input=false
+          terraform plan -out=rollback.tfplan
+          terraform apply rollback.tfplan
+          
+          # Cleanup
+          rm -f backend-ci.hcl rollback.tfplan
+
+  # Rollback summary (logged to workflow output)
+  rollback-summary:
+    name: Rollback Summary
+    runs-on: ubuntu-latest
+    needs: [rollback-frontend, rollback-infrastructure]
+    if: always()
+    
+    steps:
+      - name: Print rollback summary
+        run: |
+          echo "🔄 Production Rollback Summary"
+          echo "==============================="
+          echo "Status: ${{ needs.rollback-frontend.result == 'success' && '✅ Success' || '❌ Failed' }}"
+          echo "Target Version: ${{ github.event.inputs.target_tag }}"
+          echo "Rollback Type: ${{ github.event.inputs.rollback_type }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Executed by: @${{ github.actor }}"
+          echo "Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo ""
+          echo "Post-Rollback Checklist:"
+          echo "- [ ] Verify site functionality"
+          echo "- [ ] Check API responses"
+          echo "- [ ] Monitor error rates"
+          echo "- [ ] Notify stakeholders"

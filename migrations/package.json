@@ -1,0 +1,20 @@
+{
+    "name": "pokehabit-migrations",
+    "version": "1.0.0",
+    "description": "Database migrations for Pokemon Habit Collection",
+    "private": true,
+    "scripts": {
+        "migrate:up": "db-migrate up -m files",
+        "migrate:down": "db-migrate down -m files",
+        "migrate:reset": "db-migrate reset -m files",
+        "migrate:check": "db-migrate up --check -m files",
+        "migrate:create": "db-migrate create"
+    },
+    "devDependencies": {
+        "db-migrate": "^0.11.14",
+        "db-migrate-mysql": "^3.0.0"
+    },
+    "engines": {
+        "node": ">=24.0.0"
+    }
+}

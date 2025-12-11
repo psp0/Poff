@@ -1,0 +1,507 @@
+name: Main Branch Dev deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to perform (apply or destroy)"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+      seed_data:
+        description: "Seed database with initial data (Pokemon, Holidays)"
+        required: false
+        default: false
+        type: boolean
+
+  workflow_call:
+    inputs:
+      action:
+        required: false
+        type: string
+        default: "apply"
+        description: "Action to perform (apply or destroy)"
+        
+    secrets:
+      AWS_DEV_GHA_DEPLOY_ROLE_ARN:
+        required: true
+      AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN:
+        required: true
+      AWS_DEV_EXECUTION_ROLE_ARN:
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-dev:
+    name: Deploy dev
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+      statuses: write
+      deployments: write
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      NODE_VERSION: ${{ vars.NODE_VERSION }}
+      TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_WORKING_DIR: terraform/environments/dev
+      TF_STATE_KEY: environments/dev/terraform.tfstate
+      TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
+      TF_VAR_datadog_app_key: ${{ secrets.DATADOG_APP_KEY }}
+      TF_VAR_lambda_package_dir: "../../../lambda/packages"
+      TF_VAR_aws_infra_role_arn: ${{ secrets.AWS_INFRA_DNS_MANAGEMENT_ROLE_ARN }}
+      TF_VAR_firebase_service_account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    outputs:
+      vpc_id: ${{ steps.set-outputs.outputs.vpc_id }}
+      rds_endpoint: ${{ steps.set-outputs.outputs.rds_endpoint }}
+      database_name: ${{ steps.set-outputs.outputs.database_name }}
+      api_endpoint: ${{ steps.set-outputs.outputs.api_endpoint }}
+      s3_bucket: ${{ steps.set-outputs.outputs.s3_bucket }}
+      nat_instance_id: ${{ steps.set-outputs.outputs.nat_instance_id }}
+      cloudfront_distribution_id: ${{ steps.set-outputs.outputs.cloudfront_distribution_id }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set action variable
+        id: set-action
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_call" ]; then
+            ACTION="${{ inputs.action }}"
+          else
+            ACTION="${{ github.event.inputs.action }}"
+          fi
+          echo "action=${ACTION:-apply}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions
+          role-skip-session-tagging: true
+
+      - name: Assume second role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-second-role
+          role-chaining: true
+          role-skip-session-tagging: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Download Frontend Artifact (Workflow Dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ci.yml
+          name: frontend-dist
+          commit: ${{ github.sha }}
+          path: dist
+
+      - name: Download Frontend Artifact (Workflow Call)
+        if: github.event_name == 'workflow_call'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+
+      - name: Download Lambda Artifact (Workflow Dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ci.yml
+          name: lambda-packages
+          commit: ${{ github.sha }}
+          path: lambda/packages
+
+      - name: Download Lambda Artifact (Workflow Call)
+        if: github.event_name == 'workflow_call'
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-packages
+          path: lambda/packages
+
+
+      - name: Terraform Init
+        id: terraform_init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+          TF_IN_AUTOMATION: true
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+        run: |
+          set -e
+          echo "::group::Terraform Init"
+          cat > backend-ci.hcl << EOF
+          bucket = "${{ env.TF_STATE_BUCKET }}"
+          key = "${{ env.TF_STATE_KEY }}"
+          region = "${{ env.AWS_REGION }}"
+          encrypt = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
+          EOF
+          cleanup() {
+            rm -f backend-ci.hcl
+            echo "Backend configuration file cleaned up"
+          }
+          trap cleanup EXIT
+          terraform init -backend-config=backend-ci.hcl -input=false
+          echo "Terraform initialization completed successfully"
+          echo "::endgroup::"
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          echo "::group::Terraform Validate"
+          terraform validate
+          echo "Terraform configuration is valid"
+          echo "::endgroup::"
+
+      # Apply workflow
+      - name: Terraform Plan
+        id: plan
+        if: steps.set-action.outputs.action == 'apply'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+        run: |
+          set -e
+          echo "::group::Terraform Plan"
+          terraform plan \
+            -out=tfplan \
+            -detailed-exitcode || exit_code=$?
+
+          # Handle terraform plan exit codes
+          if [ "${exit_code:-0}" -eq 0 ]; then
+            echo "No changes needed"
+            echo "plan_has_changes=false" >> $GITHUB_OUTPUT
+          elif [ "${exit_code:-0}" -eq 2 ]; then
+            echo "Changes detected"
+            echo "plan_has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "Plan failed with exit code: ${exit_code:-0}"
+            exit ${exit_code:-1}
+          fi
+          echo "::endgroup::"
+
+      - name: Terraform Apply
+        id: apply
+        if: steps.set-action.outputs.action == 'apply' && steps.plan.outcome == 'success'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+        run: |
+          set -e
+          echo "::group::Terraform Apply"
+          if [ "${{ steps.plan.outputs.plan_has_changes }}" = "true" ]; then
+            terraform apply -auto-approve tfplan
+            echo "apply_success=true" >> $GITHUB_OUTPUT
+            echo "Resources applied successfully"
+          else
+            echo "No changes to apply"
+            echo "apply_success=true" >> $GITHUB_OUTPUT
+          fi
+          echo "::endgroup::"
+
+      # Destroy workflow
+      - name: Terraform Plan (Destroy)
+        id: plan-destroy
+        if: steps.set-action.outputs.action == 'destroy'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+        run: |
+          set -e
+          echo "::group::Terraform Plan (Destroy)"        
+          terraform plan -destroy \
+            -out=tfdestroyplan \
+            -detailed-exitcode || exit_code=$?
+
+          # Handle terraform plan exit codes
+          if [ "${exit_code:-0}" -eq 0 ]; then
+            echo "No resources to destroy"
+            echo "destroy_plan_has_changes=false" >> $GITHUB_OUTPUT
+          elif [ "${exit_code:-0}" -eq 2 ]; then
+            echo "Resources to destroy detected"
+            echo "destroy_plan_has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "Destroy plan failed with exit code: ${exit_code:-0}"
+            exit ${exit_code:-1}
+          fi
+          echo "::endgroup::"
+
+      - name: Terraform Destroy
+        id: destroy
+        if: steps.set-action.outputs.action == 'destroy' && steps.plan-destroy.outcome == 'success'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+        run: |
+          set -e
+          echo "::group::Terraform Destroy"
+          if [ "${{ steps.plan-destroy.outputs.destroy_plan_has_changes }}" = "true" ]; then
+            terraform apply -auto-approve tfdestroyplan
+            echo "destroy_success=true" >> $GITHUB_OUTPUT
+            echo "Resources destroyed successfully"
+          else
+            echo "No resources to destroy"
+            echo "destroy_success=true" >> $GITHUB_OUTPUT
+          fi
+          echo "::endgroup::"
+
+      # Install jq for output parsing
+      - name: Install jq
+        if: steps.set-action.outputs.action == 'apply'
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # Set outputs only after successful apply
+      - name: Set Terraform Outputs
+        id: set-outputs
+        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success' && steps.apply.outputs.apply_success == 'true'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          set -e
+          echo "Setting Terraform outputs..."        
+          outputs_json=$(terraform output -json)
+
+          # Essential outputs only (no sensitive information)
+          outputs_to_set=(
+            "vpc_id"
+            "rds_endpoint"
+            "rds_port"
+            "database_name"
+            "api_endpoint"
+            "s3_bucket"
+            "nat_instance_id"
+            "cloudfront_distribution_id"
+          )
+
+          for output in "${outputs_to_set[@]}"; do
+            if echo "$outputs_json" | jq -e --arg key "$output" 'has($key)' > /dev/null; then
+              value=$(echo "$outputs_json" | jq -r --arg key "$output" '.[$key].value')
+              echo "${output}=${value}" >> $GITHUB_OUTPUT
+            else
+              echo "Warning: $output output not found"
+              echo "${output}=" >> $GITHUB_OUTPUT
+            fi
+          done
+
+      - name: Store Parameters in SSM
+        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success'
+        run: |
+          ENV="dev"
+          echo "Storing infrastructure parameters in SSM for environment: $ENV"
+          
+          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/rds_endpoint" --value "${{ steps.set-outputs.outputs.rds_endpoint }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/rds_port" --value "${{ steps.set-outputs.outputs.rds_port }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/database_name" --value "${{ steps.set-outputs.outputs.database_name }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/nat_instance_id" --value "${{ steps.set-outputs.outputs.nat_instance_id }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/s3_bucket" --value "${{ steps.set-outputs.outputs.s3_bucket }}" --type "String" --overwrite
+          
+          echo "✅ Parameters stored successfully"
+
+      # Upload static files to S3
+      - name: Upload Frontend Files to S3
+        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success'
+        run: |
+          echo "Uploading Vite build output to S3..."
+          S3_BUCKET="${{ steps.set-outputs.outputs.s3_bucket }}"
+          
+          if [ -z "$S3_BUCKET" ]; then
+            echo "Error: S3 bucket name not found"
+            exit 1
+          fi
+          
+          echo "Target bucket: $S3_BUCKET"
+          
+          # Upload all files from dist/ directory (Vite build output)
+          echo "Uploading dist/ files..."
+          
+          # Sync dist/ to S3 with appropriate cache headers
+          # - HTML files: short cache (5 min) for quick updates
+          # - Assets with hash: long cache (1 year) for optimal performance
+          # - Other static files: medium cache (1 hour)
+          
+          # Upload HTML file with short cache
+          aws s3 cp dist/index.html "s3://${S3_BUCKET}/" \
+            --content-type "text/html" \
+            --cache-control "max-age=300"
+          
+          # Upload hashed assets (JS, CSS) with long cache
+          if [ -d "dist/assets" ]; then
+            aws s3 sync dist/assets/ "s3://${S3_BUCKET}/assets/" \
+              --cache-control "max-age=31536000, immutable" \
+              --exclude "*.DS_Store"
+          fi
+          
+          # Upload PWA files (manifest, service worker, icons)
+          echo "Uploading PWA files..."
+          for file in dist/manifest.json dist/sw.js; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              aws s3 cp "$file" "s3://${S3_BUCKET}/${filename}" \
+                --cache-control "max-age=3600"
+            fi
+          done
+          
+          # Upload PWA icons
+          for icon in dist/icon-*.png; do
+            if [ -f "$icon" ]; then
+              filename=$(basename "$icon")
+              aws s3 cp "$icon" "s3://${S3_BUCKET}/${filename}" \
+                --cache-control "max-age=31536000"
+            fi
+          done
+          
+          # Upload fonts if they exist in dist
+          if [ -d "dist/fonts" ]; then
+            echo "Uploading fonts..."
+            aws s3 sync dist/fonts/ "s3://${S3_BUCKET}/fonts/" \
+              --cache-control "max-age=31536000" \
+              --exclude "*.DS_Store"
+          fi
+          
+          # Note: pokehabit-assets are uploaded separately via scripts/upload-assets.sh
+          # This avoids storing large binary files in Git
+          
+          echo "✅ Frontend files uploaded successfully"
+
+      - name: Invalidate CloudFront Cache
+        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success'
+        run: |
+          DIST_ID="${{ steps.set-outputs.outputs.cloudfront_distribution_id }}"
+          if [ ! -z "$DIST_ID" ]; then
+            echo "Invalidating CloudFront cache for distribution: $DIST_ID"
+            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"
+          else
+            echo "CloudFront distribution ID not found, skipping invalidation"
+          fi
+
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Action: ${{ steps.set-action.outputs.action }}" >> $GITHUB_STEP_SUMMARY          
+
+          if [ "${{ steps.set-action.outputs.action }}" = "apply" ]; then
+            if [ "${{ steps.apply.outcome }}" = "success" ] && [ "${{ steps.apply.outputs.apply_success }}" = "true" ]; then
+              echo "- Status: Apply completed successfully" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ steps.apply.outcome }}" = "failure" ]; then
+              echo "- Status: Apply failed" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ steps.plan.outcome }}" = "failure" ]; then
+              echo "- Status: Plan failed" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- Status: Apply was skipped or incomplete" >> $GITHUB_STEP_SUMMARY
+            fi
+          elif [ "${{ steps.set-action.outputs.action }}" = "destroy" ]; then
+            if [ "${{ steps.destroy.outcome }}" = "success" ] && [ "${{ steps.destroy.outputs.destroy_success }}" = "true" ]; then
+              echo "- Status: Destroy completed successfully" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ steps.destroy.outcome }}" = "failure" ]; then
+              echo "- Status: Destroy failed" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ steps.plan-destroy.outcome }}" = "failure" ]; then
+              echo "- Status: Destroy plan failed" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- Status: Destroy was skipped or incomplete" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+      # Clean up tfplan file if it exists
+      - name: Cleanup tfplan file
+        if: always()
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          for plan_file in tfplan tfdestroyplan; do
+            if [ -f "$plan_file" ]; then
+              rm -f "$plan_file"
+              echo "$plan_file file removed."
+            else
+              echo "No $plan_file file to remove."
+            fi
+          done
+
+  run-migration:
+    name: Run Database Migration
+    needs: deploy-dev
+    if: needs.deploy-dev.outputs.rds_endpoint != ''
+    uses: ./.github/workflows/db-migration.yml
+    with:
+      environment: 'dev'
+      migration_action: 'up'  # Run pending migrations
+    secrets: inherit
+
+  seed-database:
+    name: Seed Database
+    needs: [deploy-dev, run-migration]
+    if: needs.deploy-dev.outputs.rds_endpoint != '' && github.event.inputs.seed_data == 'true'
+    uses: ./.github/workflows/seed-rds.yml
+    with:
+      environment: 'dev'
+      seed_holidays: true
+      rds_endpoint: ${{ needs.deploy-dev.outputs.rds_endpoint }}
+      rds_port: ${{ needs.deploy-dev.outputs.rds_port }}
+      database_name: ${{ needs.deploy-dev.outputs.database_name }}
+      nat_instance_id: ${{ needs.deploy-dev.outputs.nat_instance_id }}
+      s3_bucket: ${{ needs.deploy-dev.outputs.s3_bucket }}
+    secrets: inherit
+
+  notify:
+    name: Notify Deployment Status
+    needs: [deploy-dev, run-migration, seed-database]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack on Success
+        if: needs.deploy-dev.result == 'success' && needs.run-migration.result == 'success' && (needs.seed-database.result == 'success' || needs.seed-database.result == 'skipped')
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#pokehabit-deployments'
+          text: |
+            🚀 Development deployment successful!
+            API: ${{ needs.deploy-dev.outputs.api_endpoint }}
+            S3 Bucket: ${{ needs.deploy-dev.outputs.s3_bucket }}
+            Database: ${{ needs.deploy-dev.outputs.database_name }}
+            Seeding: ${{ needs.seed-database.result }}
+            Commit: ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
+
+      - name: Notify Slack on Failure
+        if: needs.deploy-dev.result == 'failure' || needs.run-migration.result == 'failure' || needs.seed-database.result == 'failure'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#pokehabit-alerts'
+          text: |
+            ❌ Development deployment failed!
+            Deploy Status: ${{ needs.deploy-dev.result }}
+            Migration Status: ${{ needs.run-migration.result }}
+            Seeding Status: ${{ needs.seed-database.result }}
+            Commit: ${{ github.sha }}
+            Check the logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}

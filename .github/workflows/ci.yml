@@ -1,0 +1,223 @@
+name: CI - Continuous Integration
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: ${{ vars.NODE_VERSION }}
+  TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Build and validate frontend
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+          retention-days: 7
+
+  # Validate Terraform configuration (Dev)
+  validate-terraform-dev:
+    name: Validate Terraform (Dev)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-ci
+          role-skip-session-tagging: true
+
+      - name: Terraform Format Check
+        run: |
+          cd terraform
+          terraform fmt -check -recursive modules/
+          terraform fmt -check -recursive environments/
+          terraform fmt -check -recursive bootstrap/
+
+      - name: Terraform Init and Validate (Dev)
+        run: |
+          set -e
+          cd terraform/environments/dev
+          
+          echo "::group::Creating temporary backend configuration"
+          cat > backend-ci.hcl <<EOF
+          bucket  = "${{ env.TF_STATE_BUCKET }}"
+          key     = "environments/dev/terraform.tfstate"
+          region  = "${{ env.AWS_REGION }}"
+          encrypt = true
+          EOF
+          
+          # Cleanup function to remove temporary backend config
+          cleanup() {
+            rm -f backend-ci.hcl
+            echo "Backend configuration file cleaned up"
+          }
+          trap cleanup EXIT
+          echo "::endgroup::"
+          
+          echo "::group::Terraform Init"
+          terraform init -backend-config=backend-ci.hcl -input=false
+          echo "Terraform initialization completed successfully"
+          echo "::endgroup::"
+          
+          echo "::group::Terraform Validate"
+          terraform validate
+          echo "Terraform validation completed successfully"
+          echo "::endgroup::"
+
+  # Validate Terraform configuration (Prod)
+  validate-terraform-prod:
+    name: Validate Terraform (Prod)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-ci
+          role-skip-session-tagging: true
+
+      - name: Terraform Init and Validate (Prod)
+        run: |
+          set -e
+          cd terraform/environments/prod
+          
+          echo "::group::Creating temporary backend configuration"
+          cat > backend-ci.hcl <<EOF
+          bucket  = "${{ env.TF_STATE_BUCKET }}"
+          key     = "environments/prod/terraform.tfstate"
+          region  = "${{ env.AWS_REGION }}"
+          encrypt = true
+          EOF
+          
+          # Cleanup function to remove temporary backend config
+          cleanup() {
+            rm -f backend-ci.hcl
+            echo "Backend configuration file cleaned up"
+          }
+          trap cleanup EXIT
+          echo "::endgroup::"
+          
+          echo "::group::Terraform Init"
+          terraform init -backend-config=backend-ci.hcl -input=false
+          echo "Terraform initialization completed successfully"
+          echo "::endgroup::"
+          
+          echo "::group::Terraform Validate"
+          terraform validate
+          echo "Terraform validation completed successfully"
+          echo "::endgroup::"
+
+  # Deploy to Dev
+  deploy-dev:
+    name: Deploy to Dev
+    needs: [build-frontend, build-lambda, validate-terraform-dev]
+    uses: ./.github/workflows/deploy-dev.yml
+    with:
+      action: apply
+    secrets: inherit
+
+  # Security scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Checkov static analysis
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform/
+          framework: terraform
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          soft_fail: true
+
+      - name: Upload Checkov scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'checkov-results.sarif'
+          category: 'checkov'
+
+  # Build Lambda packages
+  build-lambda:
+    name: Build Lambda Packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Lambda Packages
+        uses: ./.github/actions/build-lambda
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Upload Lambda packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-packages
+          path: lambda/packages/*.zip
+          retention-days: 30
