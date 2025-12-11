@@ -34,6 +34,13 @@ on:
       AWS_DEV_EXECUTION_ROLE_ARN:
         required: true
 
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+  statuses: write
+  deployments: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -77,6 +84,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Validate branch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          if [ "$BRANCH_NAME" != "develop" ]; then
+            echo "❌ Error: deploy-dev.yml can only be run from the 'develop' branch."
+            echo "   Current branch: $BRANCH_NAME"
+            echo "   Please select 'develop' from the branch dropdown and try again."
+            exit 1
+          fi
+          echo "✅ Branch validation passed: $BRANCH_NAME"
 
       - name: Set action variable
         id: set-action
