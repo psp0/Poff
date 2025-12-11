@@ -1,0 +1,10 @@
+{
+    "name": "egg-management",
+    "version": "1.0.0",
+    "description": "Pokemon Egg Management Lambda Function",
+    "main": "index.js",
+    "dependencies": {},
+    "engines": {
+        "node": ">=24.0.0"
+    }
+}

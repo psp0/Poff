@@ -1,0 +1,88 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: pokehabit-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    command: 
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pokehabit-network
+
+
+  api-server:
+    build: ./api-server
+    container_name: pokehabit-api
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=${MYSQL_DATABASE}
+      - DB_USER=${MYSQL_USER}
+      - DB_PASSWORD=${MYSQL_PASSWORD}
+      - PORT=${PORT}
+      - POKEMON_ASSET_BUCKET_URL=${POKEMON_ASSET_BUCKET_URL}
+      - VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY}
+      - VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN}
+      - VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID}
+      - VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
+      - VITE_FIREBASE_MESSAGING_SENDER_ID=${VITE_FIREBASE_MESSAGING_SENDER_ID}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./api-server:/app/src:ro
+      - ../lambda:/lambda
+      - ../pokehabit-assets:/pokehabit-assets:ro
+      - api_node_modules:/app/node_modules
+      - api_logs:/app/logs
+      - api_temp:/app/temp
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    command: npm run dev
+    networks:
+      - pokehabit-network
+
+  frontend:
+    image: nginx:alpine
+    container_name: pokehabit-frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - ..:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - frontend_logs:/var/log/nginx
+      - frontend_cache:/var/cache/nginx
+    depends_on:
+      - api-server
+    networks:
+      - pokehabit-network
+
+volumes:
+  mysql_data:
+  api_node_modules:
+  api_logs:
+  api_temp:
+  frontend_logs:
+  frontend_cache:
+
+networks:
+  pokehabit-network:
+    driver: bridge

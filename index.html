@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="description" content="PokeHabit - 포켓몬 컬렉션" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PokeHabit - 포켓몬 컬렉션</title>
+  <meta name="theme-color" content="#CD5C5C" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./public/icon-192x192.png" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" id="apple-touch-icon" />
+  <!-- CSS 직접 로드 (Vite 개발 서버 없이도 동작하도록) -->
+  <link rel="stylesheet" href="./index.css" />
+  <!-- Google Fonts 제거됨 - 시스템 폰트 폴백 사용 -->
+
+
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+
+    // Import Firebase configuration from environment-aware config
+    import './firebase-config.js';
+
+    async function initFirebase() {
+      let config = window.firebaseConfig;
+
+      // If config is missing (e.g. running in Nginx without Vite dev server), fetch from API
+      if (!config || !config.apiKey) {
+        try {
+          const res = await fetch('/api/config');
+          if (res.ok) {
+            const data = await res.json();
+            config = data.firebase;
+          }
+        } catch (e) {
+          console.error("Failed to fetch config from API:", e);
+        }
+      }
+
+      if (config && config.apiKey) {
+        try {
+          // Initialize Firebase
+          const app = initializeApp(config);
+          const auth = getAuth(app);
+          const provider = new GoogleAuthProvider();
+
+          // Expose to window for index.js
+          window.firebaseAuth = auth;
+          window.googleProvider = provider;
+          window.signInWithPopup = signInWithPopup;
+          window.firebaseSignOut = signOut;
+          console.log("Firebase initialized successfully");
+        } catch (e) {
+          console.error("Firebase initialization error:", e);
+        }
+      } else {
+        console.error("Firebase configuration not found");
+      }
+    }
+
+    initFirebase();
+  </script>
+</head>
+
+<body>
+  <!-- PWA 설치 배너 (하단에서 올라옴) -->
+  <div id="pwa-install-banner" class="pwa-install-banner hidden">
+    <div class="pwa-install-content">
+      <div class="pwa-install-icon">
+        <img id="pwa-icon-img" alt="PokeHabit" width="40" height="40">
+      </div>
+      <div class="pwa-install-text">
+        <strong>PokeHabit 앱 설치</strong>
+        <span>홈 화면에 추가하여 더 편리하게!</span>
+      </div>
+      <button id="pwa-install-btn" class="pwa-install-btn">설치</button>
+      <button id="pwa-install-close" class="pwa-install-close">&times;</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- 로그인 섹션 -->
+    <div id="auth" class="auth-section">
+      <div class="auth-logo">
+        <div class="auth-pokemon-container">
+          <div id="auth-sprite" class="sprite"></div>
+        </div>
+      </div>
+      <h1 class="auth-app-name">PokeHabit</h1>
+      <p class="auth-tagline">포켓몬과 함께하는 습관 관리</p>
+
+      <div class="auth-buttons">
+        <button id="googleLoginBtn" class="google-btn">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo">
+          Google로 시작하기
+        </button>
+        <button id="guestLoginBtn" class="guest-btn">
+          로그인 없이 둘러보기
+        </button>
+      </div>
+      <div id="authMessage"></div>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <div id="content" style="display: none" class="full-height-layout">
+
+      <div id="tab-content">
+        <!-- Tab 1: Home (My Pokemon) -->
+        <div id="view-home" class="tab-view active">
+          <!-- Pokedex Header -->
+          <div class="pokedex-header">
+            <div class="pokedex-curve-bg"></div>
+            <div class="pokedex-eyes-container">
+              <div class="pokedex-eye left">
+                <div class="pokedex-eye-line"></div>
+              </div>
+              <div class="pokedex-eye right">
+                <div class="pokedex-eye-line"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pokedex-screen">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+              <h2 style="margin: 0;">PokeHabit</h2>
+              <div class="header-controls" style="display: flex; gap: 12px; align-items: center;">
+                <button onclick="openInfoModal()" title="프로젝트 정보"
+                  style="display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; color: #4a5568; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+                  onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
+                  onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'">
+                  <svg xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+                <button onclick="openShopModal()" title="트레이드 숍"
+                  style="display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; color: #4a5568; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+                  onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
+                  onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'">
+                  <svg xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                  </svg>
+                </button>
+                <button onclick="openSettings()" title="설정"
+                  style="display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; color: #4a5568; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+                  onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
+                  onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'">
+                  <svg xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- 내 포켓몬 아이콘 컬렉션 -->
+            <div class="content-section">
+              <h3>내 포켓몬</h3>
+              <div class="collection-header-btns">
+                <button class="filter-btn corner-btn" id="filterIconsBtn" title="필터">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  <span class="filter-active-badge" id="filterActiveBadge" style="display: none;"></span>
+                </button>
+                <button class="refresh-btn corner-btn" id="refreshIconsBtn" title="새로고침">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+              <div id="iconCollectionGrid" class="collection-grid"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Tab 2: Eggs -->
+        <div id="view-eggs" class="tab-view">
+          <!-- Pokedex Header -->
+          <div class="pokedex-header">
+            <div class="pokedex-curve-bg"></div>
+            <div class="pokedex-eyes-container">
+              <div class="pokedex-eye left">
+                <div class="pokedex-eye-line"></div>
+              </div>
+              <div class="pokedex-eye right">
+                <div class="pokedex-eye-line"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pokedex-screen">
+            <div class="content-section">
+              <div class="modal-header">
+                <h3 class="modal-title">알 부화기</h3>
+              </div>
+              <!-- 상단: 둥근부적 카운트 표시 -->
+              <div class="charm-count-display">
+                <img id="ovalCharmIcon" alt="둥근부적" width="24">
+                <span id="user-charm-count">0</span>
+              </div>
+              <!-- 부화기 슬롯 -->
+              <div class="incubator-section">
+                <div class="incubator-container" id="incubator-slots">
+                  <!-- 슬롯은 JS로 동적 생성됨 -->
+                </div>
+              </div>
+
+              <!-- 하단: 알 검색 -->
+              <div class="egg-search-section">
+                <h4>탐색할 알 검색</h4>
+                <div class="search-box">
+                  <input type="text" id="egg-search-input" placeholder="포켓몬 이름 입력 (예: 리자몽)">
+                  <button id="egg-search-btn">검색</button>
+                </div>
+                <div id="egg-search-results" class="egg-results-list">
+                  <!-- 검색 결과 -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Screen Time -->
+        <div id="view-screentime" class="tab-view">
+          <!-- Pokedex Header -->
+          <div class="pokedex-header">
+            <div class="pokedex-curve-bg"></div>
+            <div class="pokedex-eyes-container">
+              <div class="pokedex-eye left">
+                <div class="pokedex-eye-line"></div>
+              </div>
+              <div class="pokedex-eye right">
+                <div class="pokedex-eye-line"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pokedex-screen">
+            <!-- 어제 스크린타임 입력 섹션 -->
+            <div class="content-section screen-time-section">
+              <div class="guest-mode-banner">🎮 체험 모드 - 데이터는 저장되지 않습니다</div>
+              <h3>어제 스크린타임 입력</h3>
+              <div class="screen-time-form">
+                <!-- 어제 날짜 표시 (변경 불가) -->
+                <input type="hidden" id="screenTimeDate" />
+                <div class="screen-time-date-row">
+                  <span class="date-display">📅 <span id="yesterdayDate"></span> (어제)</span>
+                </div>
+                <!-- 시간 입력 -->
+                <div class="screen-time-input-area">
+                  <div class="screen-time-preview" id="screenTimePreview"></div>
+                  <div class="screen-time-code-container">
+                    <input type="text" class="screen-time-digit" id="screenTimeDigit1" maxlength="1" inputmode="numeric"
+                      pattern="[0-9]" placeholder="-" />
+                    <input type="text" class="screen-time-digit" id="screenTimeDigit2" maxlength="1" inputmode="numeric"
+                      pattern="[0-9]" placeholder="-" />
+                    <input type="text" class="screen-time-digit" id="screenTimeDigit3" maxlength="1" inputmode="numeric"
+                      pattern="[0-9]" placeholder="-" />
+                    <input type="text" class="screen-time-digit" id="screenTimeDigit4" maxlength="1" inputmode="numeric"
+                      pattern="[0-9]" placeholder="-" />
+                  </div>
+                </div>
+                <!-- 10시간 이상 토글 -->
+                <label class="screen-time-toggle">
+                  <input type="checkbox" id="isOver10Hours" />
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-label">10시간 이상</span>
+                </label>
+                <!-- 저장 버튼 -->
+                <button class="submit-btn" id="submitScreenTimeBtn">
+                  스크린타임 저장
+                </button>
+                <div id="screenTimeResult" class="result-message" style="display: none;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Exercise -->
+        <div id="view-exercise" class="tab-view">
+          <!-- Pokedex Header -->
+          <div class="pokedex-header">
+            <div class="pokedex-curve-bg"></div>
+            <div class="pokedex-eyes-container">
+              <div class="pokedex-eye left">
+                <div class="pokedex-eye-line"></div>
+              </div>
+              <div class="pokedex-eye right">
+                <div class="pokedex-eye-line"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pokedex-screen">
+            <!-- 운동 관리 섹션 -->
+            <div class="content-section" id="exercise-section">
+              <div class="guest-mode-banner">🎮 체험 모드 - 데이터는 저장되지 않습니다</div>
+              <div class="exercise-section-header">
+                <h3>운동 관리</h3>
+                <button class="add-exercise-floating-btn" id="open-add-exercise-modal" title="새 운동 등록">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              </div>
+
+              <!-- 등록된 운동 목록 (햄버거 버튼) -->
+              <div class="exercise-list-summary-card">
+                <div class="exercise-list-summary-header">
+                  <div class="exercise-list-summary-info">
+                    <span class="exercise-list-icon">📝</span>
+                    <span class="exercise-list-title">등록된 운동</span>
+                    <span class="exercise-list-count" id="exercise-count-badge">0개</span>
+                  </div>
+                  <button class="exercise-list-menu-btn" id="open-exercise-list-modal" title="운동 목록 보기">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 운동 세션 기록 폼 -->
+              <div class="card-box">
+                <h4 style="margin-top: 0; color: #4a5568;">운동 세션 기록</h4>
+                <div class="form-group">
+                  <label>운동 선택</label>
+                  <select id="session-exercise-select"
+                    style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;">
+                    <option value="">운동을 선택하세요</option>
+                  </select>
+                </div>
+                <div style="display: flex; gap: 15px;">
+                  <div class="form-group" style="flex: 1;">
+                    <label>완료한 세트수</label>
+                    <input type="tel" id="session-sets-input" placeholder="3" inputmode="numeric" pattern="[0-9]*"
+                      style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" />
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label>운동 날짜</label>
+                    <input type="date" id="session-date-input"
+                      style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px;" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>메모 (선택사항)</label>
+                  <textarea id="session-notes-input" placeholder="운동 소감이나 특이사항을 기록하세요" rows="3"
+                    style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px; resize: vertical;"></textarea>
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                  <button class="submit-btn" id="log-session-btn">
+                    세션 기록
+                  </button>
+                </div>
+                <div id="session-form-result" class="result-message" style="display: none;"></div>
+              </div>
+
+              <!-- 주간 운동 진행률 대시보드 -->
+              <div class="card-box">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                  <h4 style="margin: 0; color: #4a5568;">이번 주 운동 진행률</h4>
+                </div>
+                <button class="refresh-btn corner-btn" id="refresh-progress-btn" title="새로고침">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <!-- 근육부위별 진행률 -->
+                <div id="weekly-progress-details">
+                  <p style="text-align: center; color: #666; margin: 20px 0;">운동을 등록하고 세션을 기록해보세요!</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Bar Navigation -->
+      <nav id="tab-bar">
+        <button class="tab-item active" data-tab="home">
+          <div class="tab-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+          </div>
+          <span>홈</span>
+        </button>
+        <button class="tab-item" data-tab="eggs">
+          <div class="tab-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <ellipse cx="12" cy="13" rx="7" ry="9" stroke-width="2" />
+            </svg>
+          </div>
+          <span>알</span>
+        </button>
+        <button class="tab-item" data-tab="screentime">
+          <div class="tab-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <span>스크린타임</span>
+        </button>
+        <button class="tab-item" data-tab="exercise">
+          <div class="tab-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M6.5 6.5v11M17.5 6.5v11M6.5 12h11M4 8v8M20 8v8M2 10v4M22 10v4" />
+            </svg>
+          </div>
+          <span>운동</span>
+        </button>
+      </nav>
+
+      <!-- Settings Panel (Overlay) -->
+      <div id="settings-panel" class="settings-panel slide-hidden">
+        <header class="settings-header">
+          <h2 class="settings-title">설정</h2>
+          <button onclick="closeSettings()" class="settings-close-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" class="close-icon" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </header>
+        <main class="settings-content">
+          <!-- 섹션 1: 앱 설정 -->
+          <section>
+            <h3 class="settings-section-title">앱 설정</h3>
+            <div class="settings-box">
+              <div class="settings-item">
+                <span class="settings-item-label">포켓몬 울음소리</span>
+                <div class="toggle-switch active" id="cry-sound-toggle">
+                  <div class="toggle-knob"></div>
+                </div>
+              </div>
+              <div class="settings-item clickable" id="showPwaBannerBtn" style="display: none;">
+                <span class="settings-item-label">앱 설치 배너 보기</span>
+                <svg class="chevron-right" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+              </div>
+              <div class="settings-item clickable" id="installAppBtn" style="display: none;">
+                <span class="settings-item-label">앱 설치하기</span>
+                <svg class="chevron-right" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+              </div>
+            </div>
+          </section>
+
+          <!-- 섹션 2: 앱 정보 -->
+          <section>
+            <h3 class="settings-section-title">앱 정보</h3>
+            <div class="settings-box" style="margin-bottom: 15px;">
+              <div class="settings-item">
+                <span class="settings-item-label">현재 버전</span>
+                <span class="settings-item-value">v1.0.0 (Beta)</span>
+              </div>
+            </div>
+            <div class="disclaimer-box">
+              <h4 class="disclaimer-title">
+                <svg class="warning-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                  </path>
+                </svg>
+                저작권 면책 고지 (Disclaimer)
+              </h4>
+              <div class="disclaimer-content">
+                <p>본 앱은 포켓몬스터 팬이 개발한 <strong class="text-danger">비영리(Non-commercial) 프로젝트</strong>입니다.</p>
+                <p>Pokémon 및 관련 캐릭터의 모든 저작권과 상표권은 <strong class="text-warning">Nintendo, Game Freak, The Pokémon
+                    Company</strong>에 있습니다.</p>
+                <p>이 앱은 원작자의 권리를 침해할 의도가 없으며, 저작권자의 요청이 있을 경우 즉시 서비스를 중단하거나 해당 콘텐츠를 삭제할 것입니다.</p>
+                <p class="text-success">공식 게임을 응원해주세요!</p>
+              </div>
+              <div class="disclaimer-content-en">
+                <p class="disclaimer-subtitle">Unofficial Fan Project Disclaimer</p>
+                <p>This app is a free, non-profit fan-made project. Pokémon is Trademark & © of <strong
+                    class="text-warning">Nintendo, Game Freak, and The Pokémon Company</strong>. No copyright
+                  infringement intended.</p>
+                <p class="text-success">Please support the official games!</p>
+              </div>
+              <div class="inspiration-credit">
+                <p>
+                  <svg fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  <span class="inspiration-by">Inspired by</span>
+                  <span class="inspiration-name">Pokémon: Another Red</span>
+                </p>
+              </div>
+            </div>
+          </section>
+          <button class="logout-btn" id="logoutBtn" style="margin-top: 10px;">로그아웃</button>
+          <!-- 섹션 3: 크레딧 -->
+          <section>
+            <h3 class="settings-section-title">Credits</h3>
+            <div class="credits-box">
+              <div class="credit-item">
+                <span class="credit-label">Development</span>
+                <span class="credit-value">1인 개발자 (psp0)</span>
+              </div>
+              <div class="credit-section">
+                <span class="credit-section-title">UI Resources:</span>
+                <div class="credit-list">
+                  <div class="credit-detail">
+                    <span class="credit-gen">Type Icons & UI Elements:</span>
+                    <span class="credit-author">포켓몬코리아 (The Pokémon Company Korea)</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Pokédex Data & Reference:</span>
+                    <span class="credit-author">Bulbapedia</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">UI Design Inspiration:</span>
+                    <span class="credit-author">Pokémon: Another Red</span>
+                  </div>
+                </div>
+              </div>
+              <div class="credit-section">
+                <span class="credit-section-title">Animated Sprites:</span>
+                <div class="credit-list">
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 1-5:</span>
+                    <span class="credit-author">Luka S.J.</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 6:</span>
+                    <span class="credit-author">All Contributors To Smogon X/Y Sprite Project</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 7:</span>
+                    <span class="credit-author">All Contributors To Smogon Sun/Moon Sprite Project</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 8:</span>
+                    <span class="credit-author">All Contributors To Smogon Sword/Shield Sprite Project</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 9:</span>
+                    <span class="credit-author">All Contributors To Smogon Scarlet/Violet Sprite Project</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Other Contributors:</span>
+                    <span class="credit-author">Lucidious89, Regis, Rod, Kayzering, LcorpOfficial</span>
+                  </div>
+                </div>
+              </div>
+              <div class="credit-section">
+                <span class="credit-section-title">Icon Sprites:</span>
+                <div class="credit-list">
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 1-6:</span>
+                    <span class="credit-author">Alaguesia, harveydentmd</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 7:</span>
+                    <span class="credit-author">Marin, MapleBranchWing, Contributors to the DS Styled Gen 7+
+                      Repository</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 8:</span>
+                    <span class="credit-author">Larry Turbo, Leparagon</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 1-8 (Shiny):</span>
+                    <span class="credit-author">StarrWolf, Pokemon Shattered Light Team</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">PLA Icons:</span>
+                    <span class="credit-author">LuigiTKO</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Gen 9:</span>
+                    <span class="credit-author">ezerart, JordanosArt</span>
+                  </div>
+                  <div class="credit-detail">
+                    <span class="credit-gen">Resource Compilation:</span>
+                    <span class="credit-author">Golisopod User, UberDunsparce, Caruban</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="settings-footer">
+            <button class="delete-account-btn" onclick="showToast('아직 미구현 상태입니다.')">회원 탈퇴 및 데이터 삭제</button>
+            <p class="server-info">Server powered by AWS Seoul Region</p>
+          </div>
+        </main>
+      </div>
+    </div>
+
+
+
+    <div id="evolution-modal" class="modal">
+      <!-- 진화도 모달 (ID 유지, 클래스 변경) -->
+      <div class="modal-content pokemon-detail-content">
+        <div class="modal-header">
+          <h3 class="modal-title" id="evolution-modal-title">도감</h3>
+          <button class="close-btn" id="evolution-close">&times;</button>
+        </div>
+
+        <!-- 포켓몬 상세 디스플레이 영역 -->
+        <div class="pokemon-display-area">
+          <!-- 이름 -->
+          <div class="pokemon-name-display" id="display-name"></div>
+
+          <div class="display-container">
+            <!-- 좌상단: 하트 -->
+            <div class="ui-element top-left" id="display-favorite-btn">
+              <span class="heart-icon empty"></span>
+              <span class="heart-icon filled" style="display:none;"></span>
+            </div>
+
+            <!-- 우상단: 이로치 버튼 -->
+            <div class="ui-element top-right" id="display-shiny-btn">
+              <span class="shiny-icon">✨</span>
+            </div>
+
+            <!-- 중앙: 타원형 배경 및 스프라이트 -->
+            <div class="background" id="background">
+              <!-- 3D 회전 컨테이너 -->
+              <div class="pokemon-flipper" id="pokemonFlipper">
+                <!-- 앞모습 -->
+                <div class="pokemon-wrap front-face">
+                  <div id="sprite-front" class="sprite" aria-hidden="true"></div>
+                </div>
+                <!-- 뒷모습 -->
+                <div class="pokemon-wrap back-face">
+                  <div id="sprite-back" class="sprite" aria-hidden="true"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 좌중앙: 이전 포켓몬 -->
+            <div class="ui-element center-left" id="prev-pokemon-btn">
+              <span class="nav-arrow">&lt;</span>
+            </div>
+
+            <!-- 우중앙: 다음 포켓몬 -->
+            <div class="ui-element center-right" id="next-pokemon-btn">
+              <span class="nav-arrow">&gt;</span>
+            </div>
+
+            <!-- 좌하단: 타입 -->
+            <div class="ui-element bottom-left" id="display-types"></div>
+
+            <!-- 우하단: 회전 아이콘 -->
+            <div class="ui-element bottom-right" id="display-rotate-btn">
+              <div class="rotate-icon">⇄</div>
+            </div>
+          </div>
+
+          <!-- 하단: 해시태그 (카테고리 + 플래그) -->
+          <div class="pokemon-hashtags" id="display-hashtags"></div>
+        </div>
+
+        <!-- 진화 섹션 -->
+        <div class="evolution-section">
+          <div class="evolution-header">
+            <div class="evolution-title">진화 트리</div>
+            <div class="evolution-progress-wrapper">
+              <div class="progress-label">달성도</div>
+              <div class="progress-container">
+                <div class="progress-bar" id="evolution-progress-bar"></div>
+              </div>
+            </div>
+          </div>
+          <!-- 진화 체인 다이어그램 -->
+          <div class="evolution-diagram" id="evolution-diagram">
+            <!-- JavaScript로 동적 생성 -->
+          </div>
+        </div>
+
+        <!-- 도감 설명 (하단 배치) -->
+        <div class="pokedex-description">
+          <p id="display-description" class="pokemon-description"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 알 시스템 모달 -->
+
+
+    <!-- 확인 모달 (Native confirm 대체) -->
+    <div id="confirm-modal" class="modal" style="z-index: 2100;">
+      <div class="modal-content" style="max-width: 320px; text-align: center;">
+        <h3 id="confirm-title" style="margin-top: 0;">확인</h3>
+        <p id="confirm-message" style="margin: 20px 0; color: #4a5568; line-height: 1.5;">내용</p>
+        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 24px;">
+          <button id="confirm-cancel-btn"
+            style="padding: 10px 20px; border-radius: 8px; border: 1px solid #cbd5e0; background: white; color: #4a5568; cursor: pointer;">취소</button>
+          <button id="confirm-ok-btn"
+            style="padding: 10px 20px; border-radius: 8px; border: none; background: #667eea; color: white; font-weight: bold; cursor: pointer;">확인</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 운동 수정 모달 -->
+    <div id="exercise-edit-modal" class="modal" style="z-index: 2100;">
+      <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+          <h3 class="modal-title">운동 수정</h3>
+          <button class="close-btn" id="exercise-edit-close">&times;</button>
+        </div>
+        <div class="exercise-edit-body" style="padding-top: 20px;">
+          <div class="form-group">
+            <label>운동 이름</label>
+            <input type="text" id="edit-exercise-name" placeholder="운동 이름" />
+          </div>
+          <div class="form-group">
+            <label>중량 (kg)</label>
+            <input type="tel" id="edit-exercise-weight" placeholder="중량" inputmode="decimal" />
+          </div>
+          <div class="form-group">
+            <label id="edit-exercise-intensity-label">횟수</label>
+            <input type="tel" id="edit-exercise-reps" placeholder="횟수" inputmode="decimal" />
+          </div>
+          <input type="hidden" id="edit-exercise-id" />
+          <input type="hidden" id="edit-exercise-intensity-type" />
+          <div style="display: flex; gap: 10px; margin-top: 24px;">
+            <button id="exercise-edit-cancel-btn" class="submit-btn"
+              style="flex: 1; background: #e2e8f0; color: #4a5568;">취소</button>
+            <button id="exercise-edit-save-btn" class="submit-btn" style="flex: 1;">저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 운동 삭제 확인 모달 -->
+    <div id="exercise-delete-modal" class="modal" style="z-index: 2100;">
+      <div class="modal-content" style="max-width: 360px; text-align: center;">
+        <div style="font-size: 48px; margin-bottom: 16px;">🗑️</div>
+        <h3 style="margin: 0 0 12px 0; color: #2d3748;">운동 삭제</h3>
+        <p id="exercise-delete-message" style="margin: 0 0 24px 0; color: #718096; line-height: 1.5;">이 운동을 삭제하시겠습니까?
+        </p>
+        <input type="hidden" id="delete-exercise-id" />
+        <div style="display: flex; gap: 10px;">
+          <button id="exercise-delete-cancel-btn" class="submit-btn"
+            style="flex: 1; background: #e2e8f0; color: #4a5568;">취소</button>
+          <button id="exercise-delete-confirm-btn" class="submit-btn" style="flex: 1; background: #e53e3e;">삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 새 운동 등록 모달 -->
+    <div id="add-exercise-modal" class="modal" style="z-index: 2000;">
+      <div class="modal-content add-exercise-modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">💪 새 운동 등록</h3>
+          <button class="close-btn" id="add-exercise-modal-close">&times;</button>
+        </div>
+
+        <div class="add-exercise-modal-body">
+          <div class="form-group">
+            <label>근육부위</label>
+            <select id="muscle-group-select">
+              <option value="">근육부위를 선택하세요</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>운동 이름</label>
+            <input type="text" id="exercise-name-input" placeholder="예: 벤치프레스, 스쿼트, 데드리프트" />
+          </div>
+
+          <div class="exercise-form-row">
+            <div class="form-group">
+              <label>중량 (kg)</label>
+              <input type="tel" id="exercise-weight-input" placeholder="60" inputmode="decimal" />
+            </div>
+            <div class="form-group">
+              <div class="intensity-header">
+                <label id="exercise-intensity-label">횟수</label>
+                <div class="segmented-control" id="exercise-intensity-control">
+                  <input type="radio" name="intensity-type" id="type-reps" value="reps" checked>
+                  <label for="type-reps">Reps</label>
+                  <input type="radio" name="intensity-type" id="type-rpe" value="rpe">
+                  <label for="type-rpe">RPE</label>
+                </div>
+              </div>
+              <input type="tel" id="exercise-reps-input" placeholder="10" inputmode="decimal" />
+              <small id="rpe-helper-text" class="rpe-helper">RPE (자각도): 1(쉬움) ~ 10(한계)</small>
+            </div>
+          </div>
+
+          <div id="exercise-form-result" class="result-message" style="display: none;"></div>
+
+          <div class="add-exercise-modal-actions">
+            <button class="submit-btn cancel-btn" id="add-exercise-modal-cancel">취소</button>
+            <button class="submit-btn" id="add-exercise-btn">등록하기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 등록된 운동 목록 모달 -->
+    <div id="exercise-list-modal" class="modal" style="z-index: 2000;">
+      <div class="modal-content exercise-list-modal-content">
+        <div class="modal-header exercise-list-modal-header">
+          <h3 class="modal-title">📋 등록된 운동 목록</h3>
+          <div class="exercise-list-header-actions">
+            <button class="refresh-btn exercise-list-header-btn" id="refresh-exercises-btn" title="새로고침">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+            <button class="close-btn" id="exercise-list-modal-close">&times;</button>
+          </div>
+        </div>
+        <div class="exercise-list-modal-body">
+          <div id="user-exercises-list">
+            <p style="text-align: center; color: #666; margin: 20px 0;">운동을 등록해보세요!</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 약관 동의 모달 -->
+    <div id="terms-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">서비스 이용 동의</h3>
+        </div>
+
+        <div class="modal-body">
+          <p class="terms-intro">
+            PokeHabit 서비스 이용을 위해 아래 필수 약관에 동의해 주세요.
+          </p>
+
+          <!-- 전체 동의 박스 -->
+          <div class="terms-all-agree-box">
+            <label>
+              <input type="checkbox" id="terms-check-all" onchange="toggleAllTerms()">
+              <span>모든 필수 약관에 동의합니다</span>
+            </label>
+            <p>
+              아래의 서비스 이용약관, 개인정보 수집·이용, 민감정보 처리 동의 내용을 모두 확인하였으며,
+              이에 일괄 동의합니다.
+            </p>
+          </div>
+
+          <hr class="terms-divider">
+
+          <!-- 약관 리스트 -->
+          <div class="terms-list">
+
+            <!-- 1. 서비스 이용약관 -->
+            <div class="terms-item">
+              <div class="terms-row">
+                <label class="terms-label">
+                  <input type="checkbox" class="terms-req-check" onchange="checkTermsStatus()">
+                  <span><strong class="terms-required">[필수]</strong> 서비스 이용약관 동의</span>
+                </label>
+                <button class="terms-toggle-btn" onclick="toggleTermsDetail('terms-detail-1')">보기</button>
+              </div>
+              <div id="terms-detail-1" class="terms-detail">
+                <strong>제1조 (목적)</strong><br>
+                본 약관은 회사가 제공하는 '라이프 로그 및 건강 기록 서비스'의 이용 조건 및 절차를 규정합니다.<br><br>
+
+                <strong>제2조 (비의료 서비스 고지)</strong><br>
+                본 서비스는 사용자의 건강 관리를 보조하기 위한 기록 도구일 뿐이며, 의학적 진단, 치료, 처방을 제공하지 않습니다. 건강상의 문제가 발생할 경우 반드시 전문 의료기관을 방문해야
+                합니다.<br><br>
+
+                <strong>제3조 (서비스의 내용)</strong><br>
+                회사는 회원에게 운동 기록, 휴대폰 사용 패턴 분석 및 통계 기능을 제공합니다.<br><br>
+
+                <strong>제4조 (책임의 한계)</strong><br>
+                천재지변, AWS 등 클라우드 서비스 장애, 또는 회원의 귀책사유로 인한 데이터 유실에 대해 회사는 고의 또는 중과실이 없는 한 책임을 지지 않습니다.
+              </div>
+            </div>
+
+            <!-- 2. 개인정보 수집 및 이용 -->
+            <div class="terms-item">
+              <div class="terms-row">
+                <label class="terms-label">
+                  <input type="checkbox" class="terms-req-check" onchange="checkTermsStatus()">
+                  <span><strong class="terms-required">[필수]</strong> 개인정보 수집·이용 및 위탁에 동의합니다.</span>
+                </label>
+                <button class="terms-toggle-btn" onclick="toggleTermsDetail('terms-detail-2')">보기</button>
+              </div>
+              <div id="terms-detail-2" class="terms-detail">
+                <p><strong>1. 수집하는 개인정보 항목</strong><br>
+                  - Google ID, 이름, 이메일 주소<br>
+                  - 서비스 이용 기록(접속 일시, 이용 로그, 오류 로그 등)
+                </p>
+
+                <p><strong>2. 개인정보의 수집·이용 목적</strong><br>
+                  - 회원 가입 및 본인 확인, 서비스 제공 및 유지·관리<br>
+                  - 서비스 이용 통계 분석 및 기능 개선<br>
+                  - 장애 대응, 부정 이용 방지 및 보안 강화
+                </p>
+
+                <p><strong>3. 개인정보의 보유 및 이용 기간</strong><br>
+                  - 원칙적으로 회원 탈퇴 시까지 보유하며, 탈퇴 후 지체 없이 파기합니다.<br>
+                  - 관련 법령에 따라 다음 정보를 일정 기간 보관할 수 있습니다.<br>
+                  · 통신비밀보호법에 따른 접속 기록: 3개월
+                </p>
+
+                <p><strong>4. 개인정보 처리 위탁</strong><br>
+                  서비스 운영을 위해 개인정보 처리 업무의 일부를 외부 업체에 위탁할 수 있으며, 위탁 시 관련 법령에 따른 안전성 확보 조치를 이행합니다.<br>
+                  - 수탁업체: Amazon Web Services, Inc. (AWS)<br>
+                  - 위탁업무 내용: 서비스 데이터 보관 및 시스템 인프라 운영<br>
+                  - 서버 위치: 대한민국 서울
+                </p>
+
+                <p><strong>5. 쿠키(Cookie) 및 로컬스토리지 사용</strong><br>
+                  - 자동 로그인, 사용자 설정 저장, 이용 통계 분석 등을 위해 쿠키 및 로컬스토리지를 사용할 수 있습니다.<br>
+                  - 이용자는 브라우저의 설정 메뉴에서 쿠키 저장을 차단하거나 삭제할 수 있으나, 이 경우 일부 서비스 이용에 제한이 있을 수 있습니다.
+                </p>
+
+                <p><strong>6. 동의 거부에 대한 안내</strong><br>
+                  귀하는 개인정보 수집·이용에 대한 동의를 거부할 권리가 있습니다. 다만, 위 항목은 서비스의 기본 기능 제공에 필수적인 정보이므로,
+                  동의를 거부할 경우 회원 가입 또는 서비스 이용이 제한될 수 있습니다.
+                </p>
+
+                <p><strong>7. 정보주체의 권리 및 행사 방법</strong><br>
+                  이용자는 언제든지 개인정보 열람·정정·삭제·처리정지 및 동의 철회를 요청할 수 있습니다.<br>
+                  이러한 권리 행사는 앱 내 설정 화면 또는 아래 고객센터로 신청하실 수 있으며, 회사는 관련 법령이 정하는 바에 따라 지체 없이 조치합니다.
+                </p>
+
+                <p><strong>8. 개인정보 관련 문의</strong><br>
+                  - 운영자: psp0<br>
+                  - 이메일: aws0.9058@gmail.com
+                </p>
+
+                <p><strong>9. 14세 미만 아동의 개인정보</strong><br>
+                  회사는 원칙적으로 만 14세 미만 아동에 대한 서비스 가입을 허용하지 않으며,
+                  부득이하게 아동의 개인정보를 처리할 필요가 있는 경우 법정대리인의 동의를 받은 후 처리합니다.
+                </p>
+              </div>
+            </div>
+
+            <!-- 3. 민감정보 처리 동의 -->
+            <div class="terms-item">
+              <div class="terms-row">
+                <label class="terms-label">
+                  <input type="checkbox" class="terms-req-check" onchange="checkTermsStatus()">
+                  <span><strong class="terms-required">[필수]</strong> 민감정보(운동·건강 정보) 수집·이용에 별도로 동의합니다.</span>
+                </label>
+                <button class="terms-toggle-btn" onclick="toggleTermsDetail('terms-detail-3')">보기</button>
+              </div>
+              <div id="terms-detail-3" class="terms-detail">
+                <p>
+                  본 서비스는 개인의 건강 및 생활습관 관리를 위해 아래와 같은
+                  <strong>민감정보(건강정보)</strong>를 수집·이용합니다.
+                </p>
+
+                <p><strong>1. 수집 항목</strong><br>
+                  - 운동 기록(운동 종류, 수행 시간, 강도 등)<br>
+                  - 휴대폰 사용 패턴, 디지털 웰빙 관련 데이터(앱 사용 시간)
+                </p>
+
+                <p><strong>2. 이용 목적</strong><br>
+                  - 개인별 라이프로그 대시보드 제공 및 기록 저장<br>
+                  - 운동 및 생활 패턴 저장<br>
+                  - 목표 달성 현황 관리 및 맞춤형 피드백 기능 제공
+                </p>
+
+                <p><strong>3. 보유 및 이용 기간</strong><br>
+                  - 회원 탈퇴 시까지 보유 후 지체 없이 파기합니다.<br>
+                  - 다만, 관련 법령에 따라 보존이 필요한 경우 해당 기간 동안 최소한의 정보만 분리 보관할 수 있습니다.
+                </p>
+
+                <p><strong>4. 동의 거부에 대한 안내</strong><br>
+                  귀하는 위와 같은 민감정보 제공에 대한 동의를 거부할 권리가 있습니다.<br>
+                  다만, 동의를 거부하는 경우 운동 기록 분석 등 관련 기능의 이용이 제한될 수 있습니다.
+                </p>
+
+                <p><strong>5. 권리 행사 및 문의</strong><br>
+                  이용자는 언제든지 민감정보의 열람·정정·삭제·동의 철회를 요청할 수 있습니다.<br>
+                  민감정보 처리에 관한 문의는 개인정보보호책임자(aws0.9058@gmail.com)에게 연락해 주시기 바랍니다.
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="terms-refuse-btn" class="terms-refuse-btn">
+            동의 거부 (홈으로)
+          </button>
+          <button id="terms-submit-btn" disabled>
+            시작하기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 초기 스크린타임 입력 모달 (온보딩용) -->
+    <div id="initial-screentime-modal" class="modal initial-screentime-modal">
+      <div class="modal-content initial-screentime-content">
+        <div class="modal-header initial-screentime-header">
+          <h3 class="modal-title initial-screentime-title">📱 잠깐! 첫 보상 기회!</h3>
+        </div>
+
+        <div class="initial-screentime-body">
+          <div class="reward-preview">
+            <div class="reward-icon">🎁</div>
+            <p class="reward-text">
+              <strong>지난주 평균 스크린타임</strong>을 알려주시면<br>
+              <span class="highlight">스타터 포켓몬 10마리</span>를 드려요!
+            </p>
+          </div>
+
+          <div class="screentime-input-section">
+            <label class="screentime-input-label">
+              📊 지난주 평균 스크린타임은?
+            </label>
+            <p class="screentime-hint">휴대폰 설정 → 스크린타임에서 확인할 수 있어요!</p>
+            <p class="screentime-hint" style="margin-top: 4px;">* 주의 시작: 일요일 ~ 토요일</p>
+
+            <div class="initial-screentime-input-area">
+              <div class="time-input-group">
+                <input type="number" id="initialScreenTimeHours" min="0" max="23" placeholder="0" class="time-input">
+                <span class="time-label">시간</span>
+              </div>
+              <div class="time-input-group">
+                <input type="number" id="initialScreenTimeMinutes" min="0" max="59" placeholder="0" class="time-input">
+                <span class="time-label">분</span>
+              </div>
+            </div>
+
+            <p class="time-preview" id="initialTimePreview">-</p>
+          </div>
+
+          <div class="initial-screentime-actions">
+            <button id="initial-screentime-submit-btn" class="initial-screentime-btn primary" disabled>
+              입력하고 보상 받기! 🎉
+            </button>
+          </div>
+
+          <p class="info-note">
+            ℹ️ 이 정보는 첫 번째 보상 계산에 사용됩니다.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 스타터 포켓몬 환영 모달 -->
+    <div id="starter-welcome-modal" class="modal starter-modal">
+      <div class="modal-content starter-modal-content">
+        <div class="modal-header starter-modal-header">
+          <h3 class="modal-title starter-modal-title">🎉 PokeHabit에 오신 것을 환영합니다!</h3>
+        </div>
+
+        <div class="starter-modal-body">
+          <p class="starter-intro">
+            <strong class="starter-highlight">10마리의 스타터 포켓몬</strong>을 상자에 넣어드렸어요!
+          </p>
+
+          <!-- 스타터 포켓몬 10마리 표시 (JS로 동적 생성) -->
+          <div class="starter-pokemon-grid" id="starter-pokemon-grid">
+            <!-- JavaScript가 여기에 포켓몬을 추가합니다 -->
+          </div>
+
+          <div class="starter-tip-box">
+            <p>
+              <strong>포켓몬과 아이템 얻기 팁!</strong>
+            </p>
+            <p>
+              ✨스크린타임을 줄이면 추가 포켓몬을 얻어요!
+            </p>
+            <p>
+              ✨운동세션을 기록하면 이로치 포켓몬을 얻어요!
+            </p>
+          </div>
+
+          <button id="starter-modal-close-btn" class="starter-modal-btn">
+            모험 시작하기! 🚀
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 포켓몬 필터 모달 -->
+    <div id="pokemon-filter-modal" class="modal">
+      <div class="modal-content filter-modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">필터</h3>
+          <button class="close-btn" id="filter-modal-close">&times;</button>
+        </div>
+
+        <div class="filter-modal-body">
+          <!-- 즐겨찾기 필터 -->
+          <!-- 보기 설정 -->
+          <div class="filter-section">
+            <h4 class="filter-section-title">보기 설정</h4>
+            <div class="filter-chips">
+              <!-- 즐겨찾기만 보기 -->
+              <button id="filter-favorites-toggle" class="filter-chip">
+                <div class="filter-icon-wrapper heart-bg">
+                  <svg class="filter-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                </div>만 보기
+              </button>
+              <!-- 즐겨찾기 아이콘 표시 -->
+              <button id="filter-show-favorite-icon" class="filter-chip active">
+                <div class="filter-icon-wrapper heart-bg">
+                  <svg class="filter-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                </div> 표시
+              </button>
+            </div>
+          </div>
+
+          <!-- 완료 상태 필터 -->
+          <div class="filter-section">
+            <h4 class="filter-section-title">수집 상태</h4>
+            <div class="filter-chips">
+              <button class="filter-chip" data-filter="completion" data-value="all">전체</button>
+              <button class="filter-chip" data-filter="completion" data-value="complete">완성</button>
+              <button class="filter-chip" data-filter="completion" data-value="incomplete">미완성</button>
+            </div>
+          </div>
+
+          <!-- 타입 필터 -->
+          <div class="filter-section">
+            <h4 class="filter-section-title">타입 <small class="filter-hint">(복수 선택 가능)</small></h4>
+            <div class="filter-chips type-filter-chips" id="type-filter-chips">
+              <button class="filter-chip type-chip" data-filter="type" data-value="all">전체</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="노말">노말</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="불꽃">불꽃</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="물">물</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="풀">풀</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="전기">전기</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="얼음">얼음</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="격투">격투</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="독">독</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="땅">땅</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="비행">비행</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="에스퍼">에스퍼</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="벌레">벌레</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="바위">바위</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="고스트">고스트</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="드래곤">드래곤</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="악">악</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="강철">강철</button>
+              <button class="filter-chip type-chip" data-filter="type" data-value="페어리">페어리</button>
+            </div>
+          </div>
+
+          <!-- 세대 필터 -->
+          <div class="filter-section">
+            <h4 class="filter-section-title">세대 <small class="filter-hint">(복수 선택 가능)</small></h4>
+            <div class="filter-chips generation-filter-chips" id="generation-filter-chips">
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="all">전체</button>
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="1">1</button>
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="2">2</button>
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="3">3</button>
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="4">4</button>
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="5">5</button>
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="6">6</button>
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="7">7</button>
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="8">8</button>
+              <button class="filter-chip generation-chip" data-filter="generation" data-value="9">9</button>
+            </div>
+          </div>
+
+          <!-- 정렬 옵션 -->
+          <div class="filter-section">
+            <h4 class="filter-section-title">정렬</h4>
+            <div class="filter-chips">
+              <button class="filter-chip" data-filter="sort" data-value="default">기본</button>
+              <button class="filter-chip" data-filter="sort" data-value="recent">최근 획득순</button>
+              <button class="filter-chip" data-filter="sort" data-value="progress-high">진행률↑</button>
+              <button class="filter-chip" data-filter="sort" data-value="progress-low">진행률↓</button>
+              <button class="filter-chip" data-filter="sort" data-value="generation">세대별</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-modal-footer">
+          <button class="filter-reset-btn" id="filter-reset-btn">초기화</button>
+          <button class="filter-apply-btn" id="filter-apply-btn">적용</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 프로젝트 정보 모달 -->
+    <div id="info-modal" class="modal">
+      <div class="modal-content info-modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">보상 규칙</h3>
+          <button class="close-btn" id="info-close">&times;</button>
+        </div>
+
+        <!-- 탭 네비게이션 -->
+        <div class="info-tabs">
+          <button class="info-tab active" data-tab="overview">📋 요약</button>
+          <button class="info-tab" data-tab="rewards">🎁 상세</button>
+          <button class="info-tab" data-tab="events">🎉 이벤트</button>
+        </div>
+
+        <div class="info-modal-body">
+          <!-- 요약 탭 -->
+          <div class="info-tab-content active" id="tab-overview">
+            <div class="overview-hero">
+              <div class="overview-main-message">
+                <span class="hero-icon">📱</span>
+                <p>스크린타임을 <strong>조금이라도(-1%)</strong> 줄이면<br><span class="highlight-pokemon">포켓몬</span>을 만날 수 있어요!</p>
+              </div>
+            </div>
+
+            <div class="quick-summary-grid">
+              <div class="summary-card best">
+                <div class="summary-icon">🏆</div>
+                <div class="summary-label">-40% 이상</div>
+                <div class="summary-value">전설 + 환상 + 기초 3</div>
+              </div>
+              <div class="summary-card good">
+                <div class="summary-icon">⭐</div>
+                <div class="summary-label">-30% ~ -40%</div>
+                <div class="summary-value">전설 + 기초 3</div>
+              </div>
+              <div class="summary-card normal">
+                <div class="summary-icon">✨</div>
+                <div class="summary-label">-10% ~ -30%</div>
+                <div class="summary-value">기초 2~3마리</div>
+              </div>
+              <div class="summary-card minimal">
+                <div class="summary-icon">🌱</div>
+                <div class="summary-label">-1% ~ -10%</div>
+                <div class="summary-value">기초 2마리</div>
+              </div>
+            </div>
+
+            <div class="overview-warning">
+              <span class="warning-icon">⚠️</span>
+              <span>스크린타임이 <strong>증가</strong>하면 포켓몬 없이 아이템만!</span>
+            </div>
+
+            <div class="overview-tip">
+              💡 더 자세한 보상은 <strong>"상세"</strong> 탭에서 확인하세요
+            </div>
+          </div>
+
+          <!-- 상세 보상 탭 -->
+          <div class="info-tab-content" id="tab-rewards">
+            <div class="reward-accordion">
+              <!-- 감소 그룹 -->
+              <div class="accordion-group">
+                <div class="accordion-group-header success">
+                  <span>📉 스크린타임 감소 (포켓몬 획득!)</span>
+                </div>
+
+                <div class="accordion-item" data-tier="best">
+                  <div class="accordion-header best-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">🏆</span>
+                      <span class="tier-condition">-40% 이상 또는 2시간 이하</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item pokemon"><span class="reward-emoji">🐉</span> 전설/울트라비스트 1</div>
+                      <div class="reward-item pokemon"><span class="reward-emoji">✨</span> 패러독스/환상 1</div>
+                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 3</div>
+                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 5</div>
+                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 6</div>
+                      <div class="reward-item item"><span class="reward-emoji">⚪</span> 둥근부적 2</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="accordion-item" data-tier="high1">
+                  <div class="accordion-header high-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">⭐</span>
+                      <span class="tier-condition">-30% ~ -40% 또는 3시간대</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item pokemon"><span class="reward-emoji">🐉</span> 전설/울트라비스트 1</div>
+                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 3</div>
+                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 5</div>
+                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 6</div>
+                      <div class="reward-item item"><span class="reward-emoji">⚪</span> 둥근부적 2</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="accordion-item" data-tier="high2">
+                  <div class="accordion-header high-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">✨</span>
+                      <span class="tier-condition">-20% ~ -30%</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 3</div>
+                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 4</div>
+                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 5</div>
+                      <div class="reward-item item"><span class="reward-emoji">⚪</span> 둥근부적 1</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="accordion-item" data-tier="mid1">
+                  <div class="accordion-header mid-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">💪</span>
+                      <span class="tier-condition">-10% ~ -20%</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 2</div>
+                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 3</div>
+                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 4</div>
+                      <div class="reward-item item"><span class="reward-emoji">⚪</span> 둥근부적 1</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="accordion-item" data-tier="mid2">
+                  <div class="accordion-header mid-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">🌱</span>
+                      <span class="tier-condition">-1% ~ -10% (감소 성공!)</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 2</div>
+                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 2</div>
+                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 3</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 증가 그룹 -->
+              <div class="accordion-group">
+                <div class="accordion-group-header warning">
+                  <span>📈 스크린타임 증가 (아이템만)</span>
+                </div>
+
+                <div class="accordion-item" data-tier="inc1">
+                  <div class="accordion-header low-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">😅</span>
+                      <span class="tier-condition">0% ~ +10% 증가</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item no-pokemon"><span class="reward-emoji">❌</span> 포켓몬 없음</div>
+                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 1</div>
+                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 3</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="accordion-item" data-tier="inc2">
+                  <div class="accordion-header low-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">😓</span>
+                      <span class="tier-condition">+10% ~ +20% 증가</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item no-pokemon"><span class="reward-emoji">❌</span> 포켓몬 없음</div>
+                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 1</div>
+                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 2</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="accordion-item" data-tier="inc3">
+                  <div class="accordion-header low-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">😰</span>
+                      <span class="tier-condition">+20% ~ +30% 증가</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item no-pokemon"><span class="reward-emoji">❌</span> 포켓몬 없음</div>
+                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 2</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="accordion-item" data-tier="inc4">
+                  <div class="accordion-header low-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">😢</span>
+                      <span class="tier-condition">+30% ~ +40% 증가</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item no-pokemon"><span class="reward-emoji">❌</span> 포켓몬 없음</div>
+                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 1</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="accordion-item" data-tier="inc5">
+                  <div class="accordion-header worst-tier">
+                    <div class="accordion-title">
+                      <span class="tier-badge-mini">💀</span>
+                      <span class="tier-condition">+40% 이상 증가</span>
+                    </div>
+                    <span class="accordion-arrow">▼</span>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="reward-grid">
+                      <div class="reward-item no-pokemon"><span class="reward-emoji">🚫</span> 보상 없음</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 특별 이벤트 탭 -->
+          <div class="info-tab-content" id="tab-events">
+            <div class="events-list">
+              <div class="event-card saturday">
+                <div class="event-icon">🌟</div>
+                <div class="event-info">
+                  <div class="event-name">토요일 보너스</div>
+                  <div class="event-desc">빛나는부적 1개 추가 지급</div>
+                </div>
+                <div class="event-badge">매주</div>
+              </div>
+
+              <div class="event-card holiday">
+                <div class="event-icon">🎊</div>
+                <div class="event-info">
+                  <div class="event-name">한국 공휴일 보너스</div>
+                  <div class="event-desc">환상 또는 패러독스 포켓몬 1마리 추가</div>
+                </div>
+                <div class="event-badge">공휴일</div>
+              </div>
+
+              <div class="event-card pokemon-day">
+                <div class="event-icon">🎂</div>
+                <div class="event-info">
+                  <div class="event-name">포켓몬 데이</div>
+                  <div class="event-desc">광휘의 부적 5개 지급</div>
+                </div>
+                <div class="event-badge">2월 27일</div>
+              </div>
+            </div>
+
+            <div class="events-note">
+              <span class="note-icon">💡</span>
+              <span>이벤트 보상은 기본 보상에 <strong>추가</strong>로 지급됩니다!</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 트레이드 숍 모달 -->
+    <div id="shop-modal" class="modal">
+      <div class="modal-content shop-modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">트레이드 숍</h3>
+          <button class="close-btn" id="shop-close">&times;</button>
+        </div>
+
+        <!-- 보유 아이템 한줄 표시 -->
+        <div class="my-items-bar" id="my-items-bar">
+          <span class="my-items-label">보유</span>
+          <div class="my-items-list" id="my-items-list">
+            <!-- JS로 동적 생성됨 -->
+          </div>
+        </div>
+
+        <div class="shop-modal-body">
+          <div class="shop-items-grid" id="shop-items-grid">
+            <!-- JS로 동적 생성됨 -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 메인 스크립트 (Vite 빌드 시 자동 교체됨) -->
+    <script type="module" src="/index.js"></script>
+    <script type="module" src="/pwa.js"></script>
+</body>
+
+</html>

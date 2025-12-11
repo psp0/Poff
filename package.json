@@ -1,0 +1,27 @@
+{
+  "name": "pokehabit",
+  "version": "1.0.0",
+  "description": "Pokemon Habit Collection",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "dev:up": "cd local-dev && docker-compose up -d",
+    "dev:down": "cd local-dev && docker-compose down",
+    "dev:downv": "cd local-dev && docker-compose down -v",
+    "dev:logs": "cd local-dev && docker-compose logs -f",
+    "dev:seed": "cd seeder && npm install && DB_HOST=127.0.0.1 DB_USER=admin DB_PASSWORD=pokehabit123 DB_NAME=pokehabit ASSETS_DIR=../pokehabit-assets npm run seed:local && DB_HOST=127.0.0.1 DB_USER=admin DB_PASSWORD=pokehabit123 DB_NAME=pokehabit npm run seed:holidays:local",
+    "dev:restart": "cd local-dev && docker-compose restart api-server",
+    "db:migrate": "cd migrations && npm install && npm run migrate:up",
+    "db:revert": "cd migrations && npm run migrate:down",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "devDependencies": {
+    "vite": "^7.2.6"
+  }
+}

@@ -1,0 +1,265 @@
+name: Seed RDS Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+      seed_pokemon:
+        description: 'Seed Pokemon data?'
+        required: false
+        default: true
+        type: boolean
+      seed_holidays:
+        description: 'Also seed holidays?'
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: string
+      seed_pokemon:
+        description: 'Seed Pokemon data?'
+        required: false
+        default: true
+        type: boolean
+      seed_holidays:
+        description: 'Also seed holidays?'
+        required: false
+        default: false
+        type: boolean
+      # Infrastructure inputs (optional - if provided, Terraform init is skipped)
+      rds_endpoint:
+        required: false
+        type: string
+      rds_port:
+        required: false
+        type: string
+      database_name:
+        required: false
+        type: string
+      nat_instance_id:
+        required: false
+        type: string
+      s3_bucket:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  NODE_VERSION: ${{ vars.NODE_VERSION }}
+  TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
+
+jobs:
+  seed-database:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: seeder/package-lock.json
+      
+      - name: Set environment variables
+        id: set-env
+        run: |
+          ENV="${{ inputs.environment || github.event.inputs.environment }}"
+          ENV_UPPER=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "env_upper=$ENV_UPPER" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-seed-rds
+          role-skip-session-tagging: true
+
+      - name: Assume Execution Role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-execution-role
+          role-chaining: true
+          role-skip-session-tagging: true
+
+      # Check if infrastructure details were provided as inputs
+      - name: Check Input Availability
+        id: check-inputs
+        run: |
+          if [[ -n "${{ inputs.rds_endpoint }}" && -n "${{ inputs.nat_instance_id }}" ]]; then
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get infrastructure outputs (Terraform)
+        id: infra-tf
+        if: steps.check-inputs.outputs.available == 'false'
+        env:
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          ENV="${{ steps.set-env.outputs.environment }}"
+          cd terraform/environments/$ENV
+          
+          # Generate backend config for CI
+          cat > backend-ci.hcl << EOF
+          bucket         = "$TF_STATE_BUCKET"
+          key            = "environments/$ENV/terraform.tfstate"
+          region         = "$AWS_REGION"
+          encrypt        = true
+          assume_role = {
+            role_arn = "$BACKEND_ROLE_ARN"
+          }
+          EOF
+          
+          terraform init -backend-config=backend-ci.hcl -input=false
+          
+          # Cleanup backend config
+          rm -f backend-ci.hcl
+          
+          # Get NAT instance details, RDS endpoint, and database name
+          NAT_INSTANCE_ID=$(terraform output -raw nat_instance_id 2>/dev/null || echo "")
+          RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
+          DATABASE_NAME=$(terraform output -raw database_name)
+          S3_BUCKET=$(terraform output -raw s3_bucket)
+          RDS_PORT=$(terraform output -raw rds_port)
+          
+          echo "nat_instance_id=$NAT_INSTANCE_ID" >> $GITHUB_OUTPUT
+          echo "rds_endpoint=$RDS_ENDPOINT" >> $GITHUB_OUTPUT
+          echo "rds_port=$RDS_PORT" >> $GITHUB_OUTPUT
+          echo "database_name=$DATABASE_NAME" >> $GITHUB_OUTPUT
+          echo "s3_bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+
+      - name: Consolidate Infrastructure Outputs
+        id: infra
+        run: |
+          if [ "${{ steps.check-inputs.outputs.available }}" == "true" ]; then
+            echo "Using provided inputs..."
+            echo "nat_instance_id=${{ inputs.nat_instance_id }}" >> $GITHUB_OUTPUT
+            echo "rds_endpoint=${{ inputs.rds_endpoint }}" >> $GITHUB_OUTPUT
+            echo "rds_port=${{ inputs.rds_port }}" >> $GITHUB_OUTPUT
+            echo "database_name=${{ inputs.database_name }}" >> $GITHUB_OUTPUT
+            echo "s3_bucket=${{ inputs.s3_bucket }}" >> $GITHUB_OUTPUT
+          else
+            echo "Using Terraform outputs..."
+            echo "nat_instance_id=${{ steps.infra-tf.outputs.nat_instance_id }}" >> $GITHUB_OUTPUT
+            echo "rds_endpoint=${{ steps.infra-tf.outputs.rds_endpoint }}" >> $GITHUB_OUTPUT
+            echo "rds_port=${{ steps.infra-tf.outputs.rds_port }}" >> $GITHUB_OUTPUT
+            echo "database_name=${{ steps.infra-tf.outputs.database_name }}" >> $GITHUB_OUTPUT
+            echo "s3_bucket=${{ steps.infra-tf.outputs.s3_bucket }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate NAT Instance
+        run: |
+          NAT_INSTANCE_ID="${{ steps.infra.outputs.nat_instance_id }}"
+          if [ -z "$NAT_INSTANCE_ID" ]; then
+            echo "❌ Error: NAT Instance ID is not available"
+            echo "SSM Port Forwarding requires a NAT instance for RDS access"
+            exit 1
+          fi
+          echo "✅ NAT Instance ID: $NAT_INSTANCE_ID"
+
+      - name: Setup SSM Port Forwarding
+        uses: ./.github/actions/setup-ssm-tunnel
+        with:
+          nat-instance-id: ${{ steps.infra.outputs.nat_instance_id }}
+          rds-endpoint: ${{ steps.infra.outputs.rds_endpoint }}
+          rds-port: ${{ steps.infra.outputs.rds_port }}
+      
+      - name: Wait for SSM tunnel to establish
+        run: sleep 5
+
+      - name: Fetch Database Credentials from Secrets Manager
+        id: db-creds
+        run: |
+          ENV="${{ steps.set-env.outputs.environment }}"
+          SECRET_ID="pokehabit/${ENV}/database/credentials"
+          
+          echo "Fetching credentials from secret: $SECRET_ID"
+          
+          # Fetch credentials from AWS Secrets Manager
+          SECRET_JSON=$(aws secretsmanager get-secret-value \
+            --secret-id "$SECRET_ID" \
+            --query SecretString \
+            --output text)
+          
+          # Extract username and password
+          DB_USER=$(echo "$SECRET_JSON" | jq -r .username)
+          DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r .password)
+          
+          # Set as masked output to prevent exposure in logs
+          echo "::add-mask::$DB_USER"
+          echo "::add-mask::$DB_PASSWORD"
+          echo "db_user=$DB_USER" >> $GITHUB_OUTPUT
+          echo "db_password=$DB_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Install seeder dependencies
+        run: |
+          cd seeder
+          npm ci
+
+      - name: Run seeder
+        if: inputs.seed_pokemon == true || inputs.seed_pokemon == null || github.event.inputs.seed_pokemon == 'true'
+        env:
+          NODE_ENV: production
+          DB_HOST: localhost
+          DB_PORT: 3307
+          DB_NAME: ${{ steps.infra.outputs.database_name }}
+          DB_USER: ${{ steps.db-creds.outputs.db_user }}
+          DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
+          S3_BUCKET_NAME: ${{ steps.infra.outputs.s3_bucket }}
+          S3_BASE_PATH: ''
+        run: |
+          cd seeder
+          echo "🌱 Seeding Pokemon Data..."
+          npm run seed:rds
+
+      - name: Run Holiday Seeder
+        if: inputs.seed_holidays == true || github.event.inputs.seed_holidays == 'true'
+        env:
+          NODE_ENV: production
+          DB_HOST: localhost
+          DB_PORT: 3307
+          DB_NAME: ${{ steps.infra.outputs.database_name }}
+          DB_USER: ${{ steps.db-creds.outputs.db_user }}
+          DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
+          HOLIDAY_API_KEY: ${{ secrets.HOLIDAY_API_KEY }}
+        run: |
+          cd seeder
+          echo "📅 Seeding Holiday Data..."
+          npm run seed:holidays:rds
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          pkill -f "session-manager-plugin" || true
+
+      - name: Notify on success
+        if: success()
+        run: echo "✅ Database seeding completed successfully"
+      
+      - name: Notify on failure
+        if: failure()
+        run: echo "❌ Database seeding failed"
