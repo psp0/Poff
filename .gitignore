@@ -1,0 +1,77 @@
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+
+# Environment
+.env
+.env.*.local
+.env.local
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+!*.tfvars.example
+backend.hcl
+
+# AWS / Lambda
+.aws/
+*.zip
+lambda/functions/*/node_modules/
+
+# Outputs / JSON
+# Ignore generated JSON but keep key repo files
+*.json
+!package.json
+!package-lock.json
+!*.example.json
+
+# Logs & temp
+logs/
+*.log
+tmp/
+temp/
+*.tmp
+
+# IDEs & editors
+.vscode/
+.idea/
+.kiro
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+env/
+venv/
+ENV/
+
+# Database
+*.db
+*.sqlite
+flyway*.conf
+
+# Secrets
+secrets/
+*.pem
+*.key
+!*.pub
+
+# Project-specific large assets / trash
+pokehabit-assets/*
+trash*/ 
+
+# Misc
+crash.log
