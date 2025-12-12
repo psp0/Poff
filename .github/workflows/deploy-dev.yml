@@ -50,10 +50,6 @@ jobs:
     name: Deploy dev
     runs-on: ubuntu-latest
     # Enforce develop branch for workflow_dispatch, allow workflow_call from ci.yml (which preserves 'push' event name)
-    if: |
-      github.event_name != 'workflow_dispatch' || 
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop')
-
     permissions:
       contents: read
       id-token: write
