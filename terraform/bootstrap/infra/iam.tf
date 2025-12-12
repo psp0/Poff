@@ -24,7 +24,8 @@ resource "aws_iam_role" "terraform_cross_account_backend_role" {
             # "arn:aws:iam::${var.dev_account_id}:root",
             # "arn:aws:iam::${var.prod_account_id}:root",
             "arn:aws:iam::${var.dev_account_id}:role/${var.project_name}-dev-execution-role",
-            "arn:aws:iam::${var.prod_account_id}:role/${var.project_name}-prod-execution-role"
+            "arn:aws:iam::${var.prod_account_id}:role/${var.project_name}-prod-execution-role",
+            "arn:aws:iam::${var.prod_account_id}:role/${var.project_name}-prod-gha-pr-role",
           ]
         }
       }
