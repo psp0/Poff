@@ -49,9 +49,9 @@ jobs:
   deploy-dev:
     name: Deploy dev
     runs-on: ubuntu-latest
-    # Enforce develop branch for workflow_dispatch, allow workflow_call from ci.yml
+    # Enforce develop branch for workflow_dispatch, allow workflow_call from ci.yml (which preserves 'push' event name)
     if: |
-      github.event_name == 'workflow_call' || 
+      github.event_name != 'workflow_dispatch' || 
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop')
 
     permissions:
@@ -109,7 +109,7 @@ jobs:
       - name: Set action variable
         id: set-action
         run: |
-          if [ "${{ github.event_name }}" = "workflow_call" ]; then
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
             ACTION="${{ inputs.action }}"
           else
             ACTION="${{ github.event.inputs.action }}"
@@ -149,7 +149,7 @@ jobs:
           path: dist
 
       - name: Download Frontend Artifact (Workflow Call)
-        if: github.event_name == 'workflow_call'
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
@@ -165,7 +165,7 @@ jobs:
           path: lambda/packages
 
       - name: Download Lambda Artifact (Workflow Call)
-        if: github.event_name == 'workflow_call'
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@v4
         with:
           name: lambda-packages
