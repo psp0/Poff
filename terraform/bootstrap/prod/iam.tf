@@ -343,8 +343,7 @@ resource "aws_iam_role" "github_actions_role" {
           },
           StringLike = {
             "token.actions.githubusercontent.com:sub" = [
-              "repo:${var.full_repo_path}:ref:refs/heads/main",
-              "repo:${var.full_repo_path}:pull_request"
+              "repo:${var.full_repo_path}:ref:refs/heads/main"
             ]
           }
         }
@@ -380,4 +379,52 @@ resource "aws_iam_policy" "github_actions_policy" {
 resource "aws_iam_role_policy_attachment" "github_actions_policy_attachment" {
   role       = aws_iam_role.github_actions_role.name
   policy_arn = aws_iam_policy.github_actions_policy.arn
+}
+
+# ---- GitHub Actions Role for CI (ReadOnly / Plan) ----
+resource "aws_iam_role" "github_actions_ci_role" {
+  name        = "${var.project_name}-${var.environment}-gha-ci-role"
+  description = "Role for GitHub Actions CI to perform Terraform Plan (ReadOnly) in prod account"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Principal = {
+          Federated = data.aws_iam_openid_connect_provider.github_oidc.arn
+        }
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          },
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:${var.full_repo_path}:pull_request",
+              "repo:${var.full_repo_path}:ref:refs/heads/develop",
+              "repo:${var.full_repo_path}:ref:refs/heads/main"
+            ]
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "gha-ci-role"
+    Environment = "prod"
+  }
+}
+
+# CI 역할에 기본 권한 연결 (Backend 접근 등)
+resource "aws_iam_role_policy_attachment" "github_actions_ci_base_attachment" {
+  role       = aws_iam_role.github_actions_ci_role.name
+  policy_arn = aws_iam_policy.terraform_execution_base_policy.arn
+}
+
+# CI 역할에 ReadOnlyAccess 연결
+resource "aws_iam_role_policy_attachment" "github_actions_ci_readonly_attachment" {
+  role       = aws_iam_role.github_actions_ci_role.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }

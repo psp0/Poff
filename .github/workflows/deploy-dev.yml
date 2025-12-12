@@ -34,6 +34,13 @@ on:
       AWS_DEV_EXECUTION_ROLE_ARN:
         required: true
 
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+  statuses: write
+  deployments: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -42,7 +49,7 @@ jobs:
   deploy-dev:
     name: Deploy dev
     runs-on: ubuntu-latest
-
+    # Enforce develop branch for workflow_dispatch, allow workflow_call from ci.yml (which preserves 'push' event name)
     permissions:
       contents: read
       id-token: write
@@ -78,10 +85,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate branch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          if [ "$BRANCH_NAME" != "develop" ]; then
+            echo "## ❌ Wrong Branch Selected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**deploy-dev.yml** can only be run from the \`develop\` branch." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Current branch: \`$BRANCH_NAME\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Required branch: \`develop\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please select **develop** from the branch dropdown and try again." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "✅ Branch validation passed: $BRANCH_NAME"
+
       - name: Set action variable
         id: set-action
         run: |
-          if [ "${{ github.event_name }}" = "workflow_call" ]; then
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
             ACTION="${{ inputs.action }}"
           else
             ACTION="${{ github.event.inputs.action }}"
@@ -121,7 +145,7 @@ jobs:
           path: dist
 
       - name: Download Frontend Artifact (Workflow Call)
-        if: github.event_name == 'workflow_call'
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
@@ -137,7 +161,7 @@ jobs:
           path: lambda/packages
 
       - name: Download Lambda Artifact (Workflow Call)
-        if: github.event_name == 'workflow_call'
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@v4
         with:
           name: lambda-packages

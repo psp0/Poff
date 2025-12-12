@@ -17,3 +17,8 @@ output "github_actions_role_name" {
   description = "Name of the GitHub Actions role for prod environment"
   value       = aws_iam_role.github_actions_role.name
 }
+
+output "github_actions_ci_role_arn" {
+  description = "ARN of the GitHub Actions CI role for prod environment"
+  value       = aws_iam_role.github_actions_ci_role.arn
+}
