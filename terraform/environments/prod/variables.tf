@@ -244,11 +244,7 @@ variable "datadog_site" {
   default     = "datadoghq.com"
 }
 
-variable "datadog_external_id" {
-  description = "External ID for Datadog AWS integration"
-  type        = string
-  default     = ""
-}
+
 
 variable "enable_datadog_monitoring" {
   description = "Enable Datadog monitoring integration"
