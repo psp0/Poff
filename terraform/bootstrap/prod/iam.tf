@@ -380,3 +380,49 @@ resource "aws_iam_role_policy_attachment" "github_actions_policy_attachment" {
   role       = aws_iam_role.github_actions_role.name
   policy_arn = aws_iam_policy.github_actions_policy.arn
 }
+
+# ---- GitHub Actions Role for PRs (Read Only / Plan) ----
+resource "aws_iam_role" "github_actions_pr_role" {
+  name        = "${var.project_name}-${var.environment}-gha-pr-role"
+  description = "Role for GitHub Actions PRs to perform Terraform Plan (ReadOnly) in prod account"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Principal = {
+          Federated = data.aws_iam_openid_connect_provider.github_oidc.arn
+        }
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          },
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:${var.full_repo_path}:pull_request"
+            ]
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "gha-pr-role"
+    Environment = "prod"
+  }
+}
+
+# PR 역할에 기본 권한 연결 (Backend 접근 등)
+resource "aws_iam_role_policy_attachment" "github_actions_pr_base_attachment" {
+  role       = aws_iam_role.github_actions_pr_role.name
+  policy_arn = aws_iam_policy.terraform_execution_base_policy.arn
+}
+
+# PR 역할에 ReadOnlyAccess 연결
+resource "aws_iam_role_policy_attachment" "github_actions_pr_readonly_attachment" {
+  role       = aws_iam_role.github_actions_pr_role.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
