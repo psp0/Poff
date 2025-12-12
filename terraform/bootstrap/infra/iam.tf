@@ -23,14 +23,14 @@ resource "aws_iam_role" "terraform_cross_account_backend_role" {
             # 부트스트랩과정을 위해 주석 일부로 남겨놓음
             # "arn:aws:iam::${var.dev_account_id}:root",
             # "arn:aws:iam::${var.prod_account_id}:root",
-            "arn:aws:iam::${var.dev_account_id}:role/${var.project_name}-dev-execution-role",            
+            "arn:aws:iam::${var.dev_account_id}:role/${var.project_name}-dev-execution-role",
             "arn:aws:iam::${var.prod_account_id}:role/${var.project_name}-prod-execution-role"
           ]
         }
       }
     ]
   })
-  
+
 }
 
 # Cross-Account 역할에 부여할 백엔드 접근 정책
@@ -42,9 +42,9 @@ resource "aws_iam_policy" "terraform_cross_account_backend_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowListBucketForState"
-        Effect = "Allow"
-        Action = "s3:ListBucket"
+        Sid      = "AllowListBucketForState"
+        Effect   = "Allow"
+        Action   = "s3:ListBucket"
         Resource = data.aws_s3_bucket.terraform_state.arn
         Condition = {
           StringLike = {
@@ -63,9 +63,9 @@ resource "aws_iam_policy" "terraform_cross_account_backend_policy" {
         Resource = [
           "${data.aws_s3_bucket.terraform_state.arn}/bootstrap/*",
           "${data.aws_s3_bucket.terraform_state.arn}/environments/dev/*",
-          "${data.aws_s3_bucket.terraform_state.arn}/environments/prod/*"          
+          "${data.aws_s3_bucket.terraform_state.arn}/environments/prod/*"
         ]
-      },   
+      },
     ]
   })
 }
@@ -95,7 +95,7 @@ resource "aws_iam_role" "dns_management" {
             # 부트스트랩과정을 위해 주석 일부로 남겨놓음
             # "arn:aws:iam::${var.dev_account_id}:root",
             # "arn:aws:iam::${var.prod_account_id}:root",
-            "arn:aws:iam::${var.dev_account_id}:role/${var.project_name}-dev-execution-role",            
+            "arn:aws:iam::${var.dev_account_id}:role/${var.project_name}-dev-execution-role",
             "arn:aws:iam::${var.prod_account_id}:role/${var.project_name}-prod-execution-role"
           ]
         }
@@ -131,7 +131,7 @@ resource "aws_iam_policy" "dns_management" {
         Resource = var.hosted_zone_id != "" ? [
           "arn:aws:route53:::hostedzone/${var.hosted_zone_id}",
           "arn:aws:route53:::change/*"
-        ] : [
+          ] : [
           "arn:aws:route53:::hostedzone/*",
           "arn:aws:route53:::change/*"
         ]
@@ -171,7 +171,7 @@ resource "aws_iam_role" "terraform_execution_role" {
         Action = "sts:AssumeRole"
         Principal = {
           AWS = [
-            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"           
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
           ]
         }
       }
@@ -179,7 +179,7 @@ resource "aws_iam_role" "terraform_execution_role" {
   })
 
   tags = {
-    Name = "TerraformExecutionRole"
+    Name        = "TerraformExecutionRole"
     Environment = "infra"
   }
 }
@@ -191,7 +191,7 @@ resource "aws_iam_policy" "terraform_execution_policy" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [    
+    Statement = [
       {
         Sid    = "AllowBackendAccessForInfra"
         Effect = "Allow"
@@ -209,7 +209,7 @@ resource "aws_iam_policy" "terraform_execution_policy" {
     ]
   })
 }
-  
+
 
 # TerraformExecutionRole과 정책 연결
 resource "aws_iam_role_policy_attachment" "terraform_execution_policy_attachment" {

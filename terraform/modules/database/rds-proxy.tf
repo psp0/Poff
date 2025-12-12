@@ -101,7 +101,7 @@ resource "aws_db_proxy" "main" {
   name                   = "${var.project_name}-proxy"
   debug_logging          = var.environment == "dev" ? true : false
   engine_family          = "MYSQL"
-  idle_client_timeout    = 1800  # 30분 - Lambda 실행 패턴에 적합
+  idle_client_timeout    = 1800 # 30분 - Lambda 실행 패턴에 적합
   require_tls            = true
   role_arn               = aws_iam_role.rds_proxy[0].arn
   vpc_security_group_ids = [aws_security_group.rds.id]
@@ -110,7 +110,7 @@ resource "aws_db_proxy" "main" {
   auth {
     auth_scheme               = "SECRETS"
     client_password_auth_type = "MYSQL_NATIVE_PASSWORD"
-    iam_auth                  = "DISABLED"  # IAM 인증 비활성화 (기존 방식 유지)
+    iam_auth                  = "DISABLED" # IAM 인증 비활성화 (기존 방식 유지)
     secret_arn                = aws_secretsmanager_secret.rds_credentials[0].arn
   }
 
@@ -131,13 +131,13 @@ resource "aws_db_proxy_default_target_group" "main" {
   connection_pool_config {
     # 최대 연결 비율 (RDS 인스턴스의 max_connections 대비)
     max_connections_percent = 100
-    
+
     # 연결 대기 시간 (초) - Lambda 타임아웃보다 짧게
     connection_borrow_timeout = 120
-    
+
     # 세션 고정 필터 (트랜잭션 레벨 변경 시에만 고정)
     session_pinning_filters = ["EXCLUDE_VARIABLE_SETS"]
-    
+
     # 초기화 쿼리 (연결 시 실행할 SQL)
     init_query = "SET NAMES utf8mb4"
   }
@@ -161,9 +161,9 @@ resource "aws_cloudwatch_metric_alarm" "rds_proxy_connections" {
   namespace           = "AWS/RDS"
   period              = 300
   statistic           = "Average"
-  threshold           = 80  # 80% 연결 사용 시 알람
+  threshold           = 80 # 80% 연결 사용 시 알람
   alarm_description   = "RDS Proxy connections are high"
-  
+
   dimensions = {
     DBProxyName = aws_db_proxy.main[0].name
   }

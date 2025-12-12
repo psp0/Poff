@@ -8,5 +8,5 @@ terraform {
   #backend "local" {
   #  path = "terraform.tfstate"      
   #}
-  backend "s3" {} 
+  backend "s3" {}
 }
