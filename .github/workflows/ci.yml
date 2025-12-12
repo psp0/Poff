@@ -150,20 +150,12 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ github.event_name == 'pull_request' && secrets.AWS_PROD_GHA_PR_ROLE_ARN || secrets.AWS_PROD_GHA_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_PROD_GHA_CI_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-ci
           role-skip-session-tagging: true
 
-      - name: Assume Execution Role
-        if: github.event_name != 'pull_request'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_PROD_EXECUTION_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions-ci-execution
-          role-chaining: true
-          role-skip-session-tagging: true
+
 
       - name: Terraform Init and Validate (Prod)
         working-directory: ${{ env.TF_WORKING_DIR }}

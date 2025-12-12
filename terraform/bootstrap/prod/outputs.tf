@@ -18,7 +18,7 @@ output "github_actions_role_name" {
   value       = aws_iam_role.github_actions_role.name
 }
 
-output "github_actions_pr_role_arn" {
-  description = "ARN of the GitHub Actions PR role for prod environment"
-  value       = aws_iam_role.github_actions_pr_role.arn
+output "github_actions_ci_role_arn" {
+  description = "ARN of the GitHub Actions CI role for prod environment"
+  value       = aws_iam_role.github_actions_ci_role.arn
 }
