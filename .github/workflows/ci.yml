@@ -56,6 +56,9 @@ jobs:
   validate-terraform-dev:
     name: Validate Terraform (Dev)
     runs-on: ubuntu-latest
+    env:
+      TF_WORKING_DIR: terraform/environments/dev
+      TF_STATE_KEY: environments/dev/terraform.tfstate
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,6 +67,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -71,6 +75,15 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-ci
+          role-skip-session-tagging: true
+
+      - name: Assume Execution Role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-ci-execution
+          role-chaining: true
           role-skip-session-tagging: true
 
       - name: Terraform Format Check
@@ -81,16 +94,22 @@ jobs:
           terraform fmt -check -recursive bootstrap/
 
       - name: Terraform Init and Validate (Dev)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+          TF_IN_AUTOMATION: true
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
           set -e
-          cd terraform/environments/dev
-          
           echo "::group::Creating temporary backend configuration"
           cat > backend-ci.hcl <<EOF
           bucket  = "${{ env.TF_STATE_BUCKET }}"
-          key     = "environments/dev/terraform.tfstate"
+          key     = "${{ env.TF_STATE_KEY }}"
           region  = "${{ env.AWS_REGION }}"
           encrypt = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
           EOF
           
           # Cleanup function to remove temporary backend config
@@ -115,6 +134,9 @@ jobs:
   validate-terraform-prod:
     name: Validate Terraform (Prod)
     runs-on: ubuntu-latest
+    env:
+      TF_WORKING_DIR: terraform/environments/prod
+      TF_STATE_KEY: environments/prod/terraform.tfstate
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -123,26 +145,43 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ github.event_name == 'pull_request' && secrets.AWS_PROD_GHA_PR_ROLE_ARN || secrets.AWS_PROD_GHA_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-ci
           role-skip-session-tagging: true
 
+      - name: Assume Execution Role
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PROD_EXECUTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-ci-execution
+          role-chaining: true
+          role-skip-session-tagging: true
+
       - name: Terraform Init and Validate (Prod)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+          TF_IN_AUTOMATION: true
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
           set -e
-          cd terraform/environments/prod
-          
           echo "::group::Creating temporary backend configuration"
           cat > backend-ci.hcl <<EOF
           bucket  = "${{ env.TF_STATE_BUCKET }}"
-          key     = "environments/prod/terraform.tfstate"
+          key     = "${{ env.TF_STATE_KEY }}"
           region  = "${{ env.AWS_REGION }}"
           encrypt = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
           EOF
           
           # Cleanup function to remove temporary backend config
@@ -163,10 +202,11 @@ jobs:
           echo "Terraform validation completed successfully"
           echo "::endgroup::"
 
-  # Deploy to Dev
+  # Deploy to Dev (only on push to develop, not on PR)
   deploy-dev:
     name: Deploy to Dev
     needs: [build-frontend, build-lambda, validate-terraform-dev]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     uses: ./.github/workflows/deploy-dev.yml
     with:
       action: apply
@@ -188,11 +228,12 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
 
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+      - name: Upload Trivy scan results
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          name: trivy-results
+          path: trivy-results.sarif
 
       - name: Run Checkov static analysis
         uses: bridgecrewio/checkov-action@master
@@ -203,12 +244,12 @@ jobs:
           output_file_path: checkov-results.sarif
           soft_fail: true
 
-      - name: Upload Checkov scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+      - name: Upload Checkov scan results
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          sarif_file: 'checkov-results.sarif'
-          category: 'checkov'
+          name: checkov-results
+          path: checkov-results.sarif
 
   # Build Lambda packages
   build-lambda:
