@@ -163,10 +163,11 @@ jobs:
           echo "Terraform validation completed successfully"
           echo "::endgroup::"
 
-  # Deploy to Dev
+  # Deploy to Dev (only on push to develop, not on PR)
   deploy-dev:
     name: Deploy to Dev
     needs: [build-frontend, build-lambda, validate-terraform-dev]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     uses: ./.github/workflows/deploy-dev.yml
     with:
       action: apply
