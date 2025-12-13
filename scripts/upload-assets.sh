@@ -11,15 +11,40 @@ ASSETS_DIR="$PROJECT_ROOT/pokehabit-assets"
 MANIFEST_FILE="$SCRIPT_DIR/assets-manifest.txt"
 
 # === Parse Arguments ===
-ENV="" DRY_RUN="" DELETE=""
-for arg in "$@"; do
-  case $arg in
-    dev|prod) ENV="$arg" ;;
-    --dry-run) DRY_RUN="--dryrun" ;;
-    --delete) DELETE="--delete" ;;
-    -h|--help) echo "Usage: $0 <dev|prod> [--dry-run] [--delete]"; exit 0 ;;
+ENV="" DRY_RUN="" DELETE="" PROFILE=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    dev|prod)
+      ENV="$1"
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN="--dryrun"
+      shift
+      ;;
+    --delete)
+      DELETE="--delete"
+      shift
+      ;;
+    --profile)
+      PROFILE="$2"
+      shift 2
+      ;;
+    -h|--help)
+      echo "Usage: $0 <dev|prod> [--profile <name>] [--dry-run] [--delete]"
+      exit 0
+      ;;
+    *)
+      echo "❌ Error: Unknown argument '$1'"
+      exit 1
+      ;;
   esac
 done
+
+if [[ -n "$PROFILE" ]]; then
+  export AWS_PROFILE="$PROFILE"
+fi
 
 [[ -z "$ENV" ]] && { echo "❌ Error: Environment required (dev or prod)"; exit 1; }
 [[ ! -d "$ASSETS_DIR" ]] && { echo "❌ Error: Assets directory not found"; exit 1; }
@@ -74,7 +99,7 @@ upload_manifest_files() {
 # === Main ===
 echo ""
 echo "━━━ Pokehabit Assets Upload ━━━"
-echo "Environment: $ENV | Dry-run: ${DRY_RUN:-no} | Delete: ${DELETE:-no}"
+echo "Environment: $ENV | Profile: ${AWS_PROFILE:-default} | Dry-run: ${DRY_RUN:-no} | Delete: ${DELETE:-no}"
 echo ""
 
 sync_dir "base" "$ASSETS_DIR/base" true           # exclude info/, cache: 1 year

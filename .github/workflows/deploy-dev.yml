@@ -141,7 +141,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Download Frontend Artifact (Workflow Dispatch)
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ci.yml
@@ -150,14 +150,14 @@ jobs:
           path: dist
 
       - name: Download Frontend Artifact (Workflow Call)
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist
 
       - name: Download Lambda Artifact (Workflow Dispatch)
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ci.yml
@@ -166,7 +166,7 @@ jobs:
           path: lambda/packages
 
       - name: Download Lambda Artifact (Workflow Call)
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
         uses: actions/download-artifact@v4
         with:
           name: lambda-packages
