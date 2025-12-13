@@ -343,7 +343,8 @@ resource "aws_iam_role" "github_actions_role" {
           },
           StringLike = {
             "token.actions.githubusercontent.com:sub" = [
-              "repo:${var.full_repo_path}:ref:refs/heads/main"
+              "repo:${var.full_repo_path}:ref:refs/heads/main",
+              "repo:${var.full_repo_path}:environment:${var.environment}"
             ]
           }
         }
