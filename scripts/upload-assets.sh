@@ -50,8 +50,8 @@ fi
 [[ ! -d "$ASSETS_DIR" ]] && { echo "❌ Error: Assets directory not found"; exit 1; }
 
 # === Get S3 Bucket (convention-based naming) ===
-S3_BUCKET="pokehabit-${ENV}-assets"
-echo "✅ S3 Bucket: $S3_BUCKET"
+ASSETS_BUCKET_NAME="pokehabit-${ENV}-assets"
+echo "✅ Assets Bucket: $ASSETS_BUCKET_NAME"
 
 # === Sync Function ===
 sync_dir() {
@@ -67,7 +67,7 @@ sync_dir() {
   [[ -n "$DELETE" ]] && opts+=("--delete")
   [[ "$exclude_info" == "true" ]] && opts+=(--exclude "info/*")
   
-  aws s3 sync "$local_path/" "s3://$S3_BUCKET/$name/" \
+  aws s3 sync "$local_path/" "s3://$ASSETS_BUCKET_NAME/$name/" \
     --cache-control "max-age=$cache_age" \
     --exclude "*.DS_Store" --exclude ".gitkeep" --exclude "desktop.ini" \
     "${opts[@]}"
@@ -87,7 +87,7 @@ upload_manifest_files() {
     local file="$ASSETS_DIR/$line"
     if [[ -f "$file" ]]; then
       [[ -n "$DRY_RUN" ]] && echo "  [dry-run] $line" && continue
-      aws s3 cp "$file" "s3://$S3_BUCKET/$line" \
+      aws s3 cp "$file" "s3://$ASSETS_BUCKET_NAME/$line" \
         --cache-control "max-age=86400" --content-type "text/plain; charset=utf-8" --quiet
       echo "  ✅ $line"
     else

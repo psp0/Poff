@@ -535,7 +535,7 @@ jobs:
       rds_port: ${{ needs.deploy-production.outputs.rds_port }}
       database_name: ${{ needs.deploy-production.outputs.database_name }}
       nat_instance_id: ${{ needs.deploy-production.outputs.nat_instance_id }}
-      s3_bucket: ${{ needs.deploy-production.outputs.s3_bucket }}
+      assets_bucket_name: "pokehabit-prod-assets"
     secrets: inherit
 
 
