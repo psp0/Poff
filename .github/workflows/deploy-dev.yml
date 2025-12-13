@@ -42,7 +42,7 @@ permissions:
   deployments: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: deploy-dev-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -50,6 +50,10 @@ jobs:
     name: Deploy dev
     runs-on: ubuntu-latest
     # Enforce develop branch for workflow_dispatch, allow workflow_call from ci.yml (which preserves 'push' event name)
+    if: |
+      github.event_name != 'workflow_dispatch' || 
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop')
+
     permissions:
       contents: read
       id-token: write
@@ -66,6 +70,7 @@ jobs:
       TF_STATE_KEY: environments/dev/terraform.tfstate
       TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
       TF_VAR_datadog_app_key: ${{ secrets.DATADOG_APP_KEY }}
+      TF_VAR_datadog_site: ${{ secrets.DATADOG_SITE || 'datadoghq.com' }}
       TF_VAR_lambda_package_dir: "../../../lambda/packages"
       TF_VAR_aws_infra_role_arn: ${{ secrets.AWS_INFRA_DNS_MANAGEMENT_ROLE_ARN }}
       TF_VAR_firebase_service_account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
