@@ -54,6 +54,20 @@ on:
         required: false
         type: string
 
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: false
+        description: 'AWS Deploy Role ARN'
+      AWS_EXECUTION_ROLE_ARN:
+        required: false
+        description: 'AWS Execution Role ARN'
+      AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN:
+        required: false
+        description: 'AWS Infra Cross Account Backend Role ARN'
+      HOLIDAY_API_KEY:
+        required: false
+        description: 'Holiday API Key'
+
 permissions:
   contents: read
   id-token: write
@@ -89,7 +103,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN || secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-seed-rds
           role-skip-session-tagging: true
@@ -97,7 +111,7 @@ jobs:
       - name: Assume Execution Role
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          role-to-assume: ${{ secrets.AWS_EXECUTION_ROLE_ARN || secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-execution-role
           role-chaining: true
