@@ -126,7 +126,7 @@ resource "aws_ssm_parameter" "rds_endpoint" {
 resource "aws_secretsmanager_secret" "db_credentials" {
   name        = "${var.project_name}/${var.environment}/database/credentials"
   description = "Database credentials for ${var.environment}"
-  
+
   # Allow overwriting if it was deleted but not purged
   recovery_window_in_days = 0
 
@@ -136,7 +136,7 @@ resource "aws_secretsmanager_secret" "db_credentials" {
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id     = aws_secretsmanager_secret.db_credentials.id
+  secret_id = aws_secretsmanager_secret.db_credentials.id
   secret_string = jsonencode({
     username = var.rds_admin_username
     password = random_password.rds_admin_password.result
