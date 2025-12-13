@@ -25,11 +25,6 @@ locals {
       timeout     = 30
       memory_size = 512
     }
-    screen-time-rewards = {
-      handler     = "functions/screen-time-rewards/index.handler"
-      timeout     = 30
-      memory_size = 512
-    }
     egg-management = {
       handler     = "functions/egg-management/index.handler"
       timeout     = 30
@@ -58,7 +53,6 @@ locals {
     "POST /api/screen-time"             = "screen-time-management"
     "GET /api/screen-time"              = "screen-time-management"
     "GET /api/screen-time/today"        = "screen-time-management"
-    "POST /api/screen-time/check"       = "screen-time-rewards"
     "GET /api/pokemon"                  = "pokemon-collection"
     "GET /api/pokemon/{id}"             = "pokemon-collection"
     "POST /api/pokemon/collect"         = "pokemon-collection"
