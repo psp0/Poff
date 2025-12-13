@@ -70,6 +70,7 @@ jobs:
       TF_STATE_KEY: environments/dev/terraform.tfstate
       TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
       TF_VAR_datadog_app_key: ${{ secrets.DATADOG_APP_KEY }}
+      TF_VAR_datadog_site: ${{ secrets.DATADOG_SITE || 'datadoghq.com' }}
       TF_VAR_lambda_package_dir: "../../../lambda/packages"
       TF_VAR_aws_infra_role_arn: ${{ secrets.AWS_INFRA_DNS_MANAGEMENT_ROLE_ARN }}
       TF_VAR_firebase_service_account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
