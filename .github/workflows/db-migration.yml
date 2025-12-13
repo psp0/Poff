@@ -37,6 +37,20 @@ on:
         default: 'up'
         type: string
 
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: false
+        description: 'AWS Deploy Role ARN'
+      AWS_EXECUTION_ROLE_ARN:
+        required: false
+        description: 'AWS Execution Role ARN'
+      SLACK_WEBHOOK_DEPLOY:
+        required: false
+        description: 'Slack Webhook for Deployments'
+      SLACK_WEBHOOK_ALERT:
+        required: false
+        description: 'Slack Webhook for Alerts'
+
 permissions:
   contents: read
   id-token: write
@@ -103,7 +117,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN || secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-db-migration
           role-skip-session-tagging: true
@@ -111,7 +125,7 @@ jobs:
       - name: Assume execution role
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          role-to-assume: ${{ secrets.AWS_EXECUTION_ROLE_ARN || secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-db-migration-exec
           role-chaining: true

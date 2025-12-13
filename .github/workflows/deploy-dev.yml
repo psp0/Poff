@@ -78,6 +78,7 @@ jobs:
     outputs:
       vpc_id: ${{ steps.set-outputs.outputs.vpc_id }}
       rds_endpoint: ${{ steps.set-outputs.outputs.rds_endpoint }}
+      rds_port: ${{ steps.set-outputs.outputs.rds_port }}
       database_name: ${{ steps.set-outputs.outputs.database_name }}
       api_endpoint: ${{ steps.set-outputs.outputs.api_endpoint }}
       s3_bucket: ${{ steps.set-outputs.outputs.s3_bucket }}
@@ -490,7 +491,11 @@ jobs:
     with:
       environment: 'dev'
       migration_action: 'up'  # Run pending migrations
-    secrets: inherit
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
+      AWS_EXECUTION_ROLE_ARN: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
+      SLACK_WEBHOOK_DEPLOY: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
+      SLACK_WEBHOOK_ALERT: ${{ secrets.SLACK_WEBHOOK_ALERT }}
 
   seed-database:
     name: Seed Database
@@ -505,7 +510,11 @@ jobs:
       database_name: ${{ needs.deploy-dev.outputs.database_name }}
       nat_instance_id: ${{ needs.deploy-dev.outputs.nat_instance_id }}
       s3_bucket: ${{ needs.deploy-dev.outputs.s3_bucket }}
-    secrets: inherit
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
+      AWS_EXECUTION_ROLE_ARN: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
+      AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+      HOLIDAY_API_KEY: ${{ secrets.HOLIDAY_API_KEY }}
 
   notify:
     name: Notify Deployment Status
