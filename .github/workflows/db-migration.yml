@@ -269,7 +269,7 @@ jobs:
               ;;
             "status")
               echo "Checking migration status..."
-              npx db-migrate status -e $DB_ENV -m files
+              npx db-migrate check -e $DB_ENV -m files
               ;;
             *)
               echo "Unknown migration action: $MIGRATION_ACTION"
@@ -279,7 +279,7 @@ jobs:
           
           echo ""
           echo "Current migration status:"
-          npx db-migrate status -e $DB_ENV -m files
+          npx db-migrate check -e $DB_ENV -m files
           echo ""
           echo "Migration completed successfully!"
 
