@@ -25,6 +25,11 @@ on:
         type: string
         default: "apply"
         description: "Action to perform (apply or destroy)"
+      seed_data:
+        required: false
+        type: boolean
+        default: false
+        description: "Seed database with initial data"
         
     secrets:
       AWS_DEV_GHA_DEPLOY_ROLE_ARN:
@@ -84,6 +89,7 @@ jobs:
       s3_bucket: ${{ steps.set-outputs.outputs.s3_bucket }}
       nat_instance_id: ${{ steps.set-outputs.outputs.nat_instance_id }}
       cloudfront_distribution_id: ${{ steps.set-outputs.outputs.cloudfront_distribution_id }}
+      seed_data: ${{ steps.set-variables.outputs.seed_data }}
 
     steps:
       - name: Checkout code
@@ -108,15 +114,18 @@ jobs:
           fi
           echo "✅ Branch validation passed: $BRANCH_NAME"
 
-      - name: Set action variable
-        id: set-action
+      - name: Set variables
+        id: set-variables
         run: |
           if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
             ACTION="${{ inputs.action }}"
+            SEED_DATA="${{ inputs.seed_data }}"
           else
             ACTION="${{ github.event.inputs.action }}"
+            SEED_DATA="${{ github.event.inputs.seed_data }}"
           fi
           echo "action=${ACTION:-apply}" >> $GITHUB_OUTPUT
+          echo "seed_data=${SEED_DATA:-false}" >> $GITHUB_OUTPUT
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -142,7 +151,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Download Frontend Artifact (Workflow Dispatch)
-        if: github.event_name == 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
+        if: github.event_name == 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ci.yml
@@ -151,21 +160,21 @@ jobs:
           path: dist
 
       - name: Download Frontend Artifact (Workflow Call)
-        if: github.event_name != 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
+        if: github.event_name != 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist
 
       - name: Download Lambda Artifact (Workflow Call)
-        if: github.event_name != 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
+        if: github.event_name != 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
         uses: actions/download-artifact@v4
         with:
           name: lambda-packages
           path: lambda/packages
 
       - name: Download Lambda Artifact (Workflow Dispatch)
-        if: github.event_name == 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
+        if: github.event_name == 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ci.yml
@@ -174,7 +183,7 @@ jobs:
           path: lambda/packages
 
       - name: Create Dummy Lambda Artifacts (Destroy)
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-variables.outputs.action == 'destroy'
         run: |
           echo "Creating dummy lambda artifacts for destroy..."
           mkdir -p lambda/packages
@@ -182,7 +191,6 @@ jobs:
             echo "dummy content" > lambda/packages/${func}.zip
           done
           ls -la lambda/packages/
-
 
       - name: Terraform Init
         id: terraform_init
@@ -223,7 +231,7 @@ jobs:
       # Apply workflow
       - name: Terraform Plan
         id: plan
-        if: steps.set-action.outputs.action == 'apply'
+        if: steps.set-variables.outputs.action == 'apply'
         working-directory: ${{ env.TF_WORKING_DIR }}
         env:
           TF_LOG: ERROR
@@ -249,7 +257,7 @@ jobs:
 
       - name: Terraform Apply
         id: apply
-        if: steps.set-action.outputs.action == 'apply' && steps.plan.outcome == 'success'
+        if: steps.set-variables.outputs.action == 'apply' && steps.plan.outcome == 'success'
         working-directory: ${{ env.TF_WORKING_DIR }}
         env:
           TF_LOG: ERROR
@@ -269,7 +277,7 @@ jobs:
       # Destroy workflow
       - name: Terraform Plan (Destroy)
         id: plan-destroy
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-variables.outputs.action == 'destroy'
         working-directory: ${{ env.TF_WORKING_DIR }}
         env:
           TF_LOG: ERROR
@@ -295,7 +303,7 @@ jobs:
 
       - name: Terraform Destroy
         id: destroy
-        if: steps.set-action.outputs.action == 'destroy' && steps.plan-destroy.outcome == 'success'
+        if: steps.set-variables.outputs.action == 'destroy' && steps.plan-destroy.outcome == 'success'
         working-directory: ${{ env.TF_WORKING_DIR }}
         env:
           TF_LOG: ERROR
@@ -314,13 +322,13 @@ jobs:
 
       # Install jq for output parsing
       - name: Install jq
-        if: steps.set-action.outputs.action == 'apply'
+        if: steps.set-variables.outputs.action == 'apply'
         run: sudo apt-get update && sudo apt-get install -y jq
 
       # Set outputs only after successful apply
       - name: Set Terraform Outputs
         id: set-outputs
-        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success' && steps.apply.outputs.apply_success == 'true'
+        if: steps.set-variables.outputs.action == 'apply' && steps.apply.outcome == 'success' && steps.apply.outputs.apply_success == 'true'
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           set -e
@@ -350,7 +358,7 @@ jobs:
           done
 
       - name: Store Parameters in SSM
-        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success'
+        if: steps.set-variables.outputs.action == 'apply' && steps.apply.outcome == 'success'
         run: |
           ENV="dev"
           echo "Storing infrastructure parameters in SSM for environment: $ENV"
@@ -365,7 +373,7 @@ jobs:
 
       # Upload static files to S3
       - name: Upload Frontend Files to S3
-        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success'
+        if: steps.set-variables.outputs.action == 'apply' && steps.apply.outcome == 'success'
         run: |
           echo "Uploading Vite build output to S3..."
           S3_BUCKET="${{ steps.set-outputs.outputs.s3_bucket }}"
@@ -430,7 +438,7 @@ jobs:
           echo "✅ Frontend files uploaded successfully"
 
       - name: Invalidate CloudFront Cache
-        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success'
+        if: steps.set-variables.outputs.action == 'apply' && steps.apply.outcome == 'success'
         run: |
           DIST_ID="${{ steps.set-outputs.outputs.cloudfront_distribution_id }}"
           if [ ! -z "$DIST_ID" ]; then
@@ -445,9 +453,9 @@ jobs:
         if: always()
         run: |
           echo "Workflow Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- Action: ${{ steps.set-action.outputs.action }}" >> $GITHUB_STEP_SUMMARY          
+          echo "- Action: ${{ steps.set-variables.outputs.action }}" >> $GITHUB_STEP_SUMMARY          
 
-          if [ "${{ steps.set-action.outputs.action }}" = "apply" ]; then
+          if [ "${{ steps.set-variables.outputs.action }}" = "apply" ]; then
             if [ "${{ steps.apply.outcome }}" = "success" ] && [ "${{ steps.apply.outputs.apply_success }}" = "true" ]; then
               echo "- Status: Apply completed successfully" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ steps.apply.outcome }}" = "failure" ]; then
@@ -457,7 +465,7 @@ jobs:
             else
               echo "- Status: Apply was skipped or incomplete" >> $GITHUB_STEP_SUMMARY
             fi
-          elif [ "${{ steps.set-action.outputs.action }}" = "destroy" ]; then
+          elif [ "${{ steps.set-variables.outputs.action }}" = "destroy" ]; then
             if [ "${{ steps.destroy.outcome }}" = "success" ] && [ "${{ steps.destroy.outputs.destroy_success }}" = "true" ]; then
               echo "- Status: Destroy completed successfully" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ steps.destroy.outcome }}" = "failure" ]; then
@@ -500,7 +508,7 @@ jobs:
   seed-database:
     name: Seed Database
     needs: [deploy-dev, run-migration]
-    if: needs.deploy-dev.outputs.rds_endpoint != '' && github.event.inputs.seed_data == 'true'
+    if: needs.deploy-dev.outputs.rds_endpoint != '' && needs.deploy-dev.outputs.seed_data == 'true'
     uses: ./.github/workflows/seed-rds.yml
     with:
       environment: 'dev'
