@@ -156,6 +156,13 @@ jobs:
           name: frontend-dist
           path: dist
 
+      - name: Download Lambda Artifact (Workflow Call)
+        if: github.event_name != 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-packages
+          path: lambda/packages
+
       - name: Download Lambda Artifact (Workflow Dispatch)
         if: github.event_name == 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
         uses: dawidd6/action-download-artifact@v2
