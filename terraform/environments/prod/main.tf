@@ -41,6 +41,7 @@ module "database" {
   rds_backup_window           = var.rds_backup_window
   rds_maintenance_window      = var.rds_maintenance_window
   rds_skip_final_snapshot     = var.rds_skip_final_snapshot
+  availability_zone           = var.availability_zones[0]
 }
 
 # 3. ACM Module - Certificate Management (No Circular Dependency)

@@ -161,7 +161,7 @@ data "aws_ssm_parameter" "latest_amazon_linux_2" {
 
 # NAT Instance in each public subnet
 resource "aws_instance" "nat" {
-  count = length(aws_subnet.public)
+  count = 1
 
   ami                         = data.aws_ssm_parameter.latest_amazon_linux_2.value
   instance_type               = lookup(var.az_instance_type_map, aws_subnet.public[count.index].availability_zone)
