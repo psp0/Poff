@@ -121,3 +121,28 @@ resource "aws_ssm_parameter" "rds_endpoint" {
     Name = "${var.project_name}-rds-endpoint"
   })
 }
+
+# RDS Credentials in Secrets Manager (for GitHub Actions & Applications)
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name        = "${var.project_name}/${var.environment}/database/credentials"
+  description = "Database credentials for ${var.environment}"
+  
+  # Allow overwriting if it was deleted but not purged
+  recovery_window_in_days = 0
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-db-credentials"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "db_credentials" {
+  secret_id     = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsonencode({
+    username = var.rds_admin_username
+    password = random_password.rds_admin_password.result
+    host     = aws_db_instance.main.address
+    port     = aws_db_instance.main.port
+    dbname   = replace(var.project_name, "-", "_")
+    engine   = "mysql"
+  })
+}
