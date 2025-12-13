@@ -215,9 +215,9 @@ class PokemonParser {
                 base_hp: data.base_hp,
                 base_attack: data.base_attack,
                 base_defense: data.base_defense,
+                base_speed: data.base_speed,
                 base_sp_attack: data.base_sp_attack,
                 base_sp_defense: data.base_sp_defense,
-                base_speed: data.base_speed,
                 base_stat_total: data.base_stat_total,
                 image_name: name,
                 form_suffix: null,
@@ -315,9 +315,9 @@ class PokemonParser {
                         base_hp: merged.base_hp,
                         base_attack: merged.base_attack,
                         base_defense: merged.base_defense,
+                        base_speed: merged.base_speed,
                         base_sp_attack: merged.base_sp_attack,
                         base_sp_defense: merged.base_sp_defense,
-                        base_speed: merged.base_speed,
                         base_stat_total: merged.base_stat_total,
                         image_name: name,
                         form_suffix: `_${formNum}`,
@@ -509,9 +509,9 @@ class PokemonParser {
                         data.base_hp = stats[0];
                         data.base_attack = stats[1];
                         data.base_defense = stats[2];
-                        data.base_sp_attack = stats[3];
-                        data.base_sp_defense = stats[4];
-                        data.base_speed = stats[5];
+                        data.base_speed = stats[3];
+                        data.base_sp_attack = stats[4];
+                        data.base_sp_defense = stats[5];
                         data.base_stat_total = stats.reduce((a, b) => a + b, 0);
                     }
                     break;
