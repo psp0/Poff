@@ -70,51 +70,8 @@ resource "aws_s3_bucket_policy" "assets" {
   ]
 }
 
-# S3 Bucket for CloudFront Logs
-resource "aws_s3_bucket" "cloudfront_logs" {
-  count = var.enable_cloudfront ? 1 : 0
-
+# S3 Bucket Data Source (CloudFront Logs)
+# Managed in bootstrap/dev/s3.tf
+data "aws_s3_bucket" "cloudfront_logs" {
   bucket = "${var.project_name}-${var.environment}-cloudfront-logs"
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-cloudfront-logs"
-  })
-}
-
-resource "aws_s3_bucket_public_access_block" "cloudfront_logs" {
-  count = var.enable_cloudfront ? 1 : 0
-
-  bucket = aws_s3_bucket.cloudfront_logs[0].id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "cloudfront_logs" {
-  count = var.enable_cloudfront ? 1 : 0
-
-  bucket = aws_s3_bucket.cloudfront_logs[0].id
-
-  rule {
-    id     = "delete-old-logs"
-    status = "Enabled"
-
-    filter {}
-
-    expiration {
-      days = 30
-    }
-  }
-}
-
-resource "aws_s3_bucket_ownership_controls" "cloudfront_logs" {
-  count = var.enable_cloudfront ? 1 : 0
-
-  bucket = aws_s3_bucket.cloudfront_logs[0].id
-
-  rule {
-    object_ownership = "BucketOwnerPreferred"
-  }
 }
