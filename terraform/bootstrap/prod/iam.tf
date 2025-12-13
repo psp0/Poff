@@ -287,6 +287,12 @@ resource "aws_iam_policy" "terraform_execution_misc_policy" {
         Effect   = "Allow"
         Action   = "route53:*"
         Resource = "*"
+      },
+      {
+        Sid      = "SecretsManagerPermissions"
+        Effect   = "Allow"
+        Action   = "secretsmanager:*"
+        Resource = "*"
       }
     ]
   })
