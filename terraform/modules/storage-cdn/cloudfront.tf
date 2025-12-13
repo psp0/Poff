@@ -21,21 +21,21 @@ resource "aws_cloudfront_distribution" "main" {
   aliases             = var.cloudfront_custom_domain_name != "" ? [var.cloudfront_custom_domain_name] : []
 
   origin {
-    domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
-    origin_id                = "S3-${aws_s3_bucket.frontend.id}"
+    domain_name              = data.aws_s3_bucket.frontend.bucket_regional_domain_name
+    origin_id                = "S3-${data.aws_s3_bucket.frontend.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.main[0].id
   }
 
   origin {
-    domain_name              = aws_s3_bucket.assets.bucket_regional_domain_name
-    origin_id                = "S3-${aws_s3_bucket.assets.id}"
+    domain_name              = data.aws_s3_bucket.assets.bucket_regional_domain_name
+    origin_id                = "S3-${data.aws_s3_bucket.assets.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.main[0].id
   }
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id = "S3-${aws_s3_bucket.frontend.id}"
+    target_origin_id = "S3-${data.aws_s3_bucket.frontend.id}"
 
     forwarded_values {
       query_string = false
@@ -57,7 +57,7 @@ resource "aws_cloudfront_distribution" "main" {
     path_pattern     = "/custom/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.assets.id}"
+    target_origin_id = "S3-${data.aws_s3_bucket.assets.id}"
 
     forwarded_values {
       query_string = false
@@ -77,7 +77,7 @@ resource "aws_cloudfront_distribution" "main" {
     path_pattern     = "/external/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.assets.id}"
+    target_origin_id = "S3-${data.aws_s3_bucket.assets.id}"
 
     forwarded_values {
       query_string = false
@@ -97,7 +97,7 @@ resource "aws_cloudfront_distribution" "main" {
     path_pattern     = "/base/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.assets.id}"
+    target_origin_id = "S3-${data.aws_s3_bucket.assets.id}"
 
     forwarded_values {
       query_string = false
@@ -119,7 +119,7 @@ resource "aws_cloudfront_distribution" "main" {
     path_pattern     = "/sw.js"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.frontend.id}"
+    target_origin_id = "S3-${data.aws_s3_bucket.frontend.id}"
 
     forwarded_values {
       query_string = false
@@ -140,7 +140,7 @@ resource "aws_cloudfront_distribution" "main" {
     path_pattern     = "/manifest.json"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.frontend.id}"
+    target_origin_id = "S3-${data.aws_s3_bucket.frontend.id}"
 
     forwarded_values {
       query_string = false
@@ -162,7 +162,7 @@ resource "aws_cloudfront_distribution" "main" {
     path_pattern     = "/assets/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.frontend.id}"
+    target_origin_id = "S3-${data.aws_s3_bucket.frontend.id}"
 
     forwarded_values {
       query_string = false
