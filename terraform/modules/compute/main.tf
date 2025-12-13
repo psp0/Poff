@@ -150,11 +150,20 @@ data "archive_file" "lambda_source" {
   excludes    = ["node_modules", ".git", "tests", "packages"] # Exclude packages dir to avoid recursion
 }
 
+# Random ID for Lambda function names to avoid log group conflicts
+resource "random_id" "lambda_suffix" {
+  byte_length = 4
+  keepers = {
+    project_name = var.project_name
+    environment  = var.environment
+  }
+}
+
 # Lambda Functions
 resource "aws_lambda_function" "functions" {
   for_each = local.lambda_functions
 
-  function_name = "${var.project_name}-${each.key}"
+  function_name = "${var.project_name}-${each.key}-${random_id.lambda_suffix.hex}"
   role          = aws_iam_role.lambda_execution.arn
   handler       = each.value.handler
   runtime       = var.lambda_runtime
