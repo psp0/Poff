@@ -84,3 +84,9 @@ variable "rds_skip_final_snapshot" {
   type        = bool
   default     = true
 }
+
+variable "availability_zone" {
+  description = "The Availability Zone of the RDS instance"
+  type        = string
+  default     = null
+}

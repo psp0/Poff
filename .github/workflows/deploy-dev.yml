@@ -165,12 +165,15 @@ jobs:
           commit: ${{ github.sha }}
           path: lambda/packages
 
-      - name: Download Lambda Artifact (Workflow Call)
-        if: github.event_name != 'workflow_dispatch' && steps.set-action.outputs.action == 'apply'
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-packages
-          path: lambda/packages
+      - name: Create Dummy Lambda Artifacts (Destroy)
+        if: steps.set-action.outputs.action == 'destroy'
+        run: |
+          echo "Creating dummy lambda artifacts for destroy..."
+          mkdir -p lambda/packages
+          for func in exercise-management exercise-rewards pokemon-collection screen-time-management egg-management pokemon-management user-management; do
+            echo "dummy content" > lambda/packages/${func}.zip
+          done
+          ls -la lambda/packages/
 
 
       - name: Terraform Init
@@ -503,6 +506,10 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Get Current Time
+        id: time
+        run: echo "time=$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
       - name: Notify Slack on Success
         if: needs.deploy-dev.result == 'success' && needs.run-migration.result == 'success' && (needs.seed-database.result == 'success' || needs.seed-database.result == 'skipped')
         uses: 8398a7/action-slack@v3
@@ -510,12 +517,15 @@ jobs:
           status: success
           channel: '#pokehabit-deployments'
           text: |
-            🚀 Development deployment successful!
-            API: ${{ needs.deploy-dev.outputs.api_endpoint }}
-            S3 Bucket: ${{ needs.deploy-dev.outputs.s3_bucket }}
-            Database: ${{ needs.deploy-dev.outputs.database_name }}
-            Seeding: ${{ needs.seed-database.result }}
-            Commit: ${{ github.sha }}
+            개발 환경 배포 성공!
+            
+            시간: ${{ steps.time.outputs.time }}
+            
+            API 엔드포인트: ${{ needs.deploy-dev.outputs.api_endpoint }}
+            S3 버킷: ${{ needs.deploy-dev.outputs.s3_bucket }}
+            데이터베이스: ${{ needs.deploy-dev.outputs.database_name }}
+            시딩 상태: ${{ needs.seed-database.result }}
+            커밋: ${{ github.sha }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
@@ -526,11 +536,14 @@ jobs:
           status: failure
           channel: '#pokehabit-alerts'
           text: |
-            ❌ Development deployment failed!
-            Deploy Status: ${{ needs.deploy-dev.result }}
-            Migration Status: ${{ needs.run-migration.result }}
-            Seeding Status: ${{ needs.seed-database.result }}
-            Commit: ${{ github.sha }}
-            Check the logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            개발 환경 배포 실패!
+            
+            시간: ${{ steps.time.outputs.time }}
+            
+            배포 상태: ${{ needs.deploy-dev.result }}
+            마이그레이션 상태: ${{ needs.run-migration.result }}
+            시딩 상태: ${{ needs.seed-database.result }}
+            커밋: ${{ github.sha }}
+            로그 확인: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}

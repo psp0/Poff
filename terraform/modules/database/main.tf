@@ -74,6 +74,7 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
 
   multi_az            = var.rds_multi_az
+  availability_zone   = var.rds_multi_az ? null : var.availability_zone
   publicly_accessible = false
 
   backup_retention_period = var.rds_backup_retention_period

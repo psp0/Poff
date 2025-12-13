@@ -241,15 +241,11 @@ resource "aws_cloudfront_distribution" "main" {
 
   logging_config {
     include_cookies = false
-    bucket          = aws_s3_bucket.cloudfront_logs[0].bucket_domain_name
+    bucket          = data.aws_s3_bucket.cloudfront_logs.bucket_domain_name
     prefix          = "cloudfront/"
   }
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-cloudfront"
   })
-
-  depends_on = [
-    aws_s3_bucket.cloudfront_logs
-  ]
 }

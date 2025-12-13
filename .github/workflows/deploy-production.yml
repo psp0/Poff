@@ -648,6 +648,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Get Current Time
+        id: time
+        run: echo "time=$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
       - name: Notify Slack on Success
         if: |
           needs.deploy-production.result == 'success' &&
@@ -660,23 +664,25 @@ jobs:
           status: success
           channel: '#pokehabit-deployments'
           text: |
-            🎉 **Production Deployment Successful!**
+            **운영 환경 배포 성공!**
             
-            **Details:**
+            시간: ${{ steps.time.outputs.time }}
+            
+            **상세 정보:**
             - CloudFront: ${{ needs.deploy-production.outputs.cloudfront_url }}
             - API: ${{ needs.deploy-production.outputs.api_endpoint }}
-            - S3 Bucket: ${{ needs.deploy-production.outputs.s3_bucket }}
-            - Database: ${{ needs.deploy-production.outputs.database_name }}
-            - Seeding: ${{ needs.seed-database.result }}
-            - Deployment Time: ${{ needs.deploy-production.outputs.deployment_time }}
-            - Commit: ${{ github.sha }}
-            - Deployed by: @${{ github.actor }}
+            - S3 버킷: ${{ needs.deploy-production.outputs.s3_bucket }}
+            - 데이터베이스: ${{ needs.deploy-production.outputs.database_name }}
+            - 시딩 상태: ${{ needs.seed-database.result }}
+            - 배포 소요 시간: ${{ needs.deploy-production.outputs.deployment_time }}
+            - 커밋: ${{ github.sha }}
+            - 배포자: @${{ github.actor }}
             
-            **Status:**
-            ✅ Infrastructure deployed
-            ✅ Smoke tests passed
-            ✅ Database migration completed
-            ✅ Post-deployment monitoring completed
+            **상태:**
+            인프라 배포 완료
+            스모크 테스트 통과
+            데이터베이스 마이그레이션 완료
+            배포 후 모니터링 완료
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
@@ -692,23 +698,25 @@ jobs:
           status: failure
           channel: '#pokehabit-alerts'
           text: |
-            🚨 **PRODUCTION DEPLOYMENT FAILED!**
+            **운영 환경 배포 실패!**
             
-            **Failed Jobs:**
-            - Infrastructure: ${{ needs.deploy-production.result }}
-            - Smoke Tests: ${{ needs.smoke-tests.result }}
-            - Migration: ${{ needs.run-migration.result }}
-            - Seeding: ${{ needs.seed-database.result }}
-            - Monitoring: ${{ needs.post-deployment-monitoring.result }}
+            시간: ${{ steps.time.outputs.time }}
             
-            **Action Required:** Immediate investigation needed!
+            **실패한 작업:**
+            - 인프라: ${{ needs.deploy-production.result }}
+            - 스모크 테스트: ${{ needs.smoke-tests.result }}
+            - 마이그레이션: ${{ needs.run-migration.result }}
+            - 시딩: ${{ needs.seed-database.result }}
+            - 모니터링: ${{ needs.post-deployment-monitoring.result }}
             
-            **Details:**
-            - Commit: ${{ github.sha }}
-            - Triggered by: @${{ github.actor }}
-            - Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            **조치 필요:** 즉각적인 확인이 필요합니다!
             
-            @channel - Production deployment requires attention!
+            **상세 정보:**
+            - 커밋: ${{ github.sha }}
+            - 배포자: @${{ github.actor }}
+            - 로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            @channel - 운영 배포에 주의가 필요합니다!
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}
 

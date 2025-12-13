@@ -55,7 +55,7 @@ variable "vpc_cidr_block" {
 variable "availability_zones" {
   description = "List of Availability Zones to use for subnets."
   type        = list(string)
-  default     = ["ap-northeast-2a", "ap-northeast-2b"]
+  default     = ["ap-northeast-2b", "ap-northeast-2a"]
 }
 
 variable "public_subnet_cidr_blocks" {
