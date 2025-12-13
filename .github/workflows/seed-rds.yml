@@ -50,7 +50,7 @@ on:
       nat_instance_id:
         required: false
         type: string
-      s3_bucket:
+      assets_bucket_name:
         required: false
         type: string
 
@@ -157,14 +157,14 @@ jobs:
           NAT_INSTANCE_ID=$(terraform output -raw nat_instance_id 2>/dev/null || echo "")
           RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
           DATABASE_NAME=$(terraform output -raw database_name)
-          S3_BUCKET=$(terraform output -raw s3_bucket)
+          ASSETS_BUCKET_NAME="pokehabit-${ENV}-assets"
           RDS_PORT=$(terraform output -raw rds_port)
           
           echo "nat_instance_id=$NAT_INSTANCE_ID" >> $GITHUB_OUTPUT
           echo "rds_endpoint=$RDS_ENDPOINT" >> $GITHUB_OUTPUT
           echo "rds_port=$RDS_PORT" >> $GITHUB_OUTPUT
           echo "database_name=$DATABASE_NAME" >> $GITHUB_OUTPUT
-          echo "s3_bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+          echo "assets_bucket_name=$ASSETS_BUCKET_NAME" >> $GITHUB_OUTPUT
 
       - name: Consolidate Infrastructure Outputs
         id: infra
@@ -175,14 +175,14 @@ jobs:
             echo "rds_endpoint=${{ inputs.rds_endpoint }}" >> $GITHUB_OUTPUT
             echo "rds_port=${{ inputs.rds_port }}" >> $GITHUB_OUTPUT
             echo "database_name=${{ inputs.database_name }}" >> $GITHUB_OUTPUT
-            echo "s3_bucket=${{ inputs.s3_bucket }}" >> $GITHUB_OUTPUT
+            echo "assets_bucket_name=${{ inputs.assets_bucket_name }}" >> $GITHUB_OUTPUT
           else
             echo "Using Terraform outputs..."
             echo "nat_instance_id=${{ steps.infra-tf.outputs.nat_instance_id }}" >> $GITHUB_OUTPUT
             echo "rds_endpoint=${{ steps.infra-tf.outputs.rds_endpoint }}" >> $GITHUB_OUTPUT
             echo "rds_port=${{ steps.infra-tf.outputs.rds_port }}" >> $GITHUB_OUTPUT
             echo "database_name=${{ steps.infra-tf.outputs.database_name }}" >> $GITHUB_OUTPUT
-            echo "s3_bucket=${{ steps.infra-tf.outputs.s3_bucket }}" >> $GITHUB_OUTPUT
+            echo "assets_bucket_name=${{ steps.infra-tf.outputs.assets_bucket_name }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Validate NAT Instance
@@ -243,7 +243,7 @@ jobs:
           DB_NAME: ${{ steps.infra.outputs.database_name }}
           DB_USER: ${{ steps.db-creds.outputs.db_user }}
           DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
-          S3_BUCKET_NAME: ${{ steps.infra.outputs.s3_bucket }}
+          S3_BUCKET_NAME: ${{ steps.infra.outputs.assets_bucket_name }}
           S3_BASE_PATH: ''
         run: |
           cd seeder
