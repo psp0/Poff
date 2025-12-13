@@ -202,6 +202,7 @@ jobs:
     uses: ./.github/workflows/deploy-dev.yml
     with:
       action: apply
+      seed_data: true
     secrets: inherit
 
   # Security scanning
