@@ -46,11 +46,6 @@ runs:
             # Copy shared code
             cp -r shared/*.js "packages/$function_name/shared/"
             
-            # Copy shared node_modules to root node_modules
-            # This allows require('module') to work from anywhere
-            mkdir -p "packages/$function_name/node_modules"
-            cp -r shared/node_modules/* "packages/$function_name/node_modules/" 2>/dev/null || true
-            
             # Install function-specific dependencies
             if [ -f "$dir/package.json" ]; then
               echo "Installing function dependencies..."
@@ -61,6 +56,12 @@ runs:
               rm package.json
               cd ../..
             fi
+            
+            # Copy shared node_modules to root node_modules
+            # This allows require('module') to work from anywhere
+            # We do this AFTER npm install to prevent npm from pruning shared modules
+            mkdir -p "packages/$function_name/node_modules"
+            cp -r shared/node_modules/* "packages/$function_name/node_modules/" 2>/dev/null || true
             
             # Create ZIP package
             cd "packages/$function_name"
