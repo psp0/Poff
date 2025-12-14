@@ -11,29 +11,6 @@ resource "aws_security_group" "rds" {
   description = "Security group for RDS instance"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [var.nat_security_group_id]
-    description     = "Allow MySQL access from NAT instances"
-  }
-
-  ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [var.lambda_security_group_id]
-    description     = "Allow MySQL access from Lambda functions"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-sg"
   })
@@ -41,6 +18,35 @@ resource "aws_security_group" "rds" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+resource "aws_security_group_rule" "rds_ingress_nat" {
+  security_group_id        = aws_security_group.rds.id
+  type                     = "ingress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = var.nat_security_group_id
+  description              = "Allow MySQL access from NAT instances"
+}
+
+resource "aws_security_group_rule" "rds_ingress_lambda" {
+  security_group_id        = aws_security_group.rds.id
+  type                     = "ingress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = var.lambda_security_group_id
+  description              = "Allow MySQL access from Lambda functions"
+}
+
+resource "aws_security_group_rule" "rds_egress" {
+  security_group_id = aws_security_group.rds.id
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
 }
 
 # Generate RDS admin password
