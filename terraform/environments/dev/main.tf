@@ -79,7 +79,7 @@ module "compute" {
   rds_secret_arn = module.database.rds_secret_arn
 
   firebase_service_account = base64decode(var.firebase_service_account)
-  
+
   firebase_api_key             = var.firebase_api_key
   firebase_auth_domain         = var.firebase_auth_domain
   firebase_project_id          = var.firebase_project_id

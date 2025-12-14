@@ -80,17 +80,17 @@ locals {
     "GET /api/config"                = "user-management"
 
     # Guest Mode
-    "GET /api/guest/icons"                  = "guest-mode"
-    "GET /api/guest/all-pokemon"            = "guest-mode"
-    "GET /api/guest/pokemon/{stableId}"     = "guest-mode"
+    "GET /api/guest/icons"                     = "guest-mode"
+    "GET /api/guest/all-pokemon"               = "guest-mode"
+    "GET /api/guest/pokemon/{stableId}"        = "guest-mode"
     "GET /api/guest/evolution/{baseImageName}" = "guest-mode"
-    "GET /api/guest/exercises"              = "guest-mode"
-    "GET /api/guest/muscle-groups"          = "guest-mode"
-    "GET /api/guest/weekly-stats"           = "guest-mode"
-    "GET /api/guest/eggs"                   = "guest-mode"
-    "GET /api/guest/sessions"               = "guest-mode"
-    "GET /api/guest/starter-pokemon"        = "guest-mode"
-    "GET /api/guest/items"                  = "guest-mode"
+    "GET /api/guest/exercises"                 = "guest-mode"
+    "GET /api/guest/muscle-groups"             = "guest-mode"
+    "GET /api/guest/weekly-stats"              = "guest-mode"
+    "GET /api/guest/eggs"                      = "guest-mode"
+    "GET /api/guest/sessions"                  = "guest-mode"
+    "GET /api/guest/starter-pokemon"           = "guest-mode"
+    "GET /api/guest/items"                     = "guest-mode"
   }
 }
 
