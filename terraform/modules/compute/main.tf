@@ -208,6 +208,13 @@ resource "aws_lambda_function" "functions" {
 
       # Firebase Configuration
       FIREBASE_SERVICE_ACCOUNT = var.firebase_service_account
+
+      # Firebase Client Configuration (for /api/config)
+      FIREBASE_API_KEY             = var.firebase_api_key
+      FIREBASE_AUTH_DOMAIN         = var.firebase_auth_domain
+      FIREBASE_PROJECT_ID          = var.firebase_project_id
+      FIREBASE_MESSAGING_SENDER_ID = var.firebase_messaging_sender_id
+      FIREBASE_APP_ID              = var.firebase_app_id
     }
   }
 
