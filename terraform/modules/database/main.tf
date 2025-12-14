@@ -82,6 +82,7 @@ resource "aws_db_instance" "main" {
   maintenance_window      = var.rds_maintenance_window
 
   skip_final_snapshot = var.rds_skip_final_snapshot
+  apply_immediately   = true
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds"
