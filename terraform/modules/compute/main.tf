@@ -234,6 +234,10 @@ resource "aws_lambda_function" "functions" {
       FIREBASE_PROJECT_ID          = var.firebase_project_id
       FIREBASE_MESSAGING_SENDER_ID = var.firebase_messaging_sender_id
       FIREBASE_APP_ID              = var.firebase_app_id
+
+      # Asset Configuration
+      # Empty string allows URLs to start with /custom, /base etc. which matches CloudFront behaviors
+      ASSETS_BASE_URL = "/"
     }
   }
 
