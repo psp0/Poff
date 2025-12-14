@@ -64,7 +64,7 @@ runs:
             
             # Create ZIP package
             cd "packages/$function_name"
-            zip -r "../../${function_name}.zip" . \
+            zip -r "../${function_name}.zip" . \
               -x "*.test.js" "*.spec.js" "test/*" "tests/*" \
               -x "package-lock.json" "package.json"
             
