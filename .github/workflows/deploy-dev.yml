@@ -79,6 +79,11 @@ jobs:
       TF_VAR_lambda_package_dir: "../../../lambda/packages"
       TF_VAR_aws_infra_role_arn: ${{ secrets.AWS_INFRA_DNS_MANAGEMENT_ROLE_ARN }}
       TF_VAR_firebase_service_account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      TF_VAR_firebase_api_key: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      TF_VAR_firebase_auth_domain: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+      TF_VAR_firebase_project_id: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}  
+      TF_VAR_firebase_messaging_sender_id: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      TF_VAR_firebase_app_id: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
     outputs:
       vpc_id: ${{ steps.set-outputs.outputs.vpc_id }}
@@ -187,7 +192,7 @@ jobs:
         run: |
           echo "Creating dummy lambda artifacts for destroy..."
           mkdir -p lambda/packages
-          for func in exercise-management exercise-rewards pokemon-collection screen-time-management egg-management pokemon-management user-management; do
+          for func in exercise-management exercise-rewards pokemon-collection screen-time-management egg-management pokemon-management user-management guest-mode; do
             echo "dummy content" > lambda/packages/${func}.zip
           done
           ls -la lambda/packages/

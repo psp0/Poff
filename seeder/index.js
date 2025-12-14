@@ -124,12 +124,13 @@ async function insertFlags(db, parser) {
     const records = parser.createFlagRecords();
     console.log(`Inserting ${records.length} flag records...`);
 
-    for (const record of records) {
-        await db.query(
-            'INSERT INTO pokemon_flags (name, name_ko) VALUES (?, ?) ON DUPLICATE KEY UPDATE name_ko = VALUES(name_ko)',
-            [record.name, record.name_ko]
-        );
-    }
+    if (records.length === 0) return;
+
+    const values = records.map(r => [r.name, r.name_ko]);
+    await db.query(
+        'INSERT INTO pokemon_flags (name, name_ko) VALUES ? ON DUPLICATE KEY UPDATE name_ko = VALUES(name_ko)',
+        [values]
+    );
 
     console.log(`✓ Inserted ${records.length} flags`);
 }
@@ -141,10 +142,11 @@ async function insertFlagRelations(db, parser) {
     // Clear existing relations
     await db.query('DELETE FROM pokemon_flag_relations');
 
-    for (const rel of relations) {
+    if (relations.length > 0) {
+        const values = relations.map(r => [r.pokemon_stable_id, r.flag_name]);
         await db.query(
-            'INSERT INTO pokemon_flag_relations (pokemon_stable_id, flag_name) VALUES (?, ?)',
-            [rel.pokemon_stable_id, rel.flag_name]
+            'INSERT INTO pokemon_flag_relations (pokemon_stable_id, flag_name) VALUES ?',
+            [values]
         );
     }
 
@@ -158,10 +160,11 @@ async function insertEvolutions(db, parser) {
     // Clear existing evolutions
     await db.query('DELETE FROM pokemon_evolutions');
 
-    for (const evo of evolutions) {
+    if (evolutions.length > 0) {
+        const values = evolutions.map(e => [e.from_pokemon, e.to_pokemon]);
         await db.query(
-            'INSERT INTO pokemon_evolutions (from_pokemon, to_pokemon) VALUES (?, ?)',
-            [evo.from_pokemon, evo.to_pokemon]
+            'INSERT INTO pokemon_evolutions (from_pokemon, to_pokemon) VALUES ?',
+            [values]
         );
     }
 

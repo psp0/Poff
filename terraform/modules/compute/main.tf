@@ -40,6 +40,11 @@ locals {
       timeout     = 30
       memory_size = 512
     }
+    guest-mode = {
+      handler     = "functions/guest-mode/index.handler"
+      timeout     = 30
+      memory_size = 512
+    }
   }
 
   api_routes = {
@@ -72,6 +77,20 @@ locals {
     # User Management
     "POST /api/auth/sync"            = "user-management"
     "POST /api/user/terms-agreement" = "user-management"
+    "GET /api/config"                = "user-management"
+
+    # Guest Mode
+    "GET /api/guest/icons"                     = "guest-mode"
+    "GET /api/guest/all-pokemon"               = "guest-mode"
+    "GET /api/guest/pokemon/{stableId}"        = "guest-mode"
+    "GET /api/guest/evolution/{baseImageName}" = "guest-mode"
+    "GET /api/guest/exercises"                 = "guest-mode"
+    "GET /api/guest/muscle-groups"             = "guest-mode"
+    "GET /api/guest/weekly-stats"              = "guest-mode"
+    "GET /api/guest/eggs"                      = "guest-mode"
+    "GET /api/guest/sessions"                  = "guest-mode"
+    "GET /api/guest/starter-pokemon"           = "guest-mode"
+    "GET /api/guest/items"                     = "guest-mode"
   }
 }
 
@@ -208,6 +227,13 @@ resource "aws_lambda_function" "functions" {
 
       # Firebase Configuration
       FIREBASE_SERVICE_ACCOUNT = var.firebase_service_account
+
+      # Firebase Client Configuration (for /api/config)
+      FIREBASE_API_KEY             = var.firebase_api_key
+      FIREBASE_AUTH_DOMAIN         = var.firebase_auth_domain
+      FIREBASE_PROJECT_ID          = var.firebase_project_id
+      FIREBASE_MESSAGING_SENDER_ID = var.firebase_messaging_sender_id
+      FIREBASE_APP_ID              = var.firebase_app_id
     }
   }
 

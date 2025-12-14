@@ -278,3 +278,33 @@ variable "firebase_service_account" {
   type        = string
   sensitive   = true
 }
+
+variable "firebase_api_key" {
+  description = "Firebase API Key"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_auth_domain" {
+  description = "Firebase Auth Domain"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_project_id" {
+  description = "Firebase Project ID"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_messaging_sender_id" {
+  description = "Firebase Messaging Sender ID"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_app_id" {
+  description = "Firebase App ID"
+  type        = string
+  default     = ""
+}
