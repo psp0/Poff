@@ -99,8 +99,8 @@ module "storage_cdn" {
   cloudfront_certificate_arn    = var.cloudfront_custom_domain_name != "" && var.hosted_zone_domain_name != "" ? module.acm[0].cloudfront_certificate_arn : ""
   cloudfront_price_class        = var.cloudfront_price_class
 
-  # API Gateway 도메인 전달 (프로토콜 제거)
-  api_gateway_domain = replace(module.compute.api_gateway_endpoint, "/^https?://([^/]*).*/", "$1")
+  # API Gateway 도메인 전달 (프로토콜과 경로 제거)
+  api_gateway_domain = replace(replace(module.compute.api_gateway_endpoint, "https://", ""), "/.*", "")
 }
 
 # 5. DNS Module - Route53 & ACM (Optional - only if custom domains configured)
