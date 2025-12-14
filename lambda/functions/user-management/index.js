@@ -5,8 +5,8 @@ const { logger } = require('../../shared/logger');
 
 const handler = async (event, context) => {
     const db = getDatabase();
-    const method = event.httpMethod;
-    const path = event.path;
+    const method = event.requestContext?.http?.method || event.httpMethod;
+    const path = event.rawPath || event.path;
 
     // Add request context to logger
     logger.info('Incoming Request', { path, method, query: event.queryStringParameters });
@@ -32,7 +32,7 @@ function getConfig(event) {
         firebase: {
             apiKey: process.env.FIREBASE_API_KEY,
             authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-            projectId: process.env.FIREBASE_PROJECT_ID,          
+            projectId: process.env.FIREBASE_PROJECT_ID,
             messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
             appId: process.env.FIREBASE_APP_ID
         }

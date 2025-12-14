@@ -18,8 +18,8 @@ const { processScreenTimeRewards, parseUsageCode } = require('../../shared/scree
 
 const handler = async (event, context) => {
   const db = getDatabase();
-  const method = event.httpMethod;
-  const path = event.path;
+  const method = event.requestContext?.http?.method || event.httpMethod;
+  const path = event.rawPath || event.path;
   const pathParameters = event.pathParameters || {};
 
   // 라우팅
