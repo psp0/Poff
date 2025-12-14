@@ -119,7 +119,7 @@ function withErrorHandling(handler) {
       }
 
       return createErrorResponse('Internal server error', 500,
-        process.env.NODE_ENV === 'development' ? error.message : undefined
+        (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'dev') ? error.message : undefined
       );
     }
   };
