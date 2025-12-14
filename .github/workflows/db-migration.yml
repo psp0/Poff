@@ -36,6 +36,11 @@ on:
         required: false
         default: 'up'
         type: string
+      skip_notifications:
+        description: 'Skip Slack notifications'
+        required: false
+        default: false
+        type: boolean
 
     secrets:
       AWS_DEPLOY_ROLE_ARN:
@@ -202,6 +207,7 @@ jobs:
           echo "db_password=$DB_PASSWORD" >> $GITHUB_OUTPUT
 
       - name: Test database connectivity
+        id: test-connection
         run: |
           # Install MySQL client for testing
           sudo apt-get update
@@ -244,6 +250,7 @@ jobs:
           npm ci
 
       - name: Run db-migrate Migration
+        id: migration
         env:
           MIGRATION_ACTION: ${{ needs.determine-environment.outputs.migration_action }}
           DB_ENV: ${{ needs.determine-environment.outputs.environment }}
@@ -296,33 +303,55 @@ jobs:
           
           echo "Cleanup completed"
 
+      - name: Determine Failure Details
+        id: failure_details
+        if: failure() && inputs.skip_notifications != true
+        run: |
+          # Determine which step failed
+          if [ "${{ steps.infra.outcome }}" == "failure" ]; then
+            echo "stage=Infrastructure Info Retrieval (SSM)" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.db-creds.outcome }}" == "failure" ]; then
+            echo "stage=Database Credentials Retrieval" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.test-connection.outcome }}" == "failure" ]; then
+            echo "stage=Database Connectivity Test" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.migration.outcome }}" == "failure" ]; then
+            echo "stage=Migration Execution" >> $GITHUB_OUTPUT
+          else
+            echo "stage=Unknown Step" >> $GITHUB_OUTPUT
+          fi
+
       - name: Notify Slack on Success
-        if: success()
+        if: success() && inputs.skip_notifications != true
         continue-on-error: true
         uses: 8398a7/action-slack@v3
         with:
           status: success
           channel: '#pokehabit-deployments'
           text: |
-            ✅ Database migration completed successfully!
-            Environment: ${{ needs.determine-environment.outputs.environment }}
-            Action: ${{ github.event.inputs.migration_action || 'up' }}
-            Commit: ${{ github.sha }}
+            ✅ *데이터베이스 마이그레이션 성공!*
+            
+            🌍 *환경:* ${{ needs.determine-environment.outputs.environment }}
+            🛠 *작업:* ${{ needs.determine-environment.outputs.migration_action }}
+            📝 *커밋:* ${{ github.sha }}       
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
       - name: Notify Slack on Failure
-        if: failure()
+        if: failure() && inputs.skip_notifications != true
         continue-on-error: true
         uses: 8398a7/action-slack@v3
         with:
           status: failure
           channel: '#pokehabit-alerts'
           text: |
-            ❌ Database migration failed!
-            Environment: ${{ needs.determine-environment.outputs.environment }}
-            Action: ${{ github.event.inputs.migration_action || 'up' }}
-            Commit: ${{ github.sha }}
-            Check the logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            🚨 *데이터베이스 마이그레이션 실패!*
+            
+            🛑 *실패 단계:* ${{ steps.failure_details.outputs.stage }}
+            
+            🌍 *환경:* ${{ needs.determine-environment.outputs.environment }}
+            🛠 *작업:* ${{ needs.determine-environment.outputs.migration_action }}
+            📝 *커밋:* ${{ github.sha }}   
+            
+            👉 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}

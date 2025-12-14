@@ -521,6 +521,7 @@ jobs:
     with:
       environment: 'prod'
       migration_action: 'up'
+      skip_notifications: true
     secrets: inherit
 
   seed-database:
@@ -686,6 +687,43 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
+      - name: Determine Failure Details
+        id: failure_details
+        if: |
+          needs.deploy-production.result == 'failure' ||
+          needs.smoke-tests.result == 'failure' ||
+          needs.run-migration.result == 'failure' ||
+          needs.post-deployment-monitoring.result == 'failure' ||
+          needs.seed-database.result == 'failure'
+        run: |
+          # Determine which stage failed
+          if [ "${{ needs.deploy-production.result }}" == "failure" ]; then
+            echo "stage=Infrastructure Deployment (Terraform)" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.smoke-tests.result }}" == "failure" ]; then
+            echo "stage=Smoke Tests" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.run-migration.result }}" == "failure" ]; then
+            echo "stage=Database Migration" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.seed-database.result }}" == "failure" ]; then
+            echo "stage=Database Seeding" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.post-deployment-monitoring.result }}" == "failure" ]; then
+            echo "stage=Post-Deployment Monitoring" >> $GITHUB_OUTPUT
+          else
+            echo "stage=Unknown Stage" >> $GITHUB_OUTPUT
+          fi
+
+          # Helper function for status icons
+          get_status_text() {
+            if [ "$1" == "failure" ]; then echo "❌ 실패";
+            elif [ "$1" == "success" ]; then echo "✅ 성공";
+            else echo "⏭️ 건너뜀"; fi
+          }
+
+          echo "deploy_status=$(get_status_text ${{ needs.deploy-production.result }})" >> $GITHUB_OUTPUT
+          echo "smoke_status=$(get_status_text ${{ needs.smoke-tests.result }})" >> $GITHUB_OUTPUT
+          echo "migration_status=$(get_status_text ${{ needs.run-migration.result }})" >> $GITHUB_OUTPUT
+          echo "seed_status=$(get_status_text ${{ needs.seed-database.result }})" >> $GITHUB_OUTPUT
+          echo "monitor_status=$(get_status_text ${{ needs.post-deployment-monitoring.result }})" >> $GITHUB_OUTPUT
+
       - name: Notify Slack on Failure
         if: |
           needs.deploy-production.result == 'failure' ||
@@ -698,23 +736,24 @@ jobs:
           status: failure
           channel: '#pokehabit-alerts'
           text: |
-            **운영 환경 배포 실패!**
+            🚨 *운영 환경 배포 실패!*
             
-            시간: ${{ steps.time.outputs.time }}
+            🛑 *실패 단계:* ${{ steps.failure_details.outputs.stage }}
             
-            **실패한 작업:**
-            - 인프라: ${{ needs.deploy-production.result }}
-            - 스모크 테스트: ${{ needs.smoke-tests.result }}
-            - 마이그레이션: ${{ needs.run-migration.result }}
-            - 시딩: ${{ needs.seed-database.result }}
-            - 모니터링: ${{ needs.post-deployment-monitoring.result }}
+            ⏰ *시간:* ${{ steps.time.outputs.time }}
+            📝 *커밋:* ${{ github.sha }}
+            👤 *배포자:* @${{ github.actor }}
             
-            **조치 필요:** 즉각적인 확인이 필요합니다!
+            🔍 *상세 상태:*
+            • 인프라: ${{ steps.failure_details.outputs.deploy_status }}
+            • 스모크 테스트: ${{ steps.failure_details.outputs.smoke_status }}
+            • 마이그레이션: ${{ steps.failure_details.outputs.migration_status }}
+            • 시딩: ${{ steps.failure_details.outputs.seed_status }}
+            • 모니터링: ${{ steps.failure_details.outputs.monitor_status }}
             
-            **상세 정보:**
-            - 커밋: ${{ github.sha }}
-            - 배포자: @${{ github.actor }}
-            - 로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            ⚠️ *조치 필요:* 즉각적인 확인이 필요합니다!
+            
+            👉 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
             
             @channel - 운영 배포에 주의가 필요합니다!
         env:

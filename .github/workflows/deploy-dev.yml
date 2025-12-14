@@ -504,6 +504,7 @@ jobs:
     with:
       environment: 'dev'
       migration_action: 'up'  # Run pending migrations
+      skip_notifications: true
     secrets:
       AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
       AWS_EXECUTION_ROLE_ARN: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
@@ -558,6 +559,32 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
+      - name: Determine Failure Details
+        id: failure_details
+        if: needs.deploy-dev.result == 'failure' || needs.run-migration.result == 'failure' || needs.seed-database.result == 'failure'
+        run: |
+          # Determine which stage failed
+          if [ "${{ needs.deploy-dev.result }}" == "failure" ]; then
+            echo "stage=Infrastructure Deployment (Terraform)" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.run-migration.result }}" == "failure" ]; then
+            echo "stage=Database Migration" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.seed-database.result }}" == "failure" ]; then
+            echo "stage=Database Seeding" >> $GITHUB_OUTPUT
+          else
+            echo "stage=Unknown Stage" >> $GITHUB_OUTPUT
+          fi
+
+          # Helper function for status icons
+          get_status_text() {
+            if [ "$1" == "failure" ]; then echo "❌ 실패";
+            elif [ "$1" == "success" ]; then echo "✅ 성공";
+            else echo "⏭️ 건너뜀"; fi
+          }
+
+          echo "deploy_status=$(get_status_text ${{ needs.deploy-dev.result }})" >> $GITHUB_OUTPUT
+          echo "migration_status=$(get_status_text ${{ needs.run-migration.result }})" >> $GITHUB_OUTPUT
+          echo "seed_status=$(get_status_text ${{ needs.seed-database.result }})" >> $GITHUB_OUTPUT
+
       - name: Notify Slack on Failure
         if: needs.deploy-dev.result == 'failure' || needs.run-migration.result == 'failure' || needs.seed-database.result == 'failure'
         uses: 8398a7/action-slack@v3
@@ -565,14 +592,18 @@ jobs:
           status: failure
           channel: '#pokehabit-alerts'
           text: |
-            개발 환경 배포 실패!
+            🚨 *개발 환경 배포 실패!*
             
-            시간: ${{ steps.time.outputs.time }}
+            🛑 *실패 단계:* ${{ steps.failure_details.outputs.stage }}
             
-            배포 상태: ${{ needs.deploy-dev.result }}
-            마이그레이션 상태: ${{ needs.run-migration.result }}
-            시딩 상태: ${{ needs.seed-database.result }}
-            커밋: ${{ github.sha }}
-            로그 확인: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            ⏰ *시간:* ${{ steps.time.outputs.time }}
+            📝 *커밋:* ${{ github.sha }}
+            
+            🔍 *상세 상태:*
+            • 배포: ${{ steps.failure_details.outputs.deploy_status }}
+            • 마이그레이션: ${{ steps.failure_details.outputs.migration_status }}
+            • 시딩: ${{ steps.failure_details.outputs.seed_status }}
+            
+            👉 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}
