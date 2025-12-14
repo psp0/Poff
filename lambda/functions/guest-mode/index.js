@@ -530,7 +530,10 @@ async function getStarterPokemon() {
 }
 
 exports.handler = async (event, context) => {
-  const { httpMethod, path, pathParameters, queryStringParameters } = event;
+  // Normalize event for Payload 2.0 support
+  const httpMethod = event.requestContext?.http?.method || event.httpMethod;
+  const path = event.rawPath || event.path;
+  const { pathParameters, queryStringParameters } = event;
 
   try {
     // /api/guest/icons - 포켓몬 아이콘 목록
