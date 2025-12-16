@@ -778,7 +778,7 @@ if (googleLoginBtn) {
       return;
     }
 
-    authMessage.textContent = "Google 로그인 팝업을 띄우는 중...";
+    // authMessage.textContent = "Google 로그인 팝업을 띄우는 중..."; // iOS 팝업 차단 방지를 위해 DOM 업데이트 제거
 
     // 즉시 실행 (Promise 체이닝 사용)
     window.signInWithPopup(window.firebaseAuth, window.googleProvider)
