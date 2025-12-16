@@ -532,8 +532,15 @@ async function getStarterPokemon() {
 exports.handler = async (event, context) => {
   // Normalize event for Payload 2.0 support
   const httpMethod = event.requestContext?.http?.method || event.httpMethod;
-  const path = event.rawPath || event.path;
+  let path = event.rawPath || event.path;
   const { pathParameters, queryStringParameters } = event;
+
+  // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+  // Check if path starts with /<stage>/ and strip the stage part
+  const stage = event.requestContext?.stage;
+  if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+    path = path.substring(stage.length + 1);
+  }
 
   try {
     // /api/guest/icons - 포켓몬 아이콘 목록

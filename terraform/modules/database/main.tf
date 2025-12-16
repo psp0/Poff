@@ -95,7 +95,7 @@ resource "aws_db_instance" "main" {
   })
 }
 
-# RDS Credentials in Parameter Store
+# RDS Credentials in Parameter Store (Legacy paths for backward compatibility)
 resource "aws_ssm_parameter" "rds_admin_username" {
   name        = "/${var.project_name}/database/admin/username"
   type        = "String"
@@ -126,6 +126,40 @@ resource "aws_ssm_parameter" "rds_endpoint" {
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-endpoint"
+  })
+}
+
+# Environment-specific infrastructure parameters for GitHub Actions
+resource "aws_ssm_parameter" "rds_endpoint_env" {
+  name        = "/${var.project_name}/${var.environment}/infrastructure/rds_endpoint"
+  type        = "String"
+  value       = aws_db_instance.main.address
+  description = "RDS endpoint address for ${var.environment}"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-endpoint-${var.environment}"
+  })
+}
+
+resource "aws_ssm_parameter" "rds_port_env" {
+  name        = "/${var.project_name}/${var.environment}/infrastructure/rds_port"
+  type        = "String"
+  value       = tostring(aws_db_instance.main.port)
+  description = "RDS port for ${var.environment}"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-port-${var.environment}"
+  })
+}
+
+resource "aws_ssm_parameter" "database_name_env" {
+  name        = "/${var.project_name}/${var.environment}/infrastructure/database_name"
+  type        = "String"
+  value       = replace(var.project_name, "-", "_")
+  description = "Database name for ${var.environment}"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-database-name-${var.environment}"
   })
 }
 
