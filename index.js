@@ -5574,6 +5574,11 @@ function initTabNavigation() {
           view.style.display = 'none';
         }
       });
+
+      // PWA 배너 가시성 업데이트
+      if (typeof window.updatePwaBannerVisibility === 'function') {
+        window.updatePwaBannerVisibility();
+      }
     });
   });
 
