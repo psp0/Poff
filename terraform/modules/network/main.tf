@@ -278,3 +278,15 @@ resource "aws_db_subnet_group" "main" {
     }
   )
 }
+
+# Store NAT Instance ID in SSM Parameter Store for GitHub Actions
+resource "aws_ssm_parameter" "nat_instance_id" {
+  name        = "/${var.project_name}/${var.environment}/infrastructure/nat_instance_id"
+  type        = "String"
+  value       = length(aws_instance.nat) > 0 ? aws_instance.nat[0].id : ""
+  description = "NAT Instance ID for SSM Port Forwarding"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-nat-instance-id"
+  })
+}
