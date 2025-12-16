@@ -48,20 +48,44 @@ locals {
   }
 
   api_routes = {
-    "POST /api/exercises"               = "exercise-management"
-    "GET /api/exercises"                = "exercise-management"
-    "GET /api/exercises/{id}"           = "exercise-management"
-    "PUT /api/exercises/{id}"           = "exercise-management"
-    "DELETE /api/exercises/{id}"        = "exercise-management"
-    "POST /api/exercises/{id}/complete" = "exercise-rewards"
-    "GET /api/exercises/rewards"        = "exercise-rewards"
-    "POST /api/screen-time"             = "screen-time-management"
-    "GET /api/screen-time"              = "screen-time-management"
-    "GET /api/screen-time/today"        = "screen-time-management"
-    "GET /api/pokemon"                  = "pokemon-collection"
-    "GET /api/pokemon/{id}"             = "pokemon-collection"
-    "POST /api/pokemon/collect"         = "pokemon-collection"
-    "GET /api/collection"               = "pokemon-collection"
+    "POST /api/exercises"        = "exercise-management"
+    "GET /api/exercises"         = "exercise-management"
+    "GET /api/exercises/{id}"    = "exercise-management"
+    "PUT /api/exercises/{id}"    = "exercise-management"
+    "DELETE /api/exercises/{id}" = "exercise-management"
+    "GET /api/sessions"          = "exercise-management"
+    "POST /api/sessions"         = "exercise-management"
+    "GET /api/muscle-groups"     = "exercise-management"
+    "GET /api/weekly-stats"      = "exercise-management" # Reverted to generic path for compatibility
+
+    "POST /api/exercises/{id}/complete"  = "exercise-rewards"
+    "GET /api/exercises/rewards"         = "exercise-rewards"
+    "POST /api/reward/shiny"             = "exercise-rewards"
+    "POST /api/reward/check-eligibility" = "exercise-rewards"
+    "GET /api/reward/history"            = "exercise-rewards"
+    "POST /api/reward/milestone"         = "exercise-rewards"
+
+    "POST /api/screen-time"              = "screen-time-management"
+    "GET /api/screen-time"               = "screen-time-management"
+    "GET /api/screen-time/today"         = "screen-time-management"
+    "DELETE /api/screen-time/{date}"     = "screen-time-management"
+    "GET /api/screen-time/weekly-stats"  = "screen-time-management" # Specific path
+    "GET /api/screen-time/monthly-stats" = "screen-time-management"
+    "POST /api/screen-time/reward-check" = "screen-time-management"
+
+    "GET /api/pokemon"                              = "pokemon-collection"
+    "GET /api/pokemon/{id}"                         = "pokemon-collection"
+    "POST /api/pokemon/collect"                     = "pokemon-collection"
+    "GET /api/collection"                           = "pokemon-collection"
+    "POST /api/collection/favorite"                 = "pokemon-collection"
+    "GET /api/collection/favorites"                 = "pokemon-collection"
+    "GET /api/collection/icons"                     = "pokemon-collection"
+    "GET /api/collection/all-pokemon"               = "pokemon-collection"
+    "GET /api/collection/evolution/{baseImageName}" = "pokemon-collection"
+    "POST /api/collection/reward"                   = "pokemon-collection"
+    "GET /api/collection/starters"                  = "pokemon-collection"
+    "GET /api/collection/pokemon/{id}"              = "pokemon-collection"
+
     # Egg Management
     "GET /api/eggs"          = "egg-management"
     "GET /api/eggs/search"   = "egg-management"
@@ -78,6 +102,8 @@ locals {
     "POST /api/auth/sync"            = "user-management"
     "POST /api/user/terms-agreement" = "user-management"
     "GET /api/config"                = "user-management"
+    "POST /api/user/exchange"        = "user-management"
+    "GET /api/shop/items"            = "user-management"
 
     # Guest Mode
     "GET /api/guest/icons"                     = "guest-mode"

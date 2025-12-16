@@ -18,14 +18,24 @@ const handler = async (event, context) => {
   const method = event.requestContext?.http?.method || event.httpMethod;
   const path = event.rawPath || event.path;
 
+  // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+  const stage = event.requestContext?.stage;
+  let normalizedPath = path;
+  if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+    normalizedPath = path.substring(stage.length + 1);
+  }
+
+  // Use normalizedPath for routing
+  const routePath = normalizedPath;
+
   // 라우팅
-  if (method === 'POST' && path.endsWith('/reward/shiny')) {
+  if (method === 'POST' && routePath.endsWith('/reward/shiny')) {
     return await rewardShinyPokemon(event, db);
-  } else if (method === 'POST' && path.endsWith('/reward/check-eligibility')) {
+  } else if (method === 'POST' && routePath.endsWith('/reward/check-eligibility')) {
     return await checkRewardEligibility(event, db);
-  } else if (method === 'GET' && path.endsWith('/reward/history')) {
+  } else if (method === 'GET' && routePath.endsWith('/reward/history')) {
     return await getRewardHistory(event, db);
-  } else if (method === 'POST' && path.endsWith('/reward/milestone')) {
+  } else if (method === 'POST' && routePath.endsWith('/reward/milestone')) {
     return await rewardMilestone(event, db);
   } else {
     return createErrorResponse('Not Found', 404);
