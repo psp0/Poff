@@ -95,6 +95,8 @@ jobs:
           echo "environment=$ENV" >> $GITHUB_OUTPUT
           echo "migration_action=${ACTION:-up}" >> $GITHUB_OUTPUT
           echo "Environment: $ENV, Action: ${ACTION:-up}"
+          echo "Debug: github.event_name=${{ github.event_name }}"
+          echo "Debug: github.ref=${{ github.ref }}"
 
   migrate:
     name: Run Database Migration
@@ -140,6 +142,15 @@ jobs:
         id: infra
         run: |
           ENV="${{ needs.determine-environment.outputs.environment }}"
+          echo "Debug: Raw environment value: '${{ needs.determine-environment.outputs.environment }}'"
+          echo "Debug: ENV variable: '$ENV'"
+          
+          # Fallback to dev if ENV is empty
+          if [ -z "$ENV" ]; then
+            echo "Warning: Environment is empty, defaulting to 'dev'"
+            ENV="dev"
+          fi
+          
           echo "Fetching infrastructure details from SSM for environment: $ENV"
           
           # Fetch parameters individually for better error handling
