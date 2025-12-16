@@ -176,34 +176,11 @@ function initializeFirebaseListener() {
   if (window.firebaseAuth) {
     console.log("Firebase Auth initialized, registering listener");
 
-    // Handle Redirect Result (for errors during redirect login)
-    if (window.getRedirectResult) {
-      const isRedirecting = sessionStorage.getItem('auth_redirect_in_progress');
-      if (isRedirecting) {
-        console.log("Detected return from redirect login...");
-        if (authMessage) authMessage.textContent = "로그인 확인 중...";
-      }
-
-      window.getRedirectResult(window.firebaseAuth)
-        .then((result) => {
-          if (result) {
-            console.log("Redirect login success:", result.user.uid);
-            sessionStorage.removeItem('auth_redirect_in_progress');
-            // User state will be handled by onAuthStateChanged
-          } else if (isRedirecting) {
-            console.warn("Redirect login returned null. Session might have been lost or redirect failed.");
-            // Don't remove flag yet? Or maybe it failed.
-            sessionStorage.removeItem('auth_redirect_in_progress');
-            if (authMessage) authMessage.textContent = "로그인 정보를 불러오지 못했습니다. 다시 시도해주세요.";
-          }
-        })
-        .catch((error) => {
-          console.error("Redirect login error:", error);
-          sessionStorage.removeItem('auth_redirect_in_progress');
-          if (authMessage) {
-            authMessage.textContent = "로그인 실패: " + error.message;
-          }
-        });
+    // Enable login button
+    if (googleLoginBtn) {
+      googleLoginBtn.disabled = false;
+      googleLoginBtn.style.opacity = "1";
+      googleLoginBtn.style.cursor = "pointer";
     }
 
     window.firebaseAuth.onAuthStateChanged(async (user) => {
@@ -789,38 +766,35 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
 // 구글 로그인 함수
 // 구글 로그인 함수
 if (googleLoginBtn) {
-  googleLoginBtn.addEventListener("click", async () => {
-    try {
-      // Firebase가 초기화되었는지 확인
-      if (!window.firebaseAuth || !window.googleProvider || !window.signInWithRedirect) {
-        authMessage.textContent = "잠시 후 다시 시도해주세요...";
-        console.log("Firebase not ready yet, waiting...");
-        // Firebase 초기화 대기 (최대 3초)
-        let attempts = 0;
-        while ((!window.firebaseAuth || !window.googleProvider || !window.signInWithRedirect) && attempts < 30) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          attempts++;
-        }
-        if (!window.firebaseAuth || !window.googleProvider || !window.signInWithRedirect) {
-          authMessage.textContent = "Firebase 초기화 실패. 페이지를 새로고침 해주세요.";
-          return;
-        }
-      }
+  // 초기 상태: 비활성화 (Firebase 로드 대기)
+  googleLoginBtn.disabled = true;
+  googleLoginBtn.style.opacity = "0.5";
+  googleLoginBtn.style.cursor = "wait";
 
-      authMessage.textContent = "Google 로그인 페이지로 이동 중...";
-
-      // 리다이렉트 시작 전 플래그 설정 (돌아왔을 때 확인용)
-      sessionStorage.setItem('auth_redirect_in_progress', 'true');
-      console.log("Starting redirect login...");
-
-      // Redirect 방식으로 로그인 (iOS PWA 팝업 차단 방지)
-      await window.signInWithRedirect(window.firebaseAuth, window.googleProvider);
-      // 리다이렉트 후에는 페이지가 새로고침되므로 이후 코드는 실행되지 않음
-    } catch (error) {
-      console.error("Google Login Error:", error);
-      authMessage.textContent = "로그인 실패: " + error.message;
-      sessionStorage.removeItem('auth_redirect_in_progress');
+  googleLoginBtn.addEventListener("click", () => {
+    // 중요: iOS PWA 팝업 차단을 방지하기 위해 비동기(await) 없이 즉시 호출해야 함
+    if (!window.firebaseAuth || !window.googleProvider || !window.signInWithPopup) {
+      console.warn("Firebase Auth not ready yet");
+      return;
     }
+
+    authMessage.textContent = "Google 로그인 팝업을 띄우는 중...";
+
+    // 즉시 실행 (Promise 체이닝 사용)
+    window.signInWithPopup(window.firebaseAuth, window.googleProvider)
+      .then((result) => {
+        console.log("Popup login success:", result.user.uid);
+        authMessage.textContent = "로그인 성공!";
+        // onAuthStateChanged에서 처리됨
+      })
+      .catch((error) => {
+        console.error("Google Login Error:", error);
+        authMessage.textContent = "로그인 실패: " + error.message;
+
+        if (error.code === 'auth/popup-blocked') {
+          authMessage.textContent = "팝업이 차단되었습니다. 브라우저 설정에서 팝업을 허용해주세요.";
+        }
+      });
   });
 }
 
