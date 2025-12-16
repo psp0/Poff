@@ -175,6 +175,24 @@ document.addEventListener('DOMContentLoaded', () => {
 function initializeFirebaseListener() {
   if (window.firebaseAuth) {
     console.log("Firebase Auth initialized, registering listener");
+
+    // Handle Redirect Result (for errors during redirect login)
+    if (window.getRedirectResult) {
+      window.getRedirectResult(window.firebaseAuth)
+        .then((result) => {
+          if (result) {
+            console.log("Redirect login success:", result.user.uid);
+            // User state will be handled by onAuthStateChanged
+          }
+        })
+        .catch((error) => {
+          console.error("Redirect login error:", error);
+          if (authMessage) {
+            authMessage.textContent = "로그인 실패: " + error.message;
+          }
+        });
+    }
+
     window.firebaseAuth.onAuthStateChanged(async (user) => {
       if (user) {
         window.isGuestMode = false;
@@ -756,28 +774,30 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
 
 // 로그인 함수
 // 구글 로그인 함수
+// 구글 로그인 함수
 if (googleLoginBtn) {
   googleLoginBtn.addEventListener("click", async () => {
     try {
       // Firebase가 초기화되었는지 확인
-      if (!window.firebaseAuth || !window.googleProvider || !window.signInWithPopup) {
+      if (!window.firebaseAuth || !window.googleProvider || !window.signInWithRedirect) {
         authMessage.textContent = "잠시 후 다시 시도해주세요...";
         console.log("Firebase not ready yet, waiting...");
         // Firebase 초기화 대기 (최대 3초)
         let attempts = 0;
-        while ((!window.firebaseAuth || !window.googleProvider || !window.signInWithPopup) && attempts < 30) {
+        while ((!window.firebaseAuth || !window.googleProvider || !window.signInWithRedirect) && attempts < 30) {
           await new Promise(resolve => setTimeout(resolve, 100));
           attempts++;
         }
-        if (!window.firebaseAuth || !window.googleProvider || !window.signInWithPopup) {
+        if (!window.firebaseAuth || !window.googleProvider || !window.signInWithRedirect) {
           authMessage.textContent = "Firebase 초기화 실패. 페이지를 새로고침 해주세요.";
           return;
         }
       }
 
-      authMessage.textContent = "Google 로그인 중...";
-      await window.signInWithPopup(window.firebaseAuth, window.googleProvider);
-      // onAuthStateChanged에서 처리됨
+      authMessage.textContent = "Google 로그인 페이지로 이동 중...";
+      // Redirect 방식으로 로그인 (iOS PWA 팝업 차단 방지)
+      await window.signInWithRedirect(window.firebaseAuth, window.googleProvider);
+      // 리다이렉트 후에는 페이지가 새로고침되므로 이후 코드는 실행되지 않음
     } catch (error) {
       console.error("Google Login Error:", error);
       authMessage.textContent = "로그인 실패: " + error.message;
