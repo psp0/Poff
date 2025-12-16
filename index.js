@@ -792,7 +792,7 @@ if (googleLoginBtn) {
         authMessage.textContent = "로그인 실패: " + error.message;
 
         if (error.code === 'auth/popup-blocked') {
-          authMessage.textContent = "팝업이 차단되었습니다. 브라우저 설정에서 팝업을 허용해주세요.";
+          authMessage.textContent = "팝업 차단을 허용하거나 로그인 버튼을 한번 더 눌러주세요.";
         }
       });
   });
@@ -5574,6 +5574,11 @@ function initTabNavigation() {
           view.style.display = 'none';
         }
       });
+
+      // PWA 배너 가시성 업데이트
+      if (typeof window.updatePwaBannerVisibility === 'function') {
+        window.updatePwaBannerVisibility();
+      }
     });
   });
 

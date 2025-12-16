@@ -5,6 +5,16 @@ const showPwaBannerBtn = document.getElementById('showPwaBannerBtn'); // 설정 
 const pwaBanner = document.getElementById('pwa-install-banner');
 const pwaInstallBtn = document.getElementById('pwa-install-btn');
 const pwaCloseBtn = document.getElementById('pwa-install-close');
+let bannerTimeout = null;
+
+// 홈 탭 활성화 여부 확인
+function isHomeTabActive() {
+    const homeView = document.getElementById('view-home');
+    // 초기 로드 시 active 클래스가 없을 수 있으므로 스타일 체크도 병행하거나,
+    // index.js의 초기화 로직을 신뢰. 여기서는 classList를 확인.
+    // view-home이 active 클래스를 가지고 있거나, style.display가 block인 경우
+    return homeView && (homeView.classList.contains('active') || homeView.style.display === 'block');
+}
 
 // iOS 감지
 function isIOS() {
@@ -35,27 +45,45 @@ function isPwaInstalled() {
 }
 
 // 배너 표시 (애니메이션)
+// 배너 표시 (애니메이션)
 function showPwaBanner() {
     if (pwaBanner && !isPwaInstalled()) {
+        // 홈 화면이 아니면 표시하지 않음
+        if (!isHomeTabActive()) return;
+
         // 이미 닫았으면 표시 안 함
         if (sessionStorage.getItem('pwa-banner-dismissed') === 'true') {
             return;
         }
+
+        // 이미 표시 대기 중이면 중복 실행 방지
+        if (bannerTimeout) clearTimeout(bannerTimeout);
+
         // 약간의 딜레이 후 배너 표시 (UX 개선)
-        setTimeout(() => {
-            pwaBanner.classList.remove('hidden');
-            pwaBanner.classList.add('visible');
+        bannerTimeout = setTimeout(() => {
+            // 타임아웃 후에도 여전히 홈 화면인지 확인
+            if (isHomeTabActive()) {
+                pwaBanner.classList.remove('hidden');
+                pwaBanner.classList.add('visible');
+            }
         }, 2000); // 2초 후 표시
     }
 }
 
 // iOS용 배너 표시 (설치 방법 안내)
+// iOS용 배너 표시 (설치 방법 안내)
 function showIOSInstallBanner() {
     if (pwaBanner && !isPwaInstalled() && isIOSSafari()) {
+        // 홈 화면이 아니면 표시하지 않음
+        if (!isHomeTabActive()) return;
+
         // 이미 닫았으면 표시 안 함
         if (sessionStorage.getItem('pwa-banner-dismissed') === 'true') {
             return;
         }
+
+        // 이미 표시 대기 중이면 중복 실행 방지
+        if (bannerTimeout) clearTimeout(bannerTimeout);
 
         // iOS용 설치 안내 텍스트로 변경
         const textEl = pwaBanner.querySelector('.pwa-install-text');
@@ -71,20 +99,40 @@ function showIOSInstallBanner() {
             btnEl.style.display = 'none'; // iOS에서는 직접 설치 불가
         }
 
-        setTimeout(() => {
-            pwaBanner.classList.remove('hidden');
-            pwaBanner.classList.add('visible');
+        bannerTimeout = setTimeout(() => {
+            // 타임아웃 후에도 여전히 홈 화면인지 확인
+            if (isHomeTabActive()) {
+                pwaBanner.classList.remove('hidden');
+                pwaBanner.classList.add('visible');
+            }
         }, 2000);
     }
 }
 
 // 배너 숨기기
 function hidePwaBanner() {
+    if (bannerTimeout) {
+        clearTimeout(bannerTimeout);
+        bannerTimeout = null;
+    }
     if (pwaBanner) {
         pwaBanner.classList.remove('visible');
         pwaBanner.classList.add('hidden');
     }
 }
+
+// 탭 변경 시 호출될 함수 (전역 노출)
+window.updatePwaBannerVisibility = function () {
+    if (isHomeTabActive()) {
+        if (isIOSSafari()) {
+            showIOSInstallBanner();
+        } else {
+            showPwaBanner();
+        }
+    } else {
+        hidePwaBanner();
+    }
+};
 
 // 설치 프롬프트 실행
 async function triggerInstall() {
