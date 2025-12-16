@@ -278,7 +278,17 @@ function initializeFirebaseListener() {
       }
     });
   } else {
-    console.log("Waiting for Firebase Auth to initialize...");
+    // Max retries: 100 * 100ms = 10 seconds
+    if (!window.authInitAttempts) window.authInitAttempts = 0;
+    window.authInitAttempts++;
+
+    if (window.authInitAttempts > 100) {
+      console.error("Firebase Auth initialization timed out.");
+      if (authMessage) authMessage.textContent = "Firebase 초기화 실패. 페이지를 새로고침 해주세요.";
+      return;
+    }
+
+    console.log(`Waiting for Firebase Auth to initialize... (${window.authInitAttempts})`);
     setTimeout(initializeFirebaseListener, 100);
   }
 }
