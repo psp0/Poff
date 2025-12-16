@@ -284,6 +284,7 @@ resource "aws_ssm_parameter" "nat_instance_id" {
   name        = "/${var.project_name}/${var.environment}/infrastructure/nat_instance_id"
   type        = "String"
   value       = length(aws_instance.nat) > 0 ? aws_instance.nat[0].id : ""
+  overwrite   = true
   description = "NAT Instance ID for SSM Port Forwarding"
 
   tags = merge(local.common_tags, {

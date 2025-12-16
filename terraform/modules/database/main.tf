@@ -134,6 +134,7 @@ resource "aws_ssm_parameter" "rds_endpoint_env" {
   name        = "/${var.project_name}/${var.environment}/infrastructure/rds_endpoint"
   type        = "String"
   value       = aws_db_instance.main.address
+  overwrite   = true
   description = "RDS endpoint address for ${var.environment}"
 
   tags = merge(local.common_tags, {
@@ -145,6 +146,7 @@ resource "aws_ssm_parameter" "rds_port_env" {
   name        = "/${var.project_name}/${var.environment}/infrastructure/rds_port"
   type        = "String"
   value       = tostring(aws_db_instance.main.port)
+  overwrite   = true
   description = "RDS port for ${var.environment}"
 
   tags = merge(local.common_tags, {
@@ -156,6 +158,7 @@ resource "aws_ssm_parameter" "database_name_env" {
   name        = "/${var.project_name}/${var.environment}/infrastructure/database_name"
   type        = "String"
   value       = replace(var.project_name, "-", "_")
+  overwrite   = true
   description = "Database name for ${var.environment}"
 
   tags = merge(local.common_tags, {
