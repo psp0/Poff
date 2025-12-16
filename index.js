@@ -178,15 +178,28 @@ function initializeFirebaseListener() {
 
     // Handle Redirect Result (for errors during redirect login)
     if (window.getRedirectResult) {
+      const isRedirecting = sessionStorage.getItem('auth_redirect_in_progress');
+      if (isRedirecting) {
+        console.log("Detected return from redirect login...");
+        if (authMessage) authMessage.textContent = "로그인 확인 중...";
+      }
+
       window.getRedirectResult(window.firebaseAuth)
         .then((result) => {
           if (result) {
             console.log("Redirect login success:", result.user.uid);
+            sessionStorage.removeItem('auth_redirect_in_progress');
             // User state will be handled by onAuthStateChanged
+          } else if (isRedirecting) {
+            console.warn("Redirect login returned null. Session might have been lost or redirect failed.");
+            // Don't remove flag yet? Or maybe it failed.
+            sessionStorage.removeItem('auth_redirect_in_progress');
+            if (authMessage) authMessage.textContent = "로그인 정보를 불러오지 못했습니다. 다시 시도해주세요.";
           }
         })
         .catch((error) => {
           console.error("Redirect login error:", error);
+          sessionStorage.removeItem('auth_redirect_in_progress');
           if (authMessage) {
             authMessage.textContent = "로그인 실패: " + error.message;
           }
@@ -795,12 +808,18 @@ if (googleLoginBtn) {
       }
 
       authMessage.textContent = "Google 로그인 페이지로 이동 중...";
+
+      // 리다이렉트 시작 전 플래그 설정 (돌아왔을 때 확인용)
+      sessionStorage.setItem('auth_redirect_in_progress', 'true');
+      console.log("Starting redirect login...");
+
       // Redirect 방식으로 로그인 (iOS PWA 팝업 차단 방지)
       await window.signInWithRedirect(window.firebaseAuth, window.googleProvider);
       // 리다이렉트 후에는 페이지가 새로고침되므로 이후 코드는 실행되지 않음
     } catch (error) {
       console.error("Google Login Error:", error);
       authMessage.textContent = "로그인 실패: " + error.message;
+      sessionStorage.removeItem('auth_redirect_in_progress');
     }
   });
 }
