@@ -22,18 +22,28 @@ const handler = async (event, context) => {
   const path = event.rawPath || event.path;
   const pathParameters = event.pathParameters || {};
 
+  // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+  const stage = event.requestContext?.stage;
+  let normalizedPath = path;
+  if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+    normalizedPath = path.substring(stage.length + 1);
+  }
+
+  // Use normalizedPath for routing
+  const routePath = normalizedPath;
+
   // 라우팅
-  if (method === 'GET' && path.endsWith('/screen-time')) {
+  if (method === 'GET' && routePath.endsWith('/screen-time')) {
     return await getScreenTimeRecords(event, db);
-  } else if (method === 'POST' && path.endsWith('/screen-time')) {
+  } else if (method === 'POST' && routePath.endsWith('/screen-time')) {
     return await saveScreenTimeRecord(event, db);
-  } else if (method === 'DELETE' && path.includes('/screen-time/')) {
+  } else if (method === 'DELETE' && routePath.includes('/screen-time/')) {
     return await deleteScreenTimeRecord(event, db, pathParameters.date);
-  } else if (method === 'GET' && path.endsWith('/weekly-stats')) {
+  } else if (method === 'GET' && routePath.endsWith('/weekly-stats')) {
     return await getWeeklyStats(event, db);
-  } else if (method === 'GET' && path.endsWith('/monthly-stats')) {
+  } else if (method === 'GET' && routePath.endsWith('/monthly-stats')) {
     return await getMonthlyStats(event, db);
-  } else if (method === 'POST' && path.endsWith('/reward-check')) {
+  } else if (method === 'POST' && routePath.endsWith('/reward-check')) {
     return await checkScreenTimeReward(event, db);
   } else {
     return createErrorResponse('Not Found', 404);

@@ -24,22 +24,32 @@ const handler = async (event, context) => {
   const path = event.rawPath || event.path;
   const pathParameters = event.pathParameters || {};
 
+  // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+  const stage = event.requestContext?.stage;
+  let normalizedPath = path;
+  if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+    normalizedPath = path.substring(stage.length + 1);
+  }
+
+  // Use normalizedPath for routing
+  const routePath = normalizedPath;
+
   // 라우팅
-  if (method === 'GET' && path.endsWith('/exercises')) {
+  if (method === 'GET' && routePath.endsWith('/exercises')) {
     return await getUserExercises(event, db);
-  } else if (method === 'POST' && path.endsWith('/exercises')) {
+  } else if (method === 'POST' && routePath.endsWith('/exercises')) {
     return await createUserExercise(event, db);
-  } else if (method === 'PUT' && path.includes('/exercises/')) {
+  } else if (method === 'PUT' && routePath.includes('/exercises/')) {
     return await updateUserExercise(event, db, pathParameters.id);
-  } else if (method === 'DELETE' && path.includes('/exercises/')) {
+  } else if (method === 'DELETE' && routePath.includes('/exercises/')) {
     return await deleteUserExercise(event, db, pathParameters.id);
-  } else if (method === 'GET' && path.endsWith('/sessions')) {
+  } else if (method === 'GET' && routePath.endsWith('/sessions')) {
     return await getExerciseSessions(event, db);
-  } else if (method === 'POST' && path.endsWith('/sessions')) {
+  } else if (method === 'POST' && routePath.endsWith('/sessions')) {
     return await createExerciseSession(event, db);
-  } else if (method === 'GET' && path.endsWith('/muscle-groups')) {
+  } else if (method === 'GET' && routePath.endsWith('/muscle-groups')) {
     return await getMuscleGroups(event, db);
-  } else if (method === 'GET' && path.endsWith('/weekly-stats')) {
+  } else if (method === 'GET' && routePath.endsWith('/weekly-stats')) {
     return await getWeeklyStats(event, db);
   } else {
     return createErrorResponse('Not Found', 404);

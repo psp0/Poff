@@ -17,15 +17,25 @@ const handler = async (event, context) => {
     const method = event.requestContext?.http?.method || event.httpMethod;
     const path = event.rawPath || event.path;
 
+    // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+    const stage = event.requestContext?.stage;
+    let normalizedPath = path;
+    if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+        normalizedPath = path.substring(stage.length + 1);
+    }
+
+    // Use normalizedPath for routing
+    const routePath = normalizedPath;
+
     logger.info('Incoming Request', { path, method, query: event.queryStringParameters });
 
-    if (method === 'POST' && path.endsWith('/pokemon/evolve')) {
+    if (method === 'POST' && routePath.endsWith('/pokemon/evolve')) {
         return await evolvePokemon(event, db);
-    } else if (method === 'POST' && path.endsWith('/pokemon/unlock-form')) {
+    } else if (method === 'POST' && routePath.endsWith('/pokemon/unlock-form')) {
         return await unlockPokemonForm(event, db);
-    } else if (method === 'POST' && path.endsWith('/pokemon/unlock-shiny')) {
+    } else if (method === 'POST' && routePath.endsWith('/pokemon/unlock-shiny')) {
         return await unlockShinyPokemon(event, db);
-    } else if (method === 'GET' && path.endsWith('/user/items')) {
+    } else if (method === 'GET' && routePath.endsWith('/user/items')) {
         return await getUserItems(event, db);
     } else {
         logger.warn('Route not found', { path, method });

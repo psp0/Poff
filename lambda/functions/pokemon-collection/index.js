@@ -22,26 +22,36 @@ const handler = async (event, context) => {
   const path = event.rawPath || event.path;
   const pathParameters = event.pathParameters || {};
 
+  // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+  const stage = event.requestContext?.stage;
+  let normalizedPath = path;
+  if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+    normalizedPath = path.substring(stage.length + 1);
+  }
+
+  // Use normalizedPath for routing
+  const routePath = normalizedPath;
+
   // 라우팅
-  if (method === 'GET' && path.endsWith('/collection')) {
+  if (method === 'GET' && routePath.endsWith('/collection')) {
     return await getUserPokemonCollection(event, db);
-  } else if (method === 'POST' && path.endsWith('/favorite')) {
+  } else if (method === 'POST' && routePath.endsWith('/favorite')) {
     return await toggleFavoritePokemon(event, db);
-  } else if (method === 'GET' && path.endsWith('/favorites')) {
+  } else if (method === 'GET' && routePath.endsWith('/favorites')) {
     return await getFavoritePokemon(event, db);
-  } else if (method === 'GET' && path.endsWith('/icons')) {
+  } else if (method === 'GET' && routePath.endsWith('/icons')) {
     return await getUserPokemonIcons(event, db);
-  } else if (method === 'GET' && path.endsWith('/all-pokemon')) {
+  } else if (method === 'GET' && routePath.endsWith('/all-pokemon')) {
     return await getAllUserPokemon(event, db);
-  } else if (method === 'GET' && path.includes('/evolution/')) {
+  } else if (method === 'GET' && routePath.includes('/evolution/')) {
     return await getEvolutionTree(event, db, pathParameters.baseImageName);
-  } else if (method === 'POST' && path.endsWith('/reward')) {
+  } else if (method === 'POST' && routePath.endsWith('/reward')) {
     return await rewardShinyPokemonForExercise(event, db);
 
-  } else if (method === 'GET' && path.endsWith('/starters')) {
+  } else if (method === 'GET' && routePath.endsWith('/starters')) {
     return await getStarterPokemon(event, db);
-  } else if (method === 'GET' && path.includes('/pokemon/')) {
-    const stableId = path.split('/pokemon/')[1];
+  } else if (method === 'GET' && routePath.includes('/pokemon/')) {
+    const stableId = routePath.split('/pokemon/')[1];
     return await getPokemonData(event, db, stableId);
   } else {
     return createErrorResponse('Not Found', 404);

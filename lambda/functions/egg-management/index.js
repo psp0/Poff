@@ -17,13 +17,23 @@ const handler = async (event, context) => {
   const method = event.requestContext?.http?.method || event.httpMethod;
   const path = event.rawPath || event.path;
 
-  if (method === 'GET' && path.endsWith('/eggs')) {
+  // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+  const stage = event.requestContext?.stage;
+  let normalizedPath = path;
+  if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+    normalizedPath = path.substring(stage.length + 1);
+  }
+
+  // Use normalizedPath for routing
+  const routePath = normalizedPath;
+
+  if (method === 'GET' && routePath.endsWith('/eggs')) {
     return await getUserEggs(event, db);
-  } else if (method === 'GET' && path.endsWith('/eggs/search')) {
+  } else if (method === 'GET' && routePath.endsWith('/eggs/search')) {
     return await searchPokemonEggs(event, db);
-  } else if (method === 'POST' && path.endsWith('/eggs/acquire')) {
+  } else if (method === 'POST' && routePath.endsWith('/eggs/acquire')) {
     return await acquireEgg(event, db);
-  } else if (method === 'POST' && path.endsWith('/eggs/hatch')) {
+  } else if (method === 'POST' && routePath.endsWith('/eggs/hatch')) {
     return await hatchEgg(event, db);
   } else {
     return createErrorResponse('Not Found', 404);

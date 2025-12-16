@@ -8,18 +8,28 @@ const handler = async (event, context) => {
     const method = event.requestContext?.http?.method || event.httpMethod;
     const path = event.rawPath || event.path;
 
+    // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+    const stage = event.requestContext?.stage;
+    let normalizedPath = path;
+    if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+        normalizedPath = path.substring(stage.length + 1);
+    }
+
+    // Use normalizedPath for routing
+    const routePath = normalizedPath;
+
     // Add request context to logger
     logger.info('Incoming Request', { path, method, query: event.queryStringParameters });
 
-    if (method === 'POST' && path.endsWith('/auth/sync')) {
+    if (method === 'POST' && routePath.endsWith('/auth/sync')) {
         return await syncUserByFirebase(event, db);
-    } else if (method === 'POST' && path.endsWith('/user/terms-agreement')) {
+    } else if (method === 'POST' && routePath.endsWith('/user/terms-agreement')) {
         return await saveTermsAgreement(event, db);
-    } else if (method === 'POST' && path.endsWith('/user/exchange')) {
+    } else if (method === 'POST' && routePath.endsWith('/user/exchange')) {
         return await exchangeItem(event, db);
-    } else if (method === 'GET' && path.endsWith('/shop/items')) {
+    } else if (method === 'GET' && routePath.endsWith('/shop/items')) {
         return await getShopItems(event, db);
-    } else if (method === 'GET' && path.endsWith('/api/config')) {
+    } else if (method === 'GET' && routePath.endsWith('/api/config')) {
         return getConfig(event);
     } else {
         logger.warn('Route not found', { path, method });
