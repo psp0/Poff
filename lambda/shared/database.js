@@ -44,7 +44,7 @@ class DatabaseConnection {
         if (!this.secretsManager) {
           this.secretsManager = new SecretsManagerClient();
         }
-        
+
         const command = new GetSecretValueCommand({ SecretId: process.env.DB_SECRET_ARN });
         const response = await this.secretsManager.send(command);
         const secret = JSON.parse(response.SecretString);
@@ -63,7 +63,54 @@ class DatabaseConnection {
       }
     }
 
-    throw new Error('Database configuration not found (DB_PASSWORD or DB_SECRET_ARN required)');
+    // 3. SSM Parameter Store (Terraform 구성 지원)
+    if (process.env.DB_PASSWORD_PARAM) {
+      try {
+        const { SSMClient, GetParametersCommand } = require("@aws-sdk/client-ssm");
+        const ssmClient = new SSMClient();
+
+        const params = [process.env.DB_PASSWORD_PARAM];
+        if (process.env.DB_USER_PARAM) {
+          params.push(process.env.DB_USER_PARAM);
+        }
+
+        const command = new GetParametersCommand({
+          Names: params,
+          WithDecryption: true
+        });
+
+        const response = await ssmClient.send(command);
+
+        let password, user;
+
+        response.Parameters.forEach(param => {
+          if (param.Name === process.env.DB_PASSWORD_PARAM) {
+            password = param.Value;
+          } else if (param.Name === process.env.DB_USER_PARAM) {
+            user = param.Value;
+          }
+        });
+
+        if (!password) {
+          throw new Error('Failed to retrieve DB password from SSM');
+        }
+
+        this.dbConfig = {
+          host: process.env.DB_HOST,
+          port: process.env.DB_PORT || 3306,
+          database: process.env.DB_NAME,
+          user: user || process.env.DB_USER, // SSM에서 가져오거나 환경변수 사용
+          password: password,
+        };
+        return this.dbConfig;
+
+      } catch (error) {
+        logger.error('Failed to fetch database credentials from SSM', error);
+        throw error;
+      }
+    }
+
+    throw new Error('Database configuration not found (DB_PASSWORD, DB_SECRET_ARN, or DB_PASSWORD_PARAM required)');
   }
 
   async connect() {
