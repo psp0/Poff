@@ -362,19 +362,6 @@ jobs:
             fi
           done
 
-      - name: Store Parameters in SSM
-        if: steps.set-variables.outputs.action == 'apply' && steps.apply.outcome == 'success'
-        run: |
-          ENV="dev"
-          echo "Storing infrastructure parameters in SSM for environment: $ENV"
-          
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/rds_endpoint" --value "${{ steps.set-outputs.outputs.rds_endpoint }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/rds_port" --value "${{ steps.set-outputs.outputs.rds_port }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/database_name" --value "${{ steps.set-outputs.outputs.database_name }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/nat_instance_id" --value "${{ steps.set-outputs.outputs.nat_instance_id }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/s3_bucket" --value "${{ steps.set-outputs.outputs.s3_bucket }}" --type "String" --overwrite
-          
-          echo "✅ Parameters stored successfully"
 
       # Upload static files to S3
       - name: Upload Frontend Files to S3

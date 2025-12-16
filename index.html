@@ -31,8 +31,10 @@
         try {
           const res = await fetch('/api/config');
           if (res.ok) {
-            const data = await res.json();
-            config = data.firebase;
+            const responseData = await res.json();
+            if (responseData.success && responseData.data && responseData.data.firebase) {
+              config = responseData.data.firebase;
+            }
           }
         } catch (e) {
           console.error("Failed to fetch config from API:", e);
