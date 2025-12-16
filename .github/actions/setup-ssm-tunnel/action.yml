@@ -22,11 +22,16 @@ runs:
     - name: Validate NAT Instance
       shell: bash
       run: |
-        if [ -z "${{ inputs.nat-instance-id }}" ]; then
+        echo "🔍 Debug: Received NAT Instance ID: '${{ inputs.nat-instance-id }}'"
+        NAT_ID="${{ inputs.nat-instance-id }}"
+        echo "🔍 Debug: Length: ${#NAT_ID}"
+        
+        if [ -z "$NAT_ID" ] || [ "$NAT_ID" = "null" ] || [ "$NAT_ID" = "" ]; then
           echo "❌ Error: NAT Instance ID is not provided"
+          echo "❌ Received value: '$NAT_ID'"
           exit 1
         fi
-        echo "✅ NAT Instance ID: ${{ inputs.nat-instance-id }}"
+        echo "✅ NAT Instance ID validated: $NAT_ID"
 
     - name: Install Session Manager Plugin
       shell: bash
