@@ -142,25 +142,24 @@ jobs:
           ENV="${{ needs.determine-environment.outputs.environment }}"
           echo "Fetching infrastructure details from SSM for environment: $ENV"
           
-          # Fetch all parameters at once
-          PARAMS=$(aws ssm get-parameters \
-            --names \
-              "/pokehabit/$ENV/infrastructure/nat_instance_id" \
-              "/pokehabit/$ENV/infrastructure/rds_endpoint" \
-              "/pokehabit/$ENV/infrastructure/rds_port" \
-              "/pokehabit/$ENV/infrastructure/database_name" \
-            --query "Parameters[*].{Name:Name,Value:Value}" \
-            --output json)
+          # Fetch parameters individually for better error handling
+          NAT_INSTANCE_ID=$(aws ssm get-parameter --name "/pokehabit/$ENV/infrastructure/nat_instance_id" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          RDS_ENDPOINT=$(aws ssm get-parameter --name "/pokehabit/$ENV/infrastructure/rds_endpoint" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          RDS_PORT=$(aws ssm get-parameter --name "/pokehabit/$ENV/infrastructure/rds_port" --query "Parameter.Value" --output text 2>/dev/null || echo "3306")
+          DATABASE_NAME=$(aws ssm get-parameter --name "/pokehabit/$ENV/infrastructure/database_name" --query "Parameter.Value" --output text 2>/dev/null || echo "")
           
-          # Function to get value by name suffix
-          get_param() {
-            echo "$PARAMS" | jq -r --arg name "/pokehabit/$ENV/infrastructure/$1" '.[] | select(.Name == $name) | .Value'
-          }
+          echo "Debug: Retrieved NAT_INSTANCE_ID: '$NAT_INSTANCE_ID'"
+          echo "Debug: Retrieved RDS_ENDPOINT: '$RDS_ENDPOINT'"
           
-          NAT_INSTANCE_ID=$(get_param "nat_instance_id")
-          RDS_ENDPOINT=$(get_param "rds_endpoint")
-          RDS_PORT=$(get_param "rds_port")
-          DATABASE_NAME=$(get_param "database_name")
+          if [ -z "$NAT_INSTANCE_ID" ]; then
+            echo "::error::NAT_INSTANCE_ID is empty! Please check if '/pokehabit/$ENV/infrastructure/nat_instance_id' exists in SSM Parameter Store."
+            exit 1
+          fi
+          
+          if [ -z "$RDS_ENDPOINT" ]; then
+            echo "::error::RDS_ENDPOINT is empty! Please check if '/pokehabit/$ENV/infrastructure/rds_endpoint' exists in SSM Parameter Store."
+            exit 1
+          fi
           
           # Fallback for rds_port if not found (during transition)
           if [ -z "$RDS_PORT" ] || [ "$RDS_PORT" = "null" ]; then
@@ -174,6 +173,14 @@ jobs:
           echo "database_name=$DATABASE_NAME" >> $GITHUB_OUTPUT
           
           echo "Using database: $DATABASE_NAME on $RDS_ENDPOINT:$RDS_PORT"
+
+      - name: Debug infrastructure outputs
+        run: |
+          echo "🔍 Debug: Checking infrastructure outputs before SSM tunnel setup"
+          echo "NAT Instance ID: '${{ steps.infra.outputs.nat_instance_id }}'"
+          echo "RDS Endpoint: '${{ steps.infra.outputs.rds_endpoint }}'"
+          echo "RDS Port: '${{ steps.infra.outputs.rds_port }}'"
+          echo "Database Name: '${{ steps.infra.outputs.database_name }}'"
 
       - name: Setup SSM Port Forwarding
         uses: ./.github/actions/setup-ssm-tunnel
