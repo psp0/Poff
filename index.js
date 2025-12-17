@@ -396,6 +396,35 @@ function loadBackgroundWithFallback(backgroundUrl, fallbackUrls) {
 }
 
 // 포켓몬 데이터를 화면에 표시하는 함수
+// 설명글이 화면(모달)을 벗어나는지 확인하고 숨기는 함수
+function adjustDescriptionVisibility() {
+  // 레이아웃 계산을 위해 다음 프레임에 실행
+  requestAnimationFrame(() => {
+    const container = document.querySelector('.pokemon-detail-content');
+    const description = document.querySelector('.pokedex-description');
+
+    if (container && description) {
+      // 먼저 보이게 설정하여 높이를 측정할 수 있게 함
+      description.style.display = 'block';
+
+      const containerRect = container.getBoundingClientRect();
+      const descriptionRect = description.getBoundingClientRect();
+
+      // 설명글의 하단이 컨테이너 하단보다 아래에 있으면 (짤리면) 숨김
+      // 5px 정도의 여유를 둠
+      if (descriptionRect.bottom > containerRect.bottom + 5) {
+        description.style.display = 'none';
+      }
+    }
+  });
+}
+
+// 창 크기 변경 시에도 가시성 조정
+window.addEventListener('resize', adjustDescriptionVisibility);
+
+
+
+// 포켓몬 데이터를 화면에 표시하는 함수
 // 포켓몬 데이터를 화면에 표시하는 함수
 async function displayPokemon(pokemonStableId, isShiny = false) {
   // 플리퍼 정면 초기화 (애니메이션 포함)
@@ -758,6 +787,9 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
       console.error('울음소리 재생 실패:', err);
     });
   }
+
+  // 설명글 가시성 조정
+  adjustDescriptionVisibility();
 
   console.log(`포켓몬 표시 완료: ${pokemonData.pokemon.name} (${pokemonStableId})`);
 }
