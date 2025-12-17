@@ -415,10 +415,10 @@ jobs:
           # - Assets with hash: long cache (1 year) for optimal performance
           # - Other static files: medium cache (1 hour)
           
-          # Upload HTML file with short cache
+          # Upload HTML file with no-cache (ensure users always get the latest version)
           aws s3 cp dist/index.html "s3://${S3_BUCKET}/" \
             --content-type "text/html" \
-            --cache-control "max-age=300"
+            --cache-control "no-cache"
           
           # Upload hashed assets (JS, CSS) with long cache
           if [ -d "dist/assets" ]; then
@@ -433,7 +433,7 @@ jobs:
             if [ -f "$file" ]; then
               filename=$(basename "$file")
               aws s3 cp "$file" "s3://${S3_BUCKET}/${filename}" \
-                --cache-control "max-age=3600"
+                --cache-control "no-cache"
             fi
           done
           
