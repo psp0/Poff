@@ -246,8 +246,8 @@ window.addEventListener('appinstalled', () => {
 // Service Worker Registration
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        // 상대 경로 사용하여 배포 환경에 맞게 동작
-        navigator.serviceWorker.register('./sw.js')
+        // 절대 경로 사용 (CloudFront/Nginx 배포 환경 호환)
+        navigator.serviceWorker.register('/sw.js')
             .then((registration) => {
                 console.log('ServiceWorker registration successful with scope: ', registration.scope);
             }, (err) => {
