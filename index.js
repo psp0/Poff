@@ -8,7 +8,7 @@ const getEnvVar = (key, defaultValue) => {
     return defaultValue;
   }
 };
-const ASSETS_BASE_URL = getEnvVar('VITE_ASSETS_BASE_URL', '/assets');
+const ASSETS_BASE_URL = getEnvVar('VITE_ASSETS_BASE_URL', '/');
 const API_BASE_URL = getEnvVar('VITE_API_BASE_URL', '/api');
 
 // PWA 아이콘 URL (환경변수 또는 기본 경로 사용)
