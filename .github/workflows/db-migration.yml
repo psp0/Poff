@@ -226,6 +226,10 @@ jobs:
 
       - name: Test database connectivity
         id: test-connection
+        env:
+          DB_USER: ${{ steps.db-creds.outputs.db_user }}
+          DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
+          DB_NAME: ${{ steps.infra.outputs.database_name }}
         run: |
           # Install MySQL client for testing
           sudo apt-get update
@@ -233,34 +237,37 @@ jobs:
           
           # Test connection through SSM tunnel
           echo "Testing MySQL database connectivity through SSM Port Forwarding..."
-          mysql -h 127.0.0.1 -P 3307 -u "${{ steps.db-creds.outputs.db_user }}" -p"${{ steps.db-creds.outputs.db_password }}" \
-            -D "${{ steps.infra.outputs.database_name }}" \
+          # Use env vars to avoid shell interpolation issues with special chars in password
+          mysql -h 127.0.0.1 -P 3307 -u "$DB_USER" -p"$DB_PASSWORD" \
+            -D "$DB_NAME" \
             -e "SELECT VERSION();" || {
             echo "ERROR: Database connection failed!"
             echo "Endpoint: ${{ steps.infra.outputs.rds_endpoint }}:${{ steps.infra.outputs.rds_port }}"
-            echo "Database: ${{ steps.infra.outputs.database_name }}"
+            echo "Database: $DB_NAME"
             exit 1
           }
           echo "Database connection successful!"
 
       - name: Create db-migrate configuration
+        env:
+          DB_USER: ${{ steps.db-creds.outputs.db_user }}
+          DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
+          DB_NAME: ${{ steps.infra.outputs.database_name }}
+          DB_ENV: ${{ needs.determine-environment.outputs.environment }}
         run: |
           cd migrations
-          cat > database.json <<EOF
-          {
-            "${{ needs.determine-environment.outputs.environment }}": {
-              "driver": "mysql",
-              "host": "127.0.0.1",
-              "port": 3307,
-              "database": "${{ steps.infra.outputs.database_name }}",
-              "user": "${{ steps.db-creds.outputs.db_user }}",
-              "password": "${{ steps.db-creds.outputs.db_password }}",
-              "multipleStatements": true
-            }
-          }
-          EOF
+          
+          # Use jq to safely create JSON with proper escaping
+          jq -n \
+            --arg env "$DB_ENV" \
+            --arg db "$DB_NAME" \
+            --arg user "$DB_USER" \
+            --arg password "$DB_PASSWORD" \
+            '{($env): {driver: "mysql", host: "127.0.0.1", port: 3307, database: $db, user: $user, password: $password, multipleStatements: true}}' \
+            > database.json
+            
           echo "Database configuration created for MySQL"
-          echo "Database: ${{ steps.infra.outputs.database_name }}"
+          echo "Database: $DB_NAME"
 
       - name: Install migrations dependencies
         run: |
