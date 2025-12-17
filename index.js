@@ -8,7 +8,7 @@ const getEnvVar = (key, defaultValue) => {
     return defaultValue;
   }
 };
-const ASSETS_BASE_URL = getEnvVar('VITE_ASSETS_BASE_URL', '');
+const ASSETS_BASE_URL = getEnvVar('VITE_ASSETS_BASE_URL', '/assets');
 const API_BASE_URL = getEnvVar('VITE_API_BASE_URL', '/api');
 
 // PWA 아이콘 URL (환경변수 또는 기본 경로 사용)
@@ -2091,8 +2091,13 @@ window.addEventListener('DOMContentLoaded', () => {
   initTouchEvents();
   setupSettingsListeners();
 
-  // PWA 아이콘 동적 설정 (PWA 배너 이미지 등)
+  // PWA 아이콘 동적 설정 (apple-touch-icon, PWA 배너 이미지 등)
+  const appleTouchIcon = document.getElementById('apple-touch-icon');
   const pwaIconImg = document.getElementById('pwa-icon-img');
+
+  if (appleTouchIcon) {
+    appleTouchIcon.href = IMAGE_URLS.PWA_ICON_192;
+  }
 
   if (pwaIconImg) {
     pwaIconImg.src = IMAGE_URLS.PWA_ICON_192;
@@ -3609,12 +3614,6 @@ async function updateExerciseUI() {
 // 사용자 운동 목록 업데이트
 function updateUserExercisesList() {
   const listContainer = document.getElementById('user-exercises-list');
-  const countBadge = document.getElementById('exercise-count-badge');
-
-  // 운동 개수 배지 업데이트
-  if (countBadge) {
-    countBadge.textContent = `${userExercises.length}개`;
-  }
 
   if (!listContainer) return;
 
@@ -3928,6 +3927,24 @@ function setupExerciseEventListeners() {
       }
     });
   }
+
+  // 진행률 새로고침 버튼 (모달)
+  const refreshProgressModalBtn = document.getElementById('refresh-progress-modal-btn');
+  if (refreshProgressModalBtn) {
+    refreshProgressModalBtn.addEventListener('click', async () => {
+      try {
+        refreshProgressModalBtn.classList.add('refreshing');
+        await loadWeeklyProgress();
+        updateWeeklyProgressDashboard();
+      } catch (error) {
+        console.error('진행률 새로고침 실패:', error);
+      } finally {
+        setTimeout(() => {
+          refreshProgressModalBtn.classList.remove('refreshing');
+        }, 300);
+      }
+    });
+  }
   // Intensity Type Toggle (Segmented Control)
   const intensityRadios = document.querySelectorAll('input[name="intensity-type"]');
   const repsInput = document.getElementById('exercise-reps-input');
@@ -4015,6 +4032,47 @@ function setupExerciseEventListeners() {
     exerciseDeleteModal.addEventListener('click', (e) => {
       if (e.target === exerciseDeleteModal) {
         exerciseDeleteModal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+        onModalClose();
+      }
+    });
+  }
+  // 주간 헬스 진행률 모달 이벤트 리스너
+  const exerciseWeeklyModal = document.getElementById('exercise-weekly-modal');
+  const openExerciseWeeklyModalBtn = document.getElementById('open-exercise-weekly-modal');
+  const exerciseWeeklyClose = document.getElementById('exercise-weekly-close');
+
+  if (openExerciseWeeklyModalBtn) {
+    openExerciseWeeklyModalBtn.addEventListener('click', async () => {
+      if (exerciseWeeklyModal) {
+        // 데이터 최신화
+        try {
+          await loadWeeklyProgress();
+          updateWeeklyProgressDashboard();
+        } catch (e) {
+          console.error('Failed to load weekly progress', e);
+        }
+        exerciseWeeklyModal.style.display = 'block';
+        document.body.classList.add('modal-open');
+        onModalOpen();
+      }
+    });
+  }
+
+  if (exerciseWeeklyClose) {
+    exerciseWeeklyClose.addEventListener('click', () => {
+      if (exerciseWeeklyModal) {
+        exerciseWeeklyModal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+        onModalClose();
+      }
+    });
+  }
+
+  if (exerciseWeeklyModal) {
+    exerciseWeeklyModal.addEventListener('click', (e) => {
+      if (e.target === exerciseWeeklyModal) {
+        exerciseWeeklyModal.style.display = 'none';
         document.body.classList.remove('modal-open');
         onModalClose();
       }
@@ -4192,84 +4250,90 @@ async function confirmExerciseDelete() {
 // 주간 운동 진행률 대시보드 업데이트
 async function updateWeeklyProgressDashboard() {
   try {
-    // 근육부위별 진행률 상세 업데이트
-    const detailsContainer = document.getElementById('weekly-progress-details');
+    // 근육부위별 진행률 상세 업데이트 (메인 화면 카드 & 모달)
+    const containers = [
+      document.getElementById('weekly-progress-details'),
+      document.getElementById('weekly-progress-modal-details')
+    ];
 
-    if (detailsContainer) {
-      if (weeklyProgress.length === 0) {
-        detailsContainer.innerHTML = '<p style="text-align: center; color: #666; margin: 20px 0;">운동을 등록하고 세션을 기록해보세요!</p>';
-        return;
+    // Check if at least one container exists
+    if (!containers.some(c => c)) return;
+
+    if (weeklyProgress.length === 0) {
+      const emptyHtml = '<p style="text-align: center; color: #666; margin: 20px 0;">운동을 등록하고 세션을 기록해보세요!</p>';
+      containers.forEach(c => { if (c) c.innerHTML = emptyHtml; });
+      return;
+    }
+
+    let html = '';
+    weeklyProgress.forEach(progress => {
+      // Find muscle group details to get full stats if missing
+      const muscleGroup = muscleGroups.find(mg => mg.id === progress.muscle_group_id) || {};
+
+      // API returns total_sets, not current_sets
+      const current = parseInt(progress.total_sets) || parseInt(progress.current_sets) || 0;
+      const mv = parseInt(progress.mv_sets !== undefined ? progress.mv_sets : (muscleGroup.mv_sets || 0));
+      const mev = parseInt(progress.mev_sets !== undefined ? progress.mev_sets : (muscleGroup.mev_sets || 0));
+      // Fallback logic: try mav_min_sets, then mav_sets, then default
+      const mav_min = parseInt(progress.mav_min_sets !== undefined ? progress.mav_min_sets :
+        (muscleGroup.mav_min_sets !== undefined ? muscleGroup.mav_min_sets :
+          (progress.mav_sets || muscleGroup.mav_sets || 10)));
+
+      const mav_max = parseInt(progress.mav_max_sets !== undefined ? progress.mav_max_sets :
+        (muscleGroup.mav_max_sets !== undefined ? muscleGroup.mav_max_sets :
+          (mav_min + 4)));
+
+      const mrv = parseInt(progress.mrv_sets !== undefined ? progress.mrv_sets : (muscleGroup.mrv_sets || 20));
+
+      let statusText = '';
+      let statusClass = '';
+      let statusBadgeClass = '';
+      let message = '';
+      let messageColor = '';
+
+      if (current <= mv) {
+        statusText = '근손실';
+        statusClass = 'status-loss';
+        statusBadgeClass = 'badge-loss';
+        message = `💪 MV(${mv}세트) 이하입니다. ${mv + 1}세트 이상 해야 근손실을 방지할 수 있어요!`;
+        messageColor = '#718096';
+      } else if (current <= mev) {
+        statusText = '근유지';
+        statusClass = 'status-maintenance';
+        statusBadgeClass = 'badge-maintenance';
+        message = `🔥 MV(${mv}) 달성! MEV(${mev}세트)까지 ${mev - current}세트 남았어요.`;
+        messageColor = '#d69e2e';
+      } else if (current <= mav_min) {
+        statusText = '근자극';
+        statusClass = 'status-stimulation';
+        statusBadgeClass = 'badge-stimulation';
+        message = `✨ MEV(${mev}) 달성! MAV(${mav_min}~${mav_max}세트)까지 ${mav_min - current}세트 남았어요.`;
+        messageColor = '#38a169';
+      } else if (current <= mav_max) {
+        statusText = '최적근성장';
+        statusClass = 'status-optimal';
+        statusBadgeClass = 'badge-optimal';
+        message = `🏆 완벽해요! MAV(${mav_min}~${mav_max}세트) 최적의 근성장 구간입니다.`;
+        messageColor = '#805ad5';
+      } else if (current <= mrv) {
+        statusText = '한계근성장';
+        statusClass = 'status-limit';
+        statusBadgeClass = 'badge-limit';
+        message = `⚠️ MAV 초과! MRV(${mrv}세트)까지 ${mrv - current}세트 남았어요. 주의하세요.`;
+        messageColor = '#dd6b20';
+      } else {
+        statusText = '과잉';
+        statusClass = 'status-excess';
+        statusBadgeClass = 'badge-excess';
+        message = `🚫 MRV(${mrv}세트) 초과! 오버트레이닝 위험, 휴식이 필요합니다.`;
+        messageColor = '#e53e3e';
       }
 
-      let html = '';
-      weeklyProgress.forEach(progress => {
-        // Find muscle group details to get full stats if missing
-        const muscleGroup = muscleGroups.find(mg => mg.id === progress.muscle_group_id) || {};
+      // Progress bar percentage relative to MRV (capped at 100%)
+      // Using MRV as the 100% mark for the bar gives a good visual indication of "full capacity"
+      const progressPercentage = mrv > 0 ? Math.min((current / mrv) * 100, 100) : 0;
 
-        // API returns total_sets, not current_sets
-        const current = parseInt(progress.total_sets) || parseInt(progress.current_sets) || 0;
-        const mv = parseInt(progress.mv_sets !== undefined ? progress.mv_sets : (muscleGroup.mv_sets || 0));
-        const mev = parseInt(progress.mev_sets !== undefined ? progress.mev_sets : (muscleGroup.mev_sets || 0));
-        // Fallback logic: try mav_min_sets, then mav_sets, then default
-        const mav_min = parseInt(progress.mav_min_sets !== undefined ? progress.mav_min_sets :
-          (muscleGroup.mav_min_sets !== undefined ? muscleGroup.mav_min_sets :
-            (progress.mav_sets || muscleGroup.mav_sets || 10)));
-
-        const mav_max = parseInt(progress.mav_max_sets !== undefined ? progress.mav_max_sets :
-          (muscleGroup.mav_max_sets !== undefined ? muscleGroup.mav_max_sets :
-            (mav_min + 4)));
-
-        const mrv = parseInt(progress.mrv_sets !== undefined ? progress.mrv_sets : (muscleGroup.mrv_sets || 20));
-
-        let statusText = '';
-        let statusClass = '';
-        let statusBadgeClass = '';
-        let message = '';
-        let messageColor = '';
-
-        if (current <= mv) {
-          statusText = '근손실';
-          statusClass = 'status-loss';
-          statusBadgeClass = 'badge-loss';
-          message = `💪 MV(${mv}세트) 이하입니다. ${mv + 1}세트 이상 해야 근손실을 방지할 수 있어요!`;
-          messageColor = '#718096';
-        } else if (current <= mev) {
-          statusText = '근유지';
-          statusClass = 'status-maintenance';
-          statusBadgeClass = 'badge-maintenance';
-          message = `🔥 MV(${mv}) 달성! MEV(${mev}세트)까지 ${mev - current}세트 남았어요.`;
-          messageColor = '#d69e2e';
-        } else if (current <= mav_min) {
-          statusText = '근자극';
-          statusClass = 'status-stimulation';
-          statusBadgeClass = 'badge-stimulation';
-          message = `✨ MEV(${mev}) 달성! MAV(${mav_min}~${mav_max}세트)까지 ${mav_min - current}세트 남았어요.`;
-          messageColor = '#38a169';
-        } else if (current <= mav_max) {
-          statusText = '최적근성장';
-          statusClass = 'status-optimal';
-          statusBadgeClass = 'badge-optimal';
-          message = `🏆 완벽해요! MAV(${mav_min}~${mav_max}세트) 최적의 근성장 구간입니다.`;
-          messageColor = '#805ad5';
-        } else if (current <= mrv) {
-          statusText = '한계근성장';
-          statusClass = 'status-limit';
-          statusBadgeClass = 'badge-limit';
-          message = `⚠️ MAV 초과! MRV(${mrv}세트)까지 ${mrv - current}세트 남았어요. 주의하세요.`;
-          messageColor = '#dd6b20';
-        } else {
-          statusText = '과잉';
-          statusClass = 'status-excess';
-          statusBadgeClass = 'badge-excess';
-          message = `🚫 MRV(${mrv}세트) 초과! 오버트레이닝 위험, 휴식이 필요합니다.`;
-          messageColor = '#e53e3e';
-        }
-
-        // Progress bar percentage relative to MRV (capped at 100%)
-        // Using MRV as the 100% mark for the bar gives a good visual indication of "full capacity"
-        const progressPercentage = mrv > 0 ? Math.min((current / mrv) * 100, 100) : 0;
-
-        html += `
+      html += `
           <div class="muscle-progress-card">
             <div class="muscle-progress-header">
               <div class="muscle-progress-name">${progress.muscle_group_name_ko}</div>
@@ -4290,10 +4354,9 @@ async function updateWeeklyProgressDashboard() {
             </div>
           </div>
         `;
-      });
+    });
 
-      detailsContainer.innerHTML = html;
-    }
+    containers.forEach(c => { if (c) c.innerHTML = html; });
 
   } catch (error) {
     console.error('주간 진행률 대시보드 업데이트 실패:', error);
@@ -5640,9 +5703,6 @@ function clearGuestModeUI() {
       btn.classList.remove('guest-disabled');
     }
   });
-
-  const guestBanners = document.querySelectorAll('.guest-mode-banner');
-  guestBanners.forEach(banner => banner.classList.remove('visible'));
 
   const eggSearchInput = document.getElementById('eggSearchInput');
   if (eggSearchInput) {
