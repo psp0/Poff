@@ -2091,13 +2091,8 @@ window.addEventListener('DOMContentLoaded', () => {
   initTouchEvents();
   setupSettingsListeners();
 
-  // PWA 아이콘 동적 설정 (apple-touch-icon, PWA 배너 이미지 등)
-  const appleTouchIcon = document.getElementById('apple-touch-icon');
+  // PWA 아이콘 동적 설정 (PWA 배너 이미지 등)
   const pwaIconImg = document.getElementById('pwa-icon-img');
-
-  if (appleTouchIcon) {
-    appleTouchIcon.href = IMAGE_URLS.PWA_ICON_192;
-  }
 
   if (pwaIconImg) {
     pwaIconImg.src = IMAGE_URLS.PWA_ICON_192;
