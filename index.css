@@ -99,6 +99,7 @@ body {
   flex: 1;
   position: relative;
   overflow: hidden;
+  height: 100vh- (calc(var(--tab-bar-height) + var(--safe-area-bottom)));
 }
 
 .tab-view {
@@ -227,7 +228,7 @@ textarea {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  font-size: 15px;
+  font-size: 16px;
   margin-bottom: 16px;
   color: var(--text-primary);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -901,9 +902,6 @@ button:active {
   margin-top: 4px;
 }
 
-.form-group {
-  margin-bottom: 20px;
-}
 
 .form-group label {
   display: block;
@@ -986,21 +984,6 @@ button:active {
   opacity: 0.8;
 }
 
-/* 게스트 모드 안내 배너 */
-.guest-mode-banner {
-  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
-  color: white;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  text-align: center;
-  margin-bottom: 12px;
-  display: none;
-}
-
-.guest-mode-banner.visible {
-  display: block;
-}
 
 /* 검증 섹션 */
 .validation-section {
@@ -2237,20 +2220,26 @@ body.modal-open {
   justify-content: center;
   width: fit-content;
   margin-left: auto;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 8px;
+  padding: 8px 16px;
   margin-bottom: 16px;
-  background: #FFFBEB;
-  /* amber-50 */
+  background: var(--bg-input);
   border-radius: 9999px;
   /* Pill shape */
-  border: 1px solid #FDE68A;
-  /* amber-200 */
+  border: 1px solid var(--border-color);
   font-weight: 600;
   font-size: 14px;
-  color: #B45309;
-  /* amber-700 */
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.charm-count-display:hover {
+  background: white;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .charm-count-display img {
@@ -4381,53 +4370,32 @@ body.modal-open {
   }
 }
 
-/* ============================================
-   등록된 운동 목록 요약 카드 (햄버거 버튼)
-   ============================================ */
-
-.exercise-list-summary-card {
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+.exercise-weekly-menu-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: white;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 16px 20px;
-  margin-bottom: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
   transition: all 0.2s ease;
+  margin-right: 8px;
 }
 
-.exercise-list-summary-card:hover {
-  border-color: var(--primary-color);
-  box-shadow: var(--shadow-sm);
-}
-
-.exercise-list-summary-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.exercise-list-summary-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.exercise-list-icon {
-  font-size: 20px;
-}
-
-.exercise-list-title {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--text-primary);
-}
-
-.exercise-list-count {
+.exercise-weekly-menu-btn:hover {
   background: var(--primary-color);
+  border-color: var(--primary-color);
   color: white;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 20px;
+  transform: scale(1.05);
+}
+
+.exercise-weekly-menu-btn svg {
+  width: 22px;
+  height: 22px;
 }
 
 .exercise-list-menu-btn {
@@ -5309,7 +5277,7 @@ body.modal-open {
   background-color: #CD5C5C;
   /* IndianRed */
   overflow-x: hidden;
-  padding: env(safe-area-inset-top) 0 calc(var(--tab-bar-height) + var(--safe-area-bottom) + 20px) 0;
+  /* padding: env(safe-area-inset-top) 0 calc(var(--tab-bar-height) + var(--safe-area-bottom) + 20px) 0; */
   /* Custom padding, keep bottom for tab bar */
 }
 
@@ -5400,13 +5368,12 @@ body.modal-open {
 .pokedex-screen {
   background: #F2F2F2;
   width: 96%;
-  max-width: 600px;
   min-height: calc(95vh - 60px);
   border-radius: 20px;
   /* Smaller radius */
   position: relative;
   z-index: 5;
-  padding: 30px 20px 100px 20px;
+  padding: 30px 20px 20px 20px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
   margin: 30px auto 20px auto;
   /* Push down to show header */

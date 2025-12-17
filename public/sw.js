@@ -1,6 +1,6 @@
 // PokeHabit Service Worker - Optimized for Vite + CloudFront
 // Version: Update this when you need to force cache refresh
-const CACHE_VERSION = 'v1.0.0';
+const CACHE_VERSION = 'v1.0.1';
 const CACHE_NAME = `pokehabit-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `pokehabit-runtime-${CACHE_VERSION}`;
 
@@ -10,7 +10,8 @@ const PRECACHE_URLS = [
     '/index.html',
     '/manifest.json',
     '/icon-192x192.png',
-    '/icon-512x512.png'
+    '/icon-512x512.png',
+    '/apple-touch-icon.png'
 ];
 
 // Install event: Pre-cache essential resources
