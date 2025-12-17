@@ -27,5 +27,5 @@ output "rds_security_group_id" {
 
 output "rds_secret_arn" {
   description = "ARN of the RDS credentials secret in Secrets Manager"
-  value       = try(aws_secretsmanager_secret.rds_credentials[0].arn, "")
+  value       = aws_secretsmanager_secret.db_credentials.arn
 }
