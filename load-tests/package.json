@@ -1,0 +1,23 @@
+{
+  "name": "pokehabit-load-tests",
+  "version": "1.0.0",
+  "description": "Load testing suite for PokeHabit using k6",
+  "type": "module",
+  "scripts": {
+    "test:smoke": "k6 run scenarios/smoke-test.js",
+    "test:load": "k6 run scenarios/load-test.js",
+    "test:stress": "k6 run scenarios/stress-test.js",
+    "test:spike": "k6 run scenarios/spike-test.js",
+    "test:endurance": "k6 run scenarios/endurance-test.js",
+    "test:all": "npm run test:smoke && npm run test:load && npm run test:stress"
+  },
+  "keywords": [
+    "k6",
+    "load-testing",
+    "performance",
+    "devops"
+  ],
+  "devDependencies": {
+    "k6": "^0.0.0"
+  }
+}

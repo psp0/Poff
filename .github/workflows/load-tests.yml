@@ -1,0 +1,234 @@
+name: Load Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of load test to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - load
+          - stress
+          - spike
+          - endurance
+          - all
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+  schedule:
+    # Run smoke test daily at 2 AM KST (5 PM UTC previous day)
+    - cron: '0 17 * * *'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  K6_VERSION: '0.48.0'
+
+jobs:
+  load-test:
+    name: Run Load Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Verify k6 installation
+        run: k6 version
+
+      - name: Set test parameters
+        id: test-params
+        run: |
+          # Determine test type (default to smoke for scheduled runs)
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "test_type=smoke" >> $GITHUB_OUTPUT
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          else
+            echo "test_type=${{ github.event.inputs.test_type }}" >> $GITHUB_OUTPUT
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure environment URLs
+        id: config
+        run: |
+          if [ "${{ steps.test-params.outputs.environment }}" = "prod" ]; then
+            echo "api_url=${{ vars.PROD_API_URL }}" >> $GITHUB_OUTPUT
+          else
+            echo "api_url=${{ vars.DEV_API_URL }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create results directory
+        run: mkdir -p load-tests/results
+
+      - name: Run Smoke Test
+        if: steps.test-params.outputs.test_type == 'smoke' || steps.test-params.outputs.test_type == 'all'
+        working-directory: load-tests
+        env:
+          ENVIRONMENT: ${{ steps.test-params.outputs.environment }}
+          DEV_API_URL: ${{ steps.config.outputs.api_url }}
+          PROD_API_URL: ${{ steps.config.outputs.api_url }}
+        run: |
+          echo "Running smoke test..."
+          k6 run scenarios/smoke-test.js || echo "smoke_failed=true" >> $GITHUB_ENV
+
+      - name: Run Load Test
+        if: steps.test-params.outputs.test_type == 'load' || steps.test-params.outputs.test_type == 'all'
+        working-directory: load-tests
+        env:
+          ENVIRONMENT: ${{ steps.test-params.outputs.environment }}
+          DEV_API_URL: ${{ steps.config.outputs.api_url }}
+          PROD_API_URL: ${{ steps.config.outputs.api_url }}
+        run: |
+          echo "Running load test..."
+          k6 run scenarios/load-test.js || echo "load_failed=true" >> $GITHUB_ENV
+
+      - name: Run Stress Test
+        if: steps.test-params.outputs.test_type == 'stress'
+        working-directory: load-tests
+        env:
+          ENVIRONMENT: ${{ steps.test-params.outputs.environment }}
+          DEV_API_URL: ${{ steps.config.outputs.api_url }}
+          PROD_API_URL: ${{ steps.config.outputs.api_url }}
+        run: |
+          echo "Running stress test..."
+          k6 run scenarios/stress-test.js || echo "stress_failed=true" >> $GITHUB_ENV
+
+      - name: Run Spike Test
+        if: steps.test-params.outputs.test_type == 'spike'
+        working-directory: load-tests
+        env:
+          ENVIRONMENT: ${{ steps.test-params.outputs.environment }}
+          DEV_API_URL: ${{ steps.config.outputs.api_url }}
+          PROD_API_URL: ${{ steps.config.outputs.api_url }}
+        run: |
+          echo "Running spike test..."
+          k6 run scenarios/spike-test.js || echo "spike_failed=true" >> $GITHUB_ENV
+
+      - name: Run Endurance Test
+        if: steps.test-params.outputs.test_type == 'endurance'
+        working-directory: load-tests
+        env:
+          ENVIRONMENT: ${{ steps.test-params.outputs.environment }}
+          DEV_API_URL: ${{ steps.config.outputs.api_url }}
+          PROD_API_URL: ${{ steps.config.outputs.api_url }}
+        run: |
+          echo "Running endurance test..."
+          k6 run scenarios/endurance-test.js || echo "endurance_failed=true" >> $GITHUB_ENV
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: load-test-results-${{ steps.test-params.outputs.test_type }}-${{ steps.test-params.outputs.environment }}-${{ github.run_number }}
+          path: load-tests/results/
+          retention-days: 30
+
+      - name: Analyze results
+        if: always()
+        id: analyze
+        run: |
+          cd load-tests/results
+          
+          # Check if any summary files exist
+          if ls *-summary.json 1> /dev/null 2>&1; then
+            echo "has_results=true" >> $GITHUB_OUTPUT
+            
+            # Parse JSON results for reporting
+            for file in *-summary.json; do
+              echo "Found result file: $file"
+              cat $file
+            done
+          else
+            echo "has_results=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request' && steps.analyze.outputs.has_results == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const testType = '${{ steps.test-params.outputs.test_type }}';
+            const environment = '${{ steps.test-params.outputs.environment }}';
+            
+            let comment = `## 🔥 Load Test Results\n\n`;
+            comment += `**Test Type:** ${testType}\n`;
+            comment += `**Environment:** ${environment}\n`;
+            comment += `**Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n\n`;
+            
+            const resultFiles = fs.readdirSync('load-tests/results').filter(f => f.endsWith('-summary.json'));
+            
+            for (const file of resultFiles) {
+              const data = JSON.parse(fs.readFileSync(`load-tests/results/${file}`, 'utf8'));
+              const metrics = data.metrics;
+              
+              comment += `### Results\n\n`;
+              comment += `| Metric | Value |\n`;
+              comment += `|--------|-------|\n`;
+              comment += `| Total Requests | ${metrics.http_reqs.values.count} |\n`;
+              comment += `| Request Rate | ${metrics.http_reqs.values.rate.toFixed(2)} req/s |\n`;
+              comment += `| Avg Response Time | ${metrics.http_req_duration.values.avg.toFixed(2)}ms |\n`;
+              comment += `| p95 Response Time | ${metrics.http_req_duration.values['p(95)'].toFixed(2)}ms |\n`;
+              comment += `| Error Rate | ${(metrics.http_req_failed.values.rate * 100).toFixed(2)}% |\n\n`;
+            }
+            
+            comment += `📊 [Download detailed results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Notify on failure
+        if: failure() && github.event_name == 'schedule'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#pokehabit-alerts'
+          text: |
+            🚨 *부하 테스트 실패!*
+            
+            테스트 타입: ${{ steps.test-params.outputs.test_type }}
+            환경: ${{ steps.test-params.outputs.environment }}
+            
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}
+
+      - name: Notify on success
+        if: success() && github.event_name == 'workflow_dispatch'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#pokehabit-devops'
+          text: |
+            ✅ *부하 테스트 완료*
+            
+            테스트 타입: ${{ steps.test-params.outputs.test_type }}
+            환경: ${{ steps.test-params.outputs.environment }}
+            
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|결과 확인하러 가기>
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEVOPS }}

@@ -76,3 +76,10 @@ trash*/
 
 # Misc
 crash.log
+
+# Load testing results
+load-tests/results/*.json
+load-tests/results/*.html
+
+# Chaos engineering results
+chaos-engineering/results/
