@@ -376,27 +376,128 @@ jobs:
           # Cleanup
           rm -f backend-ci.hcl rollback.tfplan
 
-  # Rollback summary (logged to workflow output)
+  # Rollback summary and notifications
   rollback-summary:
-    name: Rollback Summary
+    name: Rollback Summary & Notify
     runs-on: ubuntu-latest
-    needs: [rollback-frontend, rollback-infrastructure]
+    needs: [rollback-frontend, rollback-infrastructure, validate-rollback]
     if: always()
     
     steps:
+      - name: Get Time and Duration
+        id: time
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get formatted time (KST)
+          echo "time=$(TZ='Asia/Seoul' date '+%d일 %H시 %M분')" >> $GITHUB_OUTPUT
+          
+          # Calculate workflow duration
+          START_TIME=$(gh run view ${{ github.run_id }} --json createdAt --jq '.createdAt')
+          START_EPOCH=$(date -d "$START_TIME" +%s)
+          NOW_EPOCH=$(date +%s)
+          DURATION_SEC=$((NOW_EPOCH - START_EPOCH))
+          DURATION_MIN=$((DURATION_SEC / 60))
+          DURATION_SEC_REMAIN=$((DURATION_SEC % 60))
+          echo "duration=${DURATION_MIN}분 ${DURATION_SEC_REMAIN}초" >> $GITHUB_OUTPUT
+
+      - name: Determine Rollback Status
+        id: status
+        run: |
+          ROLLBACK_TYPE="${{ github.event.inputs.rollback_type }}"
+          FRONTEND_RESULT="${{ needs.rollback-frontend.result }}"
+          INFRA_RESULT="${{ needs.rollback-infrastructure.result }}"
+          
+          if [ "$ROLLBACK_TYPE" == "frontend-only" ]; then
+            if [ "$FRONTEND_RESULT" == "success" ]; then
+              echo "success=true" >> $GITHUB_OUTPUT
+            else
+              echo "success=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Full rollback
+            if [ "$FRONTEND_RESULT" == "success" ] && [ "$INFRA_RESULT" == "success" ]; then
+              echo "success=true" >> $GITHUB_OUTPUT
+            else
+              echo "success=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+          
+          # Determine failure stage
+          if [ "$INFRA_RESULT" == "failure" ]; then
+            echo "failed_stage=Infrastructure Rollback" >> $GITHUB_OUTPUT
+          elif [ "$FRONTEND_RESULT" == "failure" ]; then
+            echo "failed_stage=Frontend Rollback" >> $GITHUB_OUTPUT
+          else
+            echo "failed_stage=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Print rollback summary
         run: |
           echo "🔄 Production Rollback Summary"
           echo "==============================="
-          echo "Status: ${{ needs.rollback-frontend.result == 'success' && '✅ Success' || '❌ Failed' }}"
+          echo "Status: ${{ steps.status.outputs.success == 'true' && '✅ Success' || '❌ Failed' }}"
           echo "Target Version: ${{ github.event.inputs.target_tag }}"
           echo "Rollback Type: ${{ github.event.inputs.rollback_type }}"
           echo "Reason: ${{ github.event.inputs.reason }}"
           echo "Executed by: @${{ github.actor }}"
-          echo "Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Time: ${{ steps.time.outputs.time }}"
+          echo "Duration: ${{ steps.time.outputs.duration }}"
           echo ""
           echo "Post-Rollback Checklist:"
           echo "- [ ] Verify site functionality"
           echo "- [ ] Check API responses"
           echo "- [ ] Monitor error rates"
           echo "- [ ] Notify stakeholders"
+
+      - name: Notify Slack on Rollback Success
+        if: steps.status.outputs.success == 'true'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              "channel": "#pokehabit-alerts",
+              "attachments": [{
+                "color": "warning",
+                "blocks": [
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "🔄 *운영 환경 롤백 완료!*\n\n🏷️ *롤백 버전:* `${{ github.event.inputs.target_tag }}`\n📋 *롤백 유형:* ${{ github.event.inputs.rollback_type == 'frontend-only' && '프론트엔드만' || '전체 (인프라 + 프론트엔드)' }}\n\n⏰ *시간:* ${{ steps.time.outputs.time }}\n⏱️ *소요 시간:* ${{ steps.time.outputs.duration }}\n👤 *실행자:* @${{ github.actor }}\n\n💬 *롤백 사유:*\n> ${{ github.event.inputs.reason }}\n\n⚠️ *확인 필요:*\n• 사이트 기능 확인\n• API 응답 확인\n• 에러율 모니터링\n\n👉 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>"
+                    }
+                  }
+                ]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}
+
+      - name: Notify Slack on Rollback Failure
+        if: steps.status.outputs.success == 'false'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#pokehabit-alerts'
+          text: |
+            🚨 *운영 환경 롤백 실패!*
+            
+            🏷️ *롤백 대상 버전:* `${{ github.event.inputs.target_tag }}`
+            📋 *롤백 유형:* ${{ github.event.inputs.rollback_type == 'frontend-only' && '프론트엔드만' || '전체 (인프라 + 프론트엔드)' }}
+            🛑 *실패 단계:* ${{ steps.status.outputs.failed_stage }}
+            
+            ⏰ *시간:* ${{ steps.time.outputs.time }}
+            ⏱️ *소요 시간:* ${{ steps.time.outputs.duration }}
+            👤 *실행자:* @${{ github.actor }}
+            
+            💬 *롤백 사유:*
+            > ${{ github.event.inputs.reason }}
+            
+            ⚠️ *긴급 조치 필요!* 롤백이 실패하여 즉각적인 확인이 필요합니다.
+            
+            👉 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
+            
+            @channel - 운영 롤백 실패! 즉시 확인 필요!
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}

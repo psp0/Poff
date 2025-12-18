@@ -121,6 +121,12 @@ variable "rds_secret_arn" {
   default     = ""
 }
 
+variable "enable_rds_secret_access" {
+  description = "Enable IAM policy for Lambda to access RDS secrets"
+  type        = bool
+  default     = false
+}
+
 
 variable "firebase_service_account" {
   description = "Firebase Service Account JSON (Base64 encoded)"

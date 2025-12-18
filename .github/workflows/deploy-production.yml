@@ -644,14 +644,27 @@ jobs:
   # Notification
   notify:
     name: Notify Deployment Status
-    needs: [deploy-production, smoke-tests, run-migration, post-deployment-monitoring, seed-database]
+    needs: [deploy-production, smoke-tests, run-migration, post-deployment-monitoring, seed-database, pre-deployment-checks]
     if: always()
     runs-on: ubuntu-latest
     
     steps:
-      - name: Get Current Time
+      - name: Get Time and Duration
         id: time
-        run: echo "time=$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get formatted time (KST)
+          echo "time=$(TZ='Asia/Seoul' date '+%d일 %H시 %M분')" >> $GITHUB_OUTPUT
+          
+          # Calculate workflow duration
+          START_TIME=$(gh run view ${{ github.run_id }} --json createdAt --jq '.createdAt')
+          START_EPOCH=$(date -d "$START_TIME" +%s)
+          NOW_EPOCH=$(date +%s)
+          DURATION_SEC=$((NOW_EPOCH - START_EPOCH))
+          DURATION_MIN=$((DURATION_SEC / 60))
+          DURATION_SEC_REMAIN=$((DURATION_SEC % 60))
+          echo "duration=${DURATION_MIN}분 ${DURATION_SEC_REMAIN}초" >> $GITHUB_OUTPUT
 
       - name: Notify Slack on Success
         if: |
@@ -665,25 +678,25 @@ jobs:
           status: success
           channel: '#pokehabit-deployments'
           text: |
-            **운영 환경 배포 성공!**
+            🚀 *운영 환경 배포 성공!*
             
-            시간: ${{ steps.time.outputs.time }}
+            🏷️ *버전:* ${{ needs.pre-deployment-checks.outputs.deploy_version }}
+            ⏰ *시간:* ${{ steps.time.outputs.time }}
+            ⏱️ *소요 시간:* ${{ steps.time.outputs.duration }}
+            👤 *배포자:* @${{ github.actor }}
             
-            **상세 정보:**
-            - CloudFront: ${{ needs.deploy-production.outputs.cloudfront_url }}
-            - API: ${{ needs.deploy-production.outputs.api_endpoint }}
-            - S3 버킷: ${{ needs.deploy-production.outputs.s3_bucket }}
-            - 데이터베이스: ${{ needs.deploy-production.outputs.database_name }}
-            - 시딩 상태: ${{ needs.seed-database.result }}
-            - 배포 소요 시간: ${{ needs.deploy-production.outputs.deployment_time }}
-            - 커밋: ${{ github.sha }}
-            - 배포자: @${{ github.actor }}
+            🔗 *배포 정보:*
+            • CloudFront: ${{ needs.deploy-production.outputs.cloudfront_url }}
+            • API: ${{ needs.deploy-production.outputs.api_endpoint }}
+            • S3 버킷: ${{ needs.deploy-production.outputs.s3_bucket }}
+            • 데이터베이스: ${{ needs.deploy-production.outputs.database_name }}
+            • 시딩: ${{ needs.seed-database.result }}
             
-            **상태:**
-            인프라 배포 완료
-            스모크 테스트 통과
-            데이터베이스 마이그레이션 완료
-            배포 후 모니터링 완료
+            ✅ *완료 상태:*
+            • 인프라 배포 완료
+            • 스모크 테스트 통과
+            • 데이터베이스 마이그레이션 완료
+            • 배포 후 모니터링 완료
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
@@ -695,20 +708,51 @@ jobs:
           needs.run-migration.result == 'failure' ||
           needs.post-deployment-monitoring.result == 'failure' ||
           needs.seed-database.result == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Determine which stage failed
+          # Determine which stage and reason failed
           if [ "${{ needs.deploy-production.result }}" == "failure" ]; then
-            echo "stage=Infrastructure Deployment (Terraform)" >> $GITHUB_OUTPUT
+            # Fetch job steps to determine specific failure
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Deploy Production")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+            
+            if [[ "$FAILED_STEP" == *"Plan"* ]]; then
+              echo "stage=Terraform Plan 실패" >> $GITHUB_OUTPUT
+              echo "reason=인프라 계획 생성 중 오류 발생" >> $GITHUB_OUTPUT
+            elif [[ "$FAILED_STEP" == *"Apply"* ]]; then
+              echo "stage=Terraform Apply 실패" >> $GITHUB_OUTPUT
+              echo "reason=인프라 적용 중 오류 발생" >> $GITHUB_OUTPUT
+            elif [[ "$FAILED_STEP" == *"Init"* ]]; then
+              echo "stage=Terraform Init 실패" >> $GITHUB_OUTPUT
+              echo "reason=Terraform 초기화 중 오류 발생" >> $GITHUB_OUTPUT
+            elif [[ "$FAILED_STEP" == *"Validate"* ]]; then
+              echo "stage=Terraform Validate 실패" >> $GITHUB_OUTPUT
+              echo "reason=Terraform 검증 중 오류 발생" >> $GITHUB_OUTPUT
+            elif [[ "$FAILED_STEP" == *"S3"* ]] || [[ "$FAILED_STEP" == *"Upload"* ]]; then
+              echo "stage=S3 업로드 실패" >> $GITHUB_OUTPUT
+              echo "reason=프론트엔드 파일 업로드 중 오류 발생" >> $GITHUB_OUTPUT
+            elif [[ "$FAILED_STEP" == *"CloudFront"* ]]; then
+              echo "stage=CloudFront 캐시 무효화 실패" >> $GITHUB_OUTPUT
+              echo "reason=CDN 캐시 갱신 중 오류 발생" >> $GITHUB_OUTPUT
+            else
+              echo "stage=Infrastructure Deployment 실패" >> $GITHUB_OUTPUT
+              echo "reason=실패한 단계: ${FAILED_STEP:-알 수 없음}" >> $GITHUB_OUTPUT
+            fi
           elif [ "${{ needs.smoke-tests.result }}" == "failure" ]; then
-            echo "stage=Smoke Tests" >> $GITHUB_OUTPUT
+            echo "stage=Smoke Tests 실패" >> $GITHUB_OUTPUT
+            echo "reason=배포 후 상태 검증 중 오류 발생" >> $GITHUB_OUTPUT
           elif [ "${{ needs.run-migration.result }}" == "failure" ]; then
-            echo "stage=Database Migration" >> $GITHUB_OUTPUT
+            echo "stage=Database Migration 실패" >> $GITHUB_OUTPUT
+            echo "reason=데이터베이스 마이그레이션 중 오류 발생" >> $GITHUB_OUTPUT
           elif [ "${{ needs.seed-database.result }}" == "failure" ]; then
-            echo "stage=Database Seeding" >> $GITHUB_OUTPUT
+            echo "stage=Database Seeding 실패" >> $GITHUB_OUTPUT
+            echo "reason=초기 데이터 시딩 중 오류 발생" >> $GITHUB_OUTPUT
           elif [ "${{ needs.post-deployment-monitoring.result }}" == "failure" ]; then
-            echo "stage=Post-Deployment Monitoring" >> $GITHUB_OUTPUT
+            echo "stage=Post-Deployment Monitoring 실패" >> $GITHUB_OUTPUT
+            echo "reason=배포 후 모니터링 중 이상 감지" >> $GITHUB_OUTPUT
           else
             echo "stage=Unknown Stage" >> $GITHUB_OUTPUT
+            echo "reason=알 수 없는 오류" >> $GITHUB_OUTPUT
           fi
 
           # Helper function for status icons
@@ -738,10 +782,12 @@ jobs:
           text: |
             🚨 *운영 환경 배포 실패!*
             
+            🏷️ *버전:* ${{ needs.pre-deployment-checks.outputs.deploy_version }}
             🛑 *실패 단계:* ${{ steps.failure_details.outputs.stage }}
+            💬 *원인:* ${{ steps.failure_details.outputs.reason }}
             
             ⏰ *시간:* ${{ steps.time.outputs.time }}
-            📝 *커밋:* ${{ github.sha }}
+            ⏱️ *소요 시간:* ${{ steps.time.outputs.duration }}
             👤 *배포자:* @${{ github.actor }}
             
             🔍 *상세 상태:*
