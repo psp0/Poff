@@ -109,14 +109,14 @@ jobs:
             set -e
             echo "::group::Creating temporary backend configuration"
             cat > backend-ci.hcl <<EOF
-            bucket  = "${{ env.TF_STATE_BUCKET }}"
-            key     = "${{ env.TF_STATE_KEY }}"
-            region  = "${{ env.AWS_REGION }}"
-            encrypt = true
-            assume_role = {
-              role_arn = "${BACKEND_ROLE_ARN}"
-            }
-            EOF
+          bucket  = "${{ env.TF_STATE_BUCKET }}"
+          key     = "${{ env.TF_STATE_KEY }}"
+          region  = "${{ env.AWS_REGION }}"
+          encrypt = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
+          EOF
             
             # Cleanup function to remove temporary backend config
             cleanup() {
@@ -179,14 +179,14 @@ jobs:
             set -e
             echo "::group::Creating temporary backend configuration"
             cat > backend-ci.hcl <<EOF
-            bucket  = "${{ env.TF_STATE_BUCKET }}"
-            key     = "${{ env.TF_STATE_KEY }}"
-            region  = "${{ env.AWS_REGION }}"
-            encrypt = true
-            assume_role = {
-              role_arn = "${BACKEND_ROLE_ARN}"
-            }
-            EOF
+          bucket  = "${{ env.TF_STATE_BUCKET }}"
+          key     = "${{ env.TF_STATE_KEY }}"
+          region  = "${{ env.AWS_REGION }}"
+          encrypt = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
+          EOF
             
             # Cleanup function to remove temporary backend config
             cleanup() {
