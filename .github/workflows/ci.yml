@@ -31,10 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -46,7 +46,7 @@ jobs:
         run: npm run build
 
       - name: Upload frontend build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: frontend-dist
           path: dist/
@@ -61,7 +61,7 @@ jobs:
       TF_STATE_KEY: environments/dev/terraform.tfstate
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -71,7 +71,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: github.actor != 'dependabot[bot]'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -80,7 +80,7 @@ jobs:
 
       - name: Assume Execution Role
         if: github.actor != 'dependabot[bot]'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -146,7 +146,7 @@ jobs:
       TF_STATE_KEY: environments/prod/terraform.tfstate
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -156,7 +156,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: github.actor != 'dependabot[bot]'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_PROD_GHA_CI_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -224,7 +224,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -235,7 +235,7 @@ jobs:
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy scan results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: trivy-results
@@ -251,7 +251,7 @@ jobs:
           soft_fail: true
 
       - name: Upload Checkov scan results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: checkov-results
@@ -263,7 +263,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build Lambda Packages
         uses: ./.github/actions/build-lambda
@@ -271,7 +271,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Upload Lambda packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lambda-packages
           path: lambda/packages/*.zip
@@ -294,7 +294,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Get Time and Duration
         id: time
