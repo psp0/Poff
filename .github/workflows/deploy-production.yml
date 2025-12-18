@@ -681,25 +681,23 @@ jobs:
           status: success
           channel: '#pokehabit-deployments'
           text: |
-            🚀 *운영 환경 배포 성공!*
+            ✅ *운영 환경 배포 성공!*
             
-            🏷️ *버전:* ${{ needs.pre-deployment-checks.outputs.deploy_version }}
-            ⏰ *시간:* ${{ steps.time.outputs.time }}
-            ⏱️ *소요 시간:* ${{ steps.time.outputs.duration }}
-            👤 *배포자:* @${{ github.actor }}
+            버전: ${{ needs.pre-deployment-checks.outputs.deploy_version }}
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            배포자: @${{ github.actor }}
             
-            🔗 *배포 정보:*
-            • CloudFront: ${{ needs.deploy-production.outputs.cloudfront_url }}
-            • API: ${{ needs.deploy-production.outputs.api_endpoint }}
-            • S3 버킷: ${{ needs.deploy-production.outputs.s3_bucket }}
-            • 데이터베이스: ${{ needs.deploy-production.outputs.database_name }}
-            • 시딩: ${{ needs.seed-database.result }}
+            *배포 정보:*
+            CloudFront: ${{ needs.deploy-production.outputs.cloudfront_url }}
+            API: ${{ needs.deploy-production.outputs.api_endpoint }}
+            시딩: ${{ needs.seed-database.result }}
             
-            ✅ *완료 상태:*
-            • 인프라 배포 완료
-            • 스모크 테스트 통과
-            • 데이터베이스 마이그레이션 완료
-            • 배포 후 모니터링 완료
+            *완료 상태:*
+            인프라 배포 완료
+            스모크 테스트 통과
+            데이터베이스 마이그레이션 완료
+            배포 후 모니터링 완료
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
@@ -785,19 +783,19 @@ jobs:
           text: |
             🚨 *운영 환경 배포 실패!*
             
-            🏷️ *버전:* ${{ needs.pre-deployment-checks.outputs.deploy_version }}
-            🛑 *실패 단계:* ${{ steps.failure_details.outputs.stage }}
-            💬 *원인:* ${{ steps.failure_details.outputs.reason }}
+            버전: ${{ needs.pre-deployment-checks.outputs.deploy_version }}
+            실패 단계: ${{ steps.failure_details.outputs.stage }}
+            원인: ${{ steps.failure_details.outputs.reason }}
             
-            ⏰ *시간:* ${{ steps.time.outputs.time }}
-            ⏱️ *소요 시간:* ${{ steps.time.outputs.duration }}
-            👤 *배포자:* @${{ github.actor }}
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            배포자: @${{ github.actor }}
             
-            🔍 *상세 상태:*
-            • 인프라: ${{ steps.failure_details.outputs.deploy_status }}
-            • 스모크 테스트: ${{ steps.failure_details.outputs.smoke_status }}
-            • 마이그레이션: ${{ steps.failure_details.outputs.migration_status }}
-            • 시딩: ${{ steps.failure_details.outputs.seed_status }}
+            *상세 상태:*
+            인프라: ${{ steps.failure_details.outputs.deploy_status }}
+            스모크 테스트: ${{ steps.failure_details.outputs.smoke_status }}
+            마이그레이션: ${{ steps.failure_details.outputs.migration_status }}
+            시딩: ${{ steps.failure_details.outputs.seed_status }}
             • 모니터링: ${{ steps.failure_details.outputs.monitor_status }}
             
             ⚠️ *조치 필요:* 즉각적인 확인이 필요합니다!
