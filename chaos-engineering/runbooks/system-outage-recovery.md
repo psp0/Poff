@@ -40,9 +40,15 @@ aws rds describe-db-instances \
   --query 'DBInstances[0].DBInstanceStatus' --output text
 
 # CloudFront Distribution
-aws cloudfront get-distribution \
-  --id <DISTRIBUTION_ID> \
-  --query 'Distribution.Status' --output text
+CLOUDFRONT_DISTRIBUTION_ID=$(aws ssm get-parameter \
+  --name /pokehabit/prod/infrastructure/cloudfront_distribution_id \
+  --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+
+if [ -n "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
+  aws cloudfront get-distribution \
+    --id "$CLOUDFRONT_DISTRIBUTION_ID" \
+    --query 'Distribution.Status' --output text
+fi
 ```
 
 ### Step 2: Check AWS Service Health
@@ -179,15 +185,24 @@ aws cloudfront list-distributions \
   --output table
 
 # Check specific distribution
-aws cloudfront get-distribution \
-  --id <DISTRIBUTION_ID>
+CLOUDFRONT_DISTRIBUTION_ID=$(aws ssm get-parameter \
+  --name /pokehabit/prod/infrastructure/cloudfront_distribution_id \
+  --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+
+if [ -n "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
+  aws cloudfront get-distribution --id "$CLOUDFRONT_DISTRIBUTION_ID"
+fi
 ```
 
 **If CloudFront has Issues:**
 1. Create invalidation:
    ```bash
+   CLOUDFRONT_DISTRIBUTION_ID=$(aws ssm get-parameter \
+     --name /pokehabit/prod/infrastructure/cloudfront_distribution_id \
+     --query 'Parameter.Value' --output text)
+   
    aws cloudfront create-invalidation \
-     --distribution-id <DISTRIBUTION_ID> \
+     --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
      --paths "/*"
    ```
 

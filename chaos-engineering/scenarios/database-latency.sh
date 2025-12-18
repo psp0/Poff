@@ -113,8 +113,14 @@ while [ $(date +%s) -lt $END_TIME ]; do
     log "INFO" "Current connections: ${CURRENT_CONNECTIONS}"
     log "INFO" "Current CPU: ${CURRENT_CPU}%"
     
-    TOTAL_CONNECTIONS=$(echo "$TOTAL_CONNECTIONS + $CURRENT_CONNECTIONS" | bc)
-    TOTAL_CPU=$(echo "$TOTAL_CPU + $CURRENT_CPU" | bc)
+    # Validate numeric values before using bc
+    if [[ "$CURRENT_CONNECTIONS" =~ ^[0-9.]+$ ]] && [[ "$CURRENT_CONNECTIONS" != "None" ]]; then
+        TOTAL_CONNECTIONS=$(echo "$TOTAL_CONNECTIONS + $CURRENT_CONNECTIONS" | bc)
+    fi
+    
+    if [[ "$CURRENT_CPU" =~ ^[0-9.]+$ ]] && [[ "$CURRENT_CPU" != "None" ]]; then
+        TOTAL_CPU=$(echo "$TOTAL_CPU + $CURRENT_CPU" | bc)
+    fi
 done
 
 # Calculate averages

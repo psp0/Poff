@@ -61,20 +61,6 @@ export default function () {
 export function handleSummary(data) {
   return {
     'results/smoke-test-summary.json': JSON.stringify(data, null, 2),
-    stdout: textSummary(data),
   };
 }
 
-function textSummary(data) {
-  const summary = [
-    '',
-    '=== Smoke Test Summary ===',
-    `Duration: ${data.state.testRunDurationMs / 1000}s`,
-    `Requests: ${data.metrics.http_reqs.values.count}`,
-    `Failed: ${data.metrics.http_req_failed.values.passes}`,
-    `Avg Response Time: ${data.metrics.http_req_duration.values.avg.toFixed(2)}ms`,
-    `p95 Response Time: ${data.metrics.http_req_duration.values['p(95)'].toFixed(2)}ms`,
-    ''
-  ];
-  return summary.join('\n');
-}

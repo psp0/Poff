@@ -136,8 +136,14 @@ while [ $(date +%s) -lt $END_TIME ]; do
     
     log "INFO" "4XX Errors: ${CURRENT_4XX} | Total Requests: ${CURRENT_COUNT}"
     
-    TOTAL_4XX=$(echo "$TOTAL_4XX + $CURRENT_4XX" | bc)
-    TOTAL_COUNT=$(echo "$TOTAL_COUNT + $CURRENT_COUNT" | bc)
+    # Validate numeric values before using bc
+    if [[ "$CURRENT_4XX" =~ ^[0-9.]+$ ]] && [[ "$CURRENT_4XX" != "None" ]]; then
+        TOTAL_4XX=$(echo "$TOTAL_4XX + $CURRENT_4XX" | bc)
+    fi
+    
+    if [[ "$CURRENT_COUNT" =~ ^[0-9.]+$ ]] && [[ "$CURRENT_COUNT" != "None" ]]; then
+        TOTAL_COUNT=$(echo "$TOTAL_COUNT + $CURRENT_COUNT" | bc)
+    fi
 done
 
 # Restore original settings
