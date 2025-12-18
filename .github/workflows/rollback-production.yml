@@ -384,6 +384,9 @@ jobs:
     if: always()
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Get Time and Duration
         id: time
         env:
