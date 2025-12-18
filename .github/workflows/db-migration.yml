@@ -345,6 +345,22 @@ jobs:
             echo "stage=Unknown Step" >> $GITHUB_OUTPUT
           fi
 
+      - name: Get Time and Duration
+        id: time
+        if: always() && inputs.skip_notifications != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "time=$(TZ='Asia/Seoul' date '+%d일 %H시 %M분')" >> $GITHUB_OUTPUT
+          
+          START_TIME=$(gh run view ${{ github.run_id }} --json createdAt --jq '.createdAt')
+          START_EPOCH=$(date -d "$START_TIME" +%s)
+          NOW_EPOCH=$(date +%s)
+          DURATION_SEC=$((NOW_EPOCH - START_EPOCH))
+          DURATION_MIN=$((DURATION_SEC / 60))
+          DURATION_SEC_REMAIN=$((DURATION_SEC % 60))
+          echo "duration=${DURATION_MIN}분 ${DURATION_SEC_REMAIN}초" >> $GITHUB_OUTPUT
+
       - name: Notify Slack on Success
         if: success() && inputs.skip_notifications != true
         continue-on-error: true
@@ -355,9 +371,11 @@ jobs:
           text: |
             ✅ *데이터베이스 마이그레이션 성공!*
             
-            🌍 *환경:* ${{ needs.determine-environment.outputs.environment }}
-            🛠 *작업:* ${{ needs.determine-environment.outputs.migration_action }}
-            📝 *커밋:* ${{ github.sha }}       
+            환경: ${{ needs.determine-environment.outputs.environment }}
+            작업: ${{ needs.determine-environment.outputs.migration_action }}
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            커밋: ${{ github.sha }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
@@ -371,12 +389,14 @@ jobs:
           text: |
             🚨 *데이터베이스 마이그레이션 실패!*
             
-            🛑 *실패 단계:* ${{ steps.failure_details.outputs.stage }}
+            실패 단계: ${{ steps.failure_details.outputs.stage }}
             
-            🌍 *환경:* ${{ needs.determine-environment.outputs.environment }}
-            🛠 *작업:* ${{ needs.determine-environment.outputs.migration_action }}
-            📝 *커밋:* ${{ github.sha }}   
+            환경: ${{ needs.determine-environment.outputs.environment }}
+            작업: ${{ needs.determine-environment.outputs.migration_action }}
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            커밋: ${{ github.sha }}
             
-            👉 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}

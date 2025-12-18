@@ -30,6 +30,7 @@ lambda/functions/*/node_modules/
 !package.json
 !package-lock.json
 !*.example.json
+!public/manifest.json
 
 # Logs & temp
 logs/

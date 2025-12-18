@@ -341,16 +341,16 @@ jobs:
           status: failure
           channel: '#pokehabit-alerts'
           text: |
-            ❌ *CI 빌드 실패!*
+            🚨 *CI 빌드 실패!*
             
-            🌿 *브랜치:* `${{ github.ref_name }}`
-            🛑 *실패 단계:* ${{ steps.failure_details.outputs.stage }}
-            💬 *원인:* ${{ steps.failure_details.outputs.reason }}
+            브랜치: ${{ github.ref_name }}
+            실패 단계: ${{ steps.failure_details.outputs.stage }}
+            원인: ${{ steps.failure_details.outputs.reason }}
             
-            ⏰ *시간:* ${{ steps.time.outputs.time }}
-            ⏱️ *소요 시간:* ${{ steps.time.outputs.duration }}
-            👤 *커밋터:* @${{ github.actor }}
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            커밋터: @${{ github.actor }}
             
-            👉 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}
