@@ -1,6 +1,6 @@
 # Secrets Manager Access Policy
 resource "aws_iam_role_policy" "lambda_secrets_access" {
-  count = var.rds_secret_arn != "" ? 1 : 0
+  count = var.enable_rds_secret_access ? 1 : 0
   name  = "${var.project_name}-lambda-secrets-access"
   role  = aws_iam_role.lambda_execution.id
 
