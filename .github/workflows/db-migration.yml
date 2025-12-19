@@ -358,7 +358,7 @@ jobs:
         run: |
           echo "time=$(TZ='Asia/Seoul' date '+%d일 %H시 %M분')" >> $GITHUB_OUTPUT
           
-          START_TIME=$(gh run view ${{ github.run_id }} --json runStartedAt,createdAt --jq '.runStartedAt // .createdAt')
+          START_TIME=$(gh run view ${{ github.run_id }} --json startedAt,createdAt --jq '.startedAt // .createdAt')
           START_EPOCH=$(date -d "$START_TIME" +%s)
           NOW_EPOCH=$(date +%s)
           DURATION_SEC=$((NOW_EPOCH - START_EPOCH))
