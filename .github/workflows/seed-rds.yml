@@ -127,6 +127,14 @@ jobs:
             echo "available=false" >> $GITHUB_OUTPUT
           fi
 
+      # Setup Terraform only if we need to fetch infrastructure outputs
+      - name: Setup Terraform
+        if: steps.check-inputs.outputs.available == 'false'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
       - name: Get infrastructure outputs (Terraform)
         id: infra-tf
         if: steps.check-inputs.outputs.available == 'false'
