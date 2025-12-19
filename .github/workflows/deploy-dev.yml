@@ -306,6 +306,7 @@ jobs:
           set -e
           echo "::group::Terraform Plan (Destroy)"        
           terraform plan -destroy \
+            -refresh=false \
             -out=tfdestroyplan \
             -detailed-exitcode 2>&1 | tee /tmp/step_output.log || exit_code=$?
 
@@ -332,7 +333,7 @@ jobs:
           set -e
           echo "::group::Terraform Destroy"
           if [ "${{ steps.plan-destroy.outputs.destroy_plan_has_changes }}" = "true" ]; then
-            terraform apply -auto-approve tfdestroyplan 2>&1 | tee /tmp/step_output.log
+            terraform apply -refresh=false -auto-approve tfdestroyplan 2>&1 | tee /tmp/step_output.log
             echo "destroy_success=true" >> $GITHUB_OUTPUT
             echo "Resources destroyed successfully"
           else
