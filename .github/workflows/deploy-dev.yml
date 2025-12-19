@@ -18,6 +18,12 @@ on:
         default: false
         type: boolean
 
+      enable_datadog:
+        description: "Enable Datadog monitoring (default: false)"
+        required: false
+        default: false
+        type: boolean
+
   workflow_call:
     inputs:
       action:
@@ -30,6 +36,11 @@ on:
         type: boolean
         default: false
         description: "Seed database with initial data"
+      enable_datadog:
+        required: false
+        type: boolean
+        default: false
+        description: "Enable Datadog monitoring"
         
     secrets:
       AWS_DEV_GHA_DEPLOY_ROLE_ARN:
@@ -84,6 +95,7 @@ jobs:
       TF_VAR_firebase_project_id: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}  
       TF_VAR_firebase_messaging_sender_id: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
       TF_VAR_firebase_app_id: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      TF_VAR_enable_datadog_monitoring: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.enable_datadog) || inputs.enable_datadog || 'false' }}
 
     outputs:
       vpc_id: ${{ steps.set-outputs.outputs.vpc_id }}
@@ -125,12 +137,15 @@ jobs:
           if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
             ACTION="${{ inputs.action }}"
             SEED_DATA="${{ inputs.seed_data }}"
+            ENABLE_DATADOG="${{ inputs.enable_datadog }}"
           else
             ACTION="${{ github.event.inputs.action }}"
             SEED_DATA="${{ github.event.inputs.seed_data }}"
+            ENABLE_DATADOG="${{ github.event.inputs.enable_datadog }}"
           fi
           echo "action=${ACTION:-apply}" >> $GITHUB_OUTPUT
           echo "seed_data=${SEED_DATA:-false}" >> $GITHUB_OUTPUT
+          echo "enable_datadog=${ENABLE_DATADOG:-false}" >> $GITHUB_OUTPUT
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
