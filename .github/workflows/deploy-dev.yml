@@ -304,7 +304,11 @@ jobs:
           TF_LOG: ERROR
         run: |
           set -e
-          echo "::group::Terraform Plan (Destroy)"        
+          echo "::group::Terraform Plan (Destroy)"
+          # Use -refresh=false to skip state refresh during destroy
+          # This prevents Terraform from comparing dummy lambda artifacts with state file
+          # The dummy artifacts have different hashes than real packages, which would cause
+          # Terraform to incorrectly report "no resources to destroy"
           terraform plan -destroy \
             -refresh=false \
             -out=tfdestroyplan \
@@ -333,6 +337,7 @@ jobs:
           set -e
           echo "::group::Terraform Destroy"
           if [ "${{ steps.plan-destroy.outputs.destroy_plan_has_changes }}" = "true" ]; then
+            # Use -refresh=false to maintain consistency with the destroy plan
             terraform apply -refresh=false -auto-approve tfdestroyplan 2>&1 | tee /tmp/step_output.log
             echo "destroy_success=true" >> $GITHUB_OUTPUT
             echo "Resources destroyed successfully"
