@@ -24,7 +24,7 @@ resource "datadog_integration_aws_account" "main" {
   metrics_config {
     enabled = true
     namespace_filters {
-      include_only = ["lambda", "rds", "apigateway"]
+      include_only = ["AWS/Lambda", "AWS/RDS", "AWS/ApiGateway"]
     }
   }
 
