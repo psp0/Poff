@@ -3,9 +3,21 @@ name: CI - Continuous Integration
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - '.github/dependabot.yml'
+      - 'LICENSE'     
+      - '**/*.md'     
+      - 'docs/**'             
+      - '.gitignore'     
   pull_request:
     branches: [main, develop]
-
+    paths-ignore:
+      - '.github/dependabot.yml'
+      - 'LICENSE'
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+  
 permissions:
   contents: read
   id-token: write
