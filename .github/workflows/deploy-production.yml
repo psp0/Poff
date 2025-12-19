@@ -661,7 +661,7 @@ jobs:
           echo "time=$(TZ='Asia/Seoul' date '+%d일 %H시 %M분')" >> $GITHUB_OUTPUT
           
           # Calculate workflow duration
-          START_TIME=$(gh run view ${{ github.run_id }} --json createdAt --jq '.createdAt')
+          START_TIME=$(gh run view ${{ github.run_id }} --json runStartedAt,createdAt --jq '.runStartedAt // .createdAt')
           START_EPOCH=$(date -d "$START_TIME" +%s)
           NOW_EPOCH=$(date +%s)
           DURATION_SEC=$((NOW_EPOCH - START_EPOCH))
@@ -712,49 +712,31 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Determine which stage and reason failed
+          FAILED_JOB=""
+          FAILED_STEP=""
+
           if [ "${{ needs.deploy-production.result }}" == "failure" ]; then
-            # Fetch job steps to determine specific failure
+            FAILED_JOB="Deploy Production"
             FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Deploy Production")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
-            
-            if [[ "$FAILED_STEP" == *"Plan"* ]]; then
-              echo "stage=Terraform Plan 실패" >> $GITHUB_OUTPUT
-              echo "reason=인프라 계획 생성 중 오류 발생" >> $GITHUB_OUTPUT
-            elif [[ "$FAILED_STEP" == *"Apply"* ]]; then
-              echo "stage=Terraform Apply 실패" >> $GITHUB_OUTPUT
-              echo "reason=인프라 적용 중 오류 발생" >> $GITHUB_OUTPUT
-            elif [[ "$FAILED_STEP" == *"Init"* ]]; then
-              echo "stage=Terraform Init 실패" >> $GITHUB_OUTPUT
-              echo "reason=Terraform 초기화 중 오류 발생" >> $GITHUB_OUTPUT
-            elif [[ "$FAILED_STEP" == *"Validate"* ]]; then
-              echo "stage=Terraform Validate 실패" >> $GITHUB_OUTPUT
-              echo "reason=Terraform 검증 중 오류 발생" >> $GITHUB_OUTPUT
-            elif [[ "$FAILED_STEP" == *"S3"* ]] || [[ "$FAILED_STEP" == *"Upload"* ]]; then
-              echo "stage=S3 업로드 실패" >> $GITHUB_OUTPUT
-              echo "reason=프론트엔드 파일 업로드 중 오류 발생" >> $GITHUB_OUTPUT
-            elif [[ "$FAILED_STEP" == *"CloudFront"* ]]; then
-              echo "stage=CloudFront 캐시 무효화 실패" >> $GITHUB_OUTPUT
-              echo "reason=CDN 캐시 갱신 중 오류 발생" >> $GITHUB_OUTPUT
-            else
-              echo "stage=Infrastructure Deployment 실패" >> $GITHUB_OUTPUT
-              echo "reason=실패한 단계: ${FAILED_STEP:-알 수 없음}" >> $GITHUB_OUTPUT
-            fi
           elif [ "${{ needs.smoke-tests.result }}" == "failure" ]; then
-            echo "stage=Smoke Tests 실패" >> $GITHUB_OUTPUT
-            echo "reason=배포 후 상태 검증 중 오류 발생" >> $GITHUB_OUTPUT
+            FAILED_JOB="Production Smoke Tests"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Production Smoke Tests")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
           elif [ "${{ needs.run-migration.result }}" == "failure" ]; then
-            echo "stage=Database Migration 실패" >> $GITHUB_OUTPUT
-            echo "reason=데이터베이스 마이그레이션 중 오류 발생" >> $GITHUB_OUTPUT
+            FAILED_JOB="Run Production Migration"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Run Production Migration")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
           elif [ "${{ needs.seed-database.result }}" == "failure" ]; then
-            echo "stage=Database Seeding 실패" >> $GITHUB_OUTPUT
-            echo "reason=초기 데이터 시딩 중 오류 발생" >> $GITHUB_OUTPUT
+            FAILED_JOB="Seed Database"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Seed Database")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
           elif [ "${{ needs.post-deployment-monitoring.result }}" == "failure" ]; then
-            echo "stage=Post-Deployment Monitoring 실패" >> $GITHUB_OUTPUT
-            echo "reason=배포 후 모니터링 중 이상 감지" >> $GITHUB_OUTPUT
+            FAILED_JOB="Post-Deployment Monitoring"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Post-Deployment Monitoring")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
           else
-            echo "stage=Unknown Stage" >> $GITHUB_OUTPUT
-            echo "reason=알 수 없는 오류" >> $GITHUB_OUTPUT
+            FAILED_JOB="Unknown Job"
+            FAILED_STEP="Unknown Step"
           fi
+          
+          echo "failed_job=$FAILED_JOB" >> $GITHUB_OUTPUT
+          echo "failed_step=${FAILED_STEP:-알 수 없음}" >> $GITHUB_OUTPUT
 
           # Helper function for status icons
           get_status_text() {
@@ -784,8 +766,8 @@ jobs:
             🚨 *운영 환경 배포 실패!*
             
             버전: ${{ needs.pre-deployment-checks.outputs.deploy_version }}
-            실패 단계: ${{ steps.failure_details.outputs.stage }}
-            원인: ${{ steps.failure_details.outputs.reason }}
+            실패한 잡: ${{ steps.failure_details.outputs.failed_job }}
+            실패한 스텝: ${{ steps.failure_details.outputs.failed_step }}
             
             🕒 시각: ${{ steps.time.outputs.time }}
             러너 소요 시간: ${{ steps.time.outputs.duration }}
