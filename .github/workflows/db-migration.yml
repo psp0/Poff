@@ -77,19 +77,20 @@ jobs:
         id: env
         run: |
           # Determine environment based on trigger
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENV="${{ github.event.inputs.environment }}"
-            ACTION="${{ github.event.inputs.migration_action }}"
-          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
-            ENV="${{ inputs.environment }}"
-            ACTION="${{ inputs.migration_action }}"
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            ENV="prod"
-            ACTION="up"
-          else
-            # Default to dev for develop branch
-            ENV="dev"
-            ACTION="up"
+          # Try to get inputs from context (works for workflow_dispatch and workflow_call)
+          ENV="${{ inputs.environment }}"
+          ACTION="${{ inputs.migration_action }}"
+
+          # If ENV is empty (e.g. push event), determine based on branch
+          if [ -z "$ENV" ]; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              ENV="prod"
+              ACTION="up"
+            else
+              # Default to dev for develop branch
+              ENV="dev"
+              ACTION="up"
+            fi
           fi
           
           echo "environment=$ENV" >> $GITHUB_OUTPUT
@@ -209,10 +210,16 @@ jobs:
           echo "Fetching credentials from secret: $SECRET_ID"
           
           # Fetch credentials from AWS Secrets Manager
-          SECRET_JSON=$(aws secretsmanager get-secret-value \
+          # Capture stderr to log file for Slack notification on failure
+          if ! SECRET_JSON=$(aws secretsmanager get-secret-value \
             --secret-id "$SECRET_ID" \
             --query SecretString \
-            --output text)
+            --output text 2> /tmp/step_output.log); then
+            echo "::error::Failed to fetch secrets from Secrets Manager"
+            echo "Error details:"
+            cat /tmp/step_output.log
+            exit 1
+          fi
           
           # Extract username and password
           DB_USER=$(echo "$SECRET_JSON" | jq -r .username)
