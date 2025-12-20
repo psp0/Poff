@@ -24,6 +24,12 @@ on:
         default: false
         type: boolean
 
+      skip_migration:
+        description: "Skip database migration"
+        required: false
+        default: false
+        type: boolean
+
   workflow_call:
     inputs:
       action:
@@ -41,6 +47,11 @@ on:
         type: boolean
         default: false
         description: "Enable Datadog monitoring"
+      skip_migration:
+        required: false
+        type: boolean
+        default: false
+        description: "Skip database migration"
         
     secrets:
       AWS_DEV_GHA_DEPLOY_ROLE_ARN:
@@ -107,6 +118,7 @@ jobs:
       nat_instance_id: ${{ steps.set-outputs.outputs.nat_instance_id }}
       cloudfront_distribution_id: ${{ steps.set-outputs.outputs.cloudfront_distribution_id }}
       seed_data: ${{ steps.set-variables.outputs.seed_data }}
+      skip_migration: ${{ steps.set-variables.outputs.skip_migration }}
       failure_log: ${{ steps.capture-log.outputs.failure_log }}
 
     steps:
@@ -139,14 +151,17 @@ jobs:
             ACTION="${{ inputs.action }}"
             SEED_DATA="${{ inputs.seed_data }}"
             ENABLE_DATADOG="${{ inputs.enable_datadog }}"
+            SKIP_MIGRATION="${{ inputs.skip_migration }}"
           else
             ACTION="${{ github.event.inputs.action }}"
             SEED_DATA="${{ github.event.inputs.seed_data }}"
             ENABLE_DATADOG="${{ github.event.inputs.enable_datadog }}"
+            SKIP_MIGRATION="${{ github.event.inputs.skip_migration }}"
           fi
           echo "action=${ACTION:-apply}" >> $GITHUB_OUTPUT
           echo "seed_data=${SEED_DATA:-false}" >> $GITHUB_OUTPUT
           echo "enable_datadog=${ENABLE_DATADOG:-false}" >> $GITHUB_OUTPUT
+          echo "skip_migration=${SKIP_MIGRATION:-false}" >> $GITHUB_OUTPUT
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -519,7 +534,7 @@ jobs:
   run-migration:
     name: Run Database Migration
     needs: deploy-dev
-    if: needs.deploy-dev.outputs.rds_endpoint != ''
+    if: needs.deploy-dev.outputs.rds_endpoint != '' && needs.deploy-dev.outputs.skip_migration != 'true'
     uses: ./.github/workflows/db-migration.yml
     with:
       environment: 'dev'
