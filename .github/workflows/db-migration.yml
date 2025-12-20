@@ -77,19 +77,20 @@ jobs:
         id: env
         run: |
           # Determine environment based on trigger
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENV="${{ github.event.inputs.environment }}"
-            ACTION="${{ github.event.inputs.migration_action }}"
-          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
+          # Try to get inputs from context (works for workflow_dispatch and workflow_call)
             ENV="${{ inputs.environment }}"
             ACTION="${{ inputs.migration_action }}"
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+
+          # If ENV is empty (e.g. push event), determine based on branch
+          if [ -z "$ENV" ]; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             ENV="prod"
             ACTION="up"
           else
             # Default to dev for develop branch
             ENV="dev"
             ACTION="up"
+          fi
           fi
           
           echo "environment=$ENV" >> $GITHUB_OUTPUT
