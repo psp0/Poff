@@ -222,6 +222,7 @@ jobs:
           BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
           set -e
+          set -o pipefail
           echo "::group::Terraform Init"
           cat > backend-ci.hcl << EOF
           bucket = "${{ env.TF_STATE_BUCKET }}"
@@ -244,6 +245,7 @@ jobs:
       - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
+          set -o pipefail
           echo "::group::Terraform Validate"
           terraform validate 2>&1 | tee /tmp/step_output.log
           echo "Terraform configuration is valid"
@@ -258,6 +260,7 @@ jobs:
           TF_LOG: ERROR
         run: |
           set -e
+          set -o pipefail
           echo "::group::Terraform Plan"
           terraform plan \
             -out=tfplan \
@@ -284,6 +287,7 @@ jobs:
           TF_LOG: ERROR
         run: |
           set -e
+          set -o pipefail
           echo "::group::Terraform Apply"
           if [ "${{ steps.plan.outputs.plan_has_changes }}" = "true" ]; then
             terraform apply -auto-approve tfplan 2>&1 | tee /tmp/step_output.log
@@ -304,6 +308,7 @@ jobs:
           TF_LOG: ERROR
         run: |
           set -e
+          set -o pipefail
           echo "::group::Terraform Plan (Destroy)"        
           terraform plan -destroy \
             -out=tfdestroyplan \
@@ -330,6 +335,7 @@ jobs:
           TF_LOG: ERROR
         run: |
           set -e
+          set -o pipefail
           echo "::group::Terraform Destroy"
           if [ "${{ steps.plan-destroy.outputs.destroy_plan_has_changes }}" = "true" ]; then
             terraform apply -auto-approve tfdestroyplan 2>&1 | tee /tmp/step_output.log
