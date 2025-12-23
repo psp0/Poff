@@ -8,42 +8,42 @@ locals {
     exercise-management = {
       handler     = "functions/exercise-management/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     exercise-rewards = {
       handler     = "functions/exercise-rewards/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     pokemon-collection = {
       handler     = "functions/pokemon-collection/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     screen-time-management = {
       handler     = "functions/screen-time-management/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     egg-management = {
       handler     = "functions/egg-management/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     pokemon-management = {
       handler     = "functions/pokemon-management/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     user-management = {
       handler     = "functions/user-management/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     guest-mode = {
       handler     = "functions/guest-mode/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
   }
 
