@@ -208,7 +208,7 @@ variable "cloudfront_subject_alternative_names" {
 variable "cloudfront_price_class" {
   description = "CloudFront price class"
   type        = string
-  default     = "PriceClass_200"
+  default     = "PriceClass_100"
 }
 
 ################################################################################
