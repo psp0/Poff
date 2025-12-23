@@ -185,6 +185,7 @@ jobs:
       s3_bucket: ${{ steps.set-outputs.outputs.s3_bucket }}
       nat_instance_id: ${{ steps.set-outputs.outputs.nat_instance_id }}
       cloudfront_distribution_id: ${{ steps.set-outputs.outputs.cloudfront_distribution_id }}
+      infra_duration: ${{ steps.apply.outputs.infra_duration }}
       deployment_time: ${{ steps.deployment-info.outputs.deployment_time }}
 
     steps:
@@ -314,6 +315,7 @@ jobs:
         run: |
           set -e
           echo "::group::Terraform Apply"
+          START_TIME=$(date +%s)
           if [ "${{ steps.plan.outputs.plan_has_changes }}" = "true" ]; then
             echo "🚀 Applying infrastructure changes to production..."
             terraform apply -auto-approve tfplan
@@ -323,6 +325,8 @@ jobs:
             echo "No changes to apply"
             echo "apply_success=true" >> $GITHUB_OUTPUT
           fi
+          END_TIME=$(date +%s)
+          echo "infra_duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
           echo "::endgroup::"
 
 
@@ -668,6 +672,35 @@ jobs:
           DURATION_MIN=$((DURATION_SEC / 60))
           DURATION_SEC_REMAIN=$((DURATION_SEC % 60))
           echo "duration=${DURATION_MIN}분 ${DURATION_SEC_REMAIN}초" >> $GITHUB_OUTPUT
+          echo "duration_seconds=${DURATION_SEC}" >> $GITHUB_OUTPUT
+
+      - name: Send Deployment Metrics to Datadog
+        if: always()
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_SITE: ${{ secrets.DATADOG_SITE || 'datadoghq.com' }}
+        run: |
+          # Determine overall deployment status
+          if [[ "${{ needs.deploy-production.result }}" == "success" && \
+                "${{ needs.smoke-tests.result }}" == "success" && \
+                "${{ needs.run-migration.result }}" == "success" && \
+                "${{ needs.post-deployment-monitoring.result }}" == "success" && \
+                ("${{ needs.seed-database.result }}" == "success" || "${{ needs.seed-database.result }}" == "skipped") ]]; then
+            DEPLOYMENT_STATUS="success"
+          else
+            DEPLOYMENT_STATUS="failure"
+          fi
+          
+          chmod +x scripts/send-deployment-to-datadog.sh
+          
+          scripts/send-deployment-to-datadog.sh \
+            "$DEPLOYMENT_STATUS" \
+            "production" \
+            "${{ needs.pre-deployment-checks.outputs.deploy_version }}" \
+            "${{ steps.time.outputs.duration_seconds }}" \
+            "${{ needs.deploy-production.outputs.infra_duration || 0 }}" \
+            "${{ github.actor }}" \
+            "${{ github.sha }}"
 
       - name: Notify Slack on Success
         if: |
