@@ -103,6 +103,12 @@ variable "datadog_api_key" {
   default     = ""
 }
 
+variable "datadog_site" {
+  description = "Datadog site URL (e.g. datadoghq.com, datadoghq.eu)"
+  type        = string
+  default     = "datadoghq.com"
+}
+
 variable "datadog_extension_version" {
   description = "Datadog Lambda Extension layer version"
   type        = number
