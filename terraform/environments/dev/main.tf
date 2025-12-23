@@ -73,11 +73,11 @@ module "compute" {
   api_throttling_rate_limit  = var.api_throttling_rate_limit
 
   datadog_api_key              = var.datadog_api_key
+  datadog_site                 = var.datadog_site
   datadog_extension_version    = var.datadog_extension_version
   datadog_lambda_layer_version = var.datadog_lambda_layer_version
 
-  rds_secret_arn           = module.database.rds_secret_arn
-  enable_rds_secret_access = true
+
 
   firebase_service_account = base64decode(var.firebase_service_account)
 

@@ -201,29 +201,34 @@ jobs:
           rds-endpoint: ${{ steps.infra.outputs.rds_endpoint }}
           rds-port: ${{ steps.infra.outputs.rds_port }}       
 
-      - name: Fetch database credentials from Secrets Manager
+      - name: Fetch database credentials from SSM
         id: db-creds
         run: |
           ENV="${{ needs.determine-environment.outputs.environment }}"
-          SECRET_ID="pokehabit/${ENV}/database/credentials"
+          # Project name is fixed as 'pokehabit' in Terraform variables
+          PROJECT_NAME="pokehabit"
           
-          echo "Fetching credentials from secret: $SECRET_ID"
+          USER_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/username"
+          PASS_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/password"
           
-          # Fetch credentials from AWS Secrets Manager
-          # Capture stderr to log file for Slack notification on failure
-          if ! SECRET_JSON=$(aws secretsmanager get-secret-value \
-            --secret-id "$SECRET_ID" \
-            --query SecretString \
-            --output text 2> /tmp/step_output.log); then
-            echo "::error::Failed to fetch secrets from Secrets Manager"
-            echo "Error details:"
-            cat /tmp/step_output.log
-            exit 1
+          echo "Fetching credentials from SSM Parameters..."
+          echo "User Param: $USER_PARAM"
+          
+          # Fetch Username
+          if ! DB_USER=$(aws ssm get-parameter --name "$USER_PARAM" --with-decryption --query "Parameter.Value" --output text 2> /tmp/step_output.log); then
+             echo "::error::Failed to fetch DB username from SSM"
+             echo "Error details:"
+             cat /tmp/step_output.log
+             exit 1
           fi
-          
-          # Extract username and password
-          DB_USER=$(echo "$SECRET_JSON" | jq -r .username)
-          DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r .password)
+
+          # Fetch Password
+          if ! DB_PASSWORD=$(aws ssm get-parameter --name "$PASS_PARAM" --with-decryption --query "Parameter.Value" --output text 2> /tmp/step_output.log); then
+             echo "::error::Failed to fetch DB password from SSM"
+             echo "Error details:"
+             cat /tmp/step_output.log
+             exit 1
+          fi
           
           # Set as masked output to prevent exposure in logs
           echo "::add-mask::$DB_USER"

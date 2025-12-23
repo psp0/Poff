@@ -117,6 +117,7 @@ jobs:
       s3_bucket: ${{ steps.set-outputs.outputs.s3_bucket }}
       nat_instance_id: ${{ steps.set-outputs.outputs.nat_instance_id }}
       cloudfront_distribution_id: ${{ steps.set-outputs.outputs.cloudfront_distribution_id }}
+      infra_duration: ${{ steps.apply.outputs.infra_duration }}
       seed_data: ${{ steps.set-variables.outputs.seed_data }}
       skip_migration: ${{ steps.set-variables.outputs.skip_migration }}
       failure_log: ${{ steps.capture-log.outputs.failure_log }}
@@ -304,6 +305,7 @@ jobs:
           set -e
           set -o pipefail
           echo "::group::Terraform Apply"
+          START_TIME=$(date +%s)
           if [ "${{ steps.plan.outputs.plan_has_changes }}" = "true" ]; then
             terraform apply -auto-approve tfplan 2>&1 | tee /tmp/step_output.log
             echo "apply_success=true" >> $GITHUB_OUTPUT
@@ -312,6 +314,8 @@ jobs:
             echo "No changes to apply"
             echo "apply_success=true" >> $GITHUB_OUTPUT
           fi
+          END_TIME=$(date +%s)
+          echo "infra_duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
           echo "::endgroup::"
 
       # Destroy workflow
@@ -592,6 +596,36 @@ jobs:
           DURATION_MIN=$((DURATION_SEC / 60))
           DURATION_SEC_REMAIN=$((DURATION_SEC % 60))
           echo "duration=${DURATION_MIN}분 ${DURATION_SEC_REMAIN}초" >> $GITHUB_OUTPUT
+          echo "duration_seconds=${DURATION_SEC}" >> $GITHUB_OUTPUT
+
+      - name: Send Deployment Metrics to Datadog
+        if: always()
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_SITE: ${{ secrets.DATADOG_SITE || 'datadoghq.com' }}
+        run: |
+          # Determine overall deployment status
+          if [[ "${{ needs.deploy-dev.result }}" == "success" && \
+                "${{ needs.run-migration.result }}" == "success" && \
+                ("${{ needs.seed-database.result }}" == "success" || "${{ needs.seed-database.result }}" == "skipped") ]]; then
+            DEPLOYMENT_STATUS="success"
+          else
+            DEPLOYMENT_STATUS="failure"
+          fi
+          
+          # Generate version for dev (commit-based)
+          VERSION="dev-${{ github.sha }}"
+          
+          chmod +x scripts/send-deployment-to-datadog.sh
+          
+          scripts/send-deployment-to-datadog.sh \
+            "$DEPLOYMENT_STATUS" \
+            "dev" \
+            "${VERSION:0:20}" \
+            "${{ steps.time.outputs.duration_seconds }}" \
+            "${{ needs.deploy-dev.outputs.infra_duration || 0 }}" \
+            "${{ github.actor }}" \
+            "${{ github.sha }}"
 
       - name: Notify Slack on Success
         if: needs.deploy-dev.result == 'success' && needs.run-migration.result == 'success' && (needs.seed-database.result == 'success' || needs.seed-database.result == 'skipped')

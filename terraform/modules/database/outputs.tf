@@ -25,7 +25,4 @@ output "rds_security_group_id" {
   value       = aws_security_group.rds.id
 }
 
-output "rds_secret_arn" {
-  description = "ARN of the RDS credentials secret in Secrets Manager"
-  value       = aws_secretsmanager_secret.db_credentials.arn
-}
+
