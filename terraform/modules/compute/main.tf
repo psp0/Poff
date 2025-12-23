@@ -166,7 +166,7 @@ resource "aws_iam_role_policy" "lambda_ssm_read" {
           "ssm:GetParameters"
         ]
         Resource = [
-          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/database/*"
+          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/${var.environment}/database/*"
         ]
       },
       {
@@ -234,12 +234,12 @@ resource "aws_lambda_function" "functions" {
       DB_HOST           = var.rds_address
       DB_PORT           = tostring(var.rds_port)
       DB_NAME           = var.database_name
-      DB_USER_PARAM     = "/${var.project_name}/database/admin/username"
-      DB_PASSWORD_PARAM = "/${var.project_name}/database/admin/password"
+      DB_USER_PARAM     = "/${var.project_name}/${var.environment}/database/admin/username"
+      DB_PASSWORD_PARAM = "/${var.project_name}/${var.environment}/database/admin/password"
 
       # Datadog Configuration
       DD_API_KEY           = var.datadog_api_key
-      DD_SITE              = "datadoghq.com"
+      DD_SITE              = var.datadog_site
       DD_LOGS_ENABLED      = var.datadog_api_key != "" ? "true" : "false"
       DD_SERVICE           = "${var.project_name}-${each.key}"
       DD_ENV               = var.environment

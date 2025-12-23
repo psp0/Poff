@@ -121,17 +121,7 @@ variable "datadog_lambda_layer_version" {
   default     = 115
 }
 
-variable "rds_secret_arn" {
-  description = "ARN of the RDS credentials secret in Secrets Manager (optional)"
-  type        = string
-  default     = ""
-}
 
-variable "enable_rds_secret_access" {
-  description = "Enable IAM policy for Lambda to access RDS secrets"
-  type        = bool
-  default     = false
-}
 
 
 variable "firebase_service_account" {

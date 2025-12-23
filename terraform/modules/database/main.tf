@@ -95,37 +95,37 @@ resource "aws_db_instance" "main" {
   })
 }
 
-# RDS Credentials in Parameter Store (Legacy paths for backward compatibility)
+# RDS Credentials in Parameter Store (Updated to include environment)
 resource "aws_ssm_parameter" "rds_admin_username" {
-  name        = "/${var.project_name}/database/admin/username"
+  name        = "/${var.project_name}/${var.environment}/database/admin/username"
   type        = "String"
   value       = var.rds_admin_username
-  description = "Admin username for RDS instance"
+  description = "Admin username for RDS instance (${var.environment})"
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-rds-admin-username"
+    Name = "${var.project_name}-rds-admin-username-${var.environment}"
   })
 }
 
 resource "aws_ssm_parameter" "rds_admin_password" {
-  name        = "/${var.project_name}/database/admin/password"
+  name        = "/${var.project_name}/${var.environment}/database/admin/password"
   type        = "SecureString"
   value       = random_password.rds_admin_password.result
-  description = "Admin password for RDS instance"
+  description = "Admin password for RDS instance (${var.environment})"
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-rds-admin-password"
+    Name = "${var.project_name}-rds-admin-password-${var.environment}"
   })
 }
 
 resource "aws_ssm_parameter" "rds_endpoint" {
-  name        = "/${var.project_name}/database/endpoint"
+  name        = "/${var.project_name}/${var.environment}/database/endpoint"
   type        = "String"
   value       = aws_db_instance.main.endpoint
-  description = "RDS endpoint"
+  description = "RDS endpoint (${var.environment})"
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-rds-endpoint"
+    Name = "${var.project_name}-rds-endpoint-${var.environment}"
   })
 }
 
@@ -163,30 +163,5 @@ resource "aws_ssm_parameter" "database_name_env" {
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-database-name-${var.environment}"
-  })
-}
-
-# RDS Credentials in Secrets Manager (for GitHub Actions & Applications)
-resource "aws_secretsmanager_secret" "db_credentials" {
-  name        = "${var.project_name}/${var.environment}/database/credentials"
-  description = "Database credentials for ${var.environment}"
-
-  # Allow overwriting if it was deleted but not purged
-  recovery_window_in_days = 0
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-db-credentials"
-  })
-}
-
-resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id = aws_secretsmanager_secret.db_credentials.id
-  secret_string = jsonencode({
-    username = var.rds_admin_username
-    password = random_password.rds_admin_password.result
-    host     = aws_db_instance.main.address
-    port     = aws_db_instance.main.port
-    dbname   = replace(var.project_name, "-", "_")
-    engine   = "mysql"
   })
 }
