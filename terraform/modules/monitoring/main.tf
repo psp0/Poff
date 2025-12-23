@@ -92,6 +92,9 @@ resource "aws_iam_policy" "datadog_integration" {
           "lambda:GetFunction",
           "lambda:ListFunctions",
           "rds:DescribeDBInstances",
+          "rds:DescribeEvents",
+          "rds:ListTagsForResource",
+          "rds:DescribeDBClusters",
           "apigateway:GET"
         ]
         Resource = "*"
