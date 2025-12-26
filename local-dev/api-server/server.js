@@ -29,8 +29,7 @@ app.use('/assets', express.static('/pokehabit-assets'));
 // Import Lambda handlers
 const pokemonCollection = require('/lambda/functions/pokemon-collection');
 const eggManagement = require('/lambda/functions/egg-management');
-const exerciseManagement = require('/lambda/functions/exercise-management');
-const exerciseRewards = require('/lambda/functions/exercise-rewards');
+
 const screenTimeManagement = require('/lambda/functions/screen-time-management');
 
 const userManagement = require('/lambda/functions/user-management');
@@ -95,19 +94,7 @@ app.post('/api/eggs/acquire', lambdaAdapter(eggManagement));
 app.post('/api/eggs/hatch', lambdaAdapter(eggManagement));
 
 
-// Exercise Management Routes
-// Exercise Management Routes
-app.get('/api/exercises', lambdaAdapter(exerciseManagement));
-app.post('/api/exercises', lambdaAdapter(exerciseManagement));
-app.put('/api/exercises/:id', lambdaAdapter(exerciseManagement));
-app.delete('/api/exercises/:id', lambdaAdapter(exerciseManagement));
-app.get('/api/sessions', lambdaAdapter(exerciseManagement));
-app.post('/api/sessions', lambdaAdapter(exerciseManagement));
-app.get('/api/muscle-groups', lambdaAdapter(exerciseManagement));
-app.get('/api/weekly-stats', lambdaAdapter(exerciseManagement));
 
-// Exercise Rewards Routes
-app.post('/api/exercise/rewards', lambdaAdapter(exerciseRewards));
 
 // Screen Time Management Routes
 app.post('/api/screen-time', lambdaAdapter(screenTimeManagement));
@@ -132,11 +119,9 @@ app.get('/api/guest/icons', lambdaAdapter(guestMode));
 app.get('/api/guest/all-pokemon', lambdaAdapter(guestMode));
 app.get('/api/guest/pokemon/:stableId', lambdaAdapter(guestMode));
 app.get('/api/guest/evolution/:baseImageName', lambdaAdapter(guestMode));
-app.get('/api/guest/exercises', lambdaAdapter(guestMode));
-app.get('/api/guest/muscle-groups', lambdaAdapter(guestMode));
-app.get('/api/guest/weekly-stats', lambdaAdapter(guestMode));
+
 app.get('/api/guest/eggs', lambdaAdapter(guestMode));
-app.get('/api/guest/sessions', lambdaAdapter(guestMode));
+
 app.get('/api/guest/starter-pokemon', lambdaAdapter(guestMode));
 
 // Health check

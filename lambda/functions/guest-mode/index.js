@@ -432,62 +432,9 @@ async function getGuestEvolutionTree(baseImageName) {
   };
 }
 
-/**
- * 게스트 유저의 운동 목록 (고정값 - 읽기 전용)
- */
-function getGuestExercises() {
-  // DB 조회 대신 고정값 반환 (다른 사용자에게 영향 없음)
-  return [
-    { id: 'guest-ex-1', exercise_name: '벤치프레스 (체험용)', weight_kg: 60, intensity_type: 'reps', reps: 10, muscle_group_id: 'chest', muscle_group_name: '가슴' },
-    { id: 'guest-ex-2', exercise_name: '데드리프트 (체험용)', weight_kg: 100, intensity_type: 'reps', reps: 5, muscle_group_id: 'back', muscle_group_name: '등' },
-    { id: 'guest-ex-3', exercise_name: '스쿼트 (체험용)', weight_kg: 80, intensity_type: 'reps', reps: 8, muscle_group_id: 'quad', muscle_group_name: '대퇴사두근' }
-  ];
-}
 
-/**
- * 게스트 유저의 주간 운동 통계 (고정값 - 읽기 전용)
- */
-function getGuestWeeklyStats() {
-  // DB 조회 대신 고정값 반환 (다른 사용자에게 영향 없음)
-  // 실제 API 응답과 동일한 필드 구조 사용
-  return {
-    muscleGroups: [
-      {
-        muscle_group_id: 'chest',
-        muscle_group_name: 'chest',
-        muscle_group_name_ko: '가슴',
-        total_sets: 10,
-        mv_sets: 0,
-        mev_sets: 6,
-        mav_min_sets: 10,
-        mav_max_sets: 14,
-        mrv_sets: 20
-      },
-      {
-        muscle_group_id: 'back',
-        muscle_group_name: 'back',
-        muscle_group_name_ko: '등',
-        total_sets: 8,
-        mv_sets: 0,
-        mev_sets: 8,
-        mav_min_sets: 12,
-        mav_max_sets: 18,
-        mrv_sets: 25
-      },
-      {
-        muscle_group_id: 'quad',
-        muscle_group_name: 'quad',
-        muscle_group_name_ko: '대퇴사두근',
-        total_sets: 15,
-        mv_sets: 0,
-        mev_sets: 6,
-        mav_min_sets: 10,
-        mav_max_sets: 14,
-        mrv_sets: 20
-      }
-    ]
-  };
-}
+
+
 
 /**
  * 게스트 유저의 아이템 목록 (고정값 - 읽기 전용)
@@ -578,37 +525,18 @@ exports.handler = async (event, context) => {
       return success(evolutionData);
     }
 
-    // /api/guest/exercises - 운동 목록
-    if (path === '/api/guest/exercises' && httpMethod === 'GET') {
-      const exercises = getGuestExercises();
-      return success(exercises);
-    }
 
-    // /api/guest/muscle-groups - 근육 그룹 목록 (공개 데이터)
-    if (path === '/api/guest/muscle-groups' && httpMethod === 'GET') {
-      const groupsResult = await db.query(`
-        SELECT id, name, name_ko, mev_sets, mav_min_sets as mav_sets
-        FROM muscle_groups
-        ORDER BY name_ko
-      `);
-      return success(groupsResult.rows);
-    }
 
-    // /api/guest/weekly-stats - 주간 통계
-    if (path === '/api/guest/weekly-stats' && httpMethod === 'GET') {
-      const stats = getGuestWeeklyStats();
-      return success(stats);
-    }
+
+
+
 
     // /api/guest/eggs - 알 목록 (빈 목록)
     if (path === '/api/guest/eggs' && httpMethod === 'GET') {
       return success([]);
     }
 
-    // /api/guest/sessions - 운동 세션 (빈 목록)
-    if (path === '/api/guest/sessions' && httpMethod === 'GET') {
-      return success([]);
-    }
+
 
     // /api/guest/starter-pokemon - 스타터 포켓몬 목록 (로그인 화면용)
     if (path === '/api/guest/starter-pokemon' && httpMethod === 'GET') {

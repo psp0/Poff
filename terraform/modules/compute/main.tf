@@ -5,16 +5,7 @@ locals {
   }
 
   lambda_functions = {
-    exercise-management = {
-      handler     = "functions/exercise-management/index.handler"
-      timeout     = 30
-      memory_size = 256
-    }
-    exercise-rewards = {
-      handler     = "functions/exercise-rewards/index.handler"
-      timeout     = 30
-      memory_size = 256
-    }
+
     pokemon-collection = {
       handler     = "functions/pokemon-collection/index.handler"
       timeout     = 30
@@ -48,22 +39,7 @@ locals {
   }
 
   api_routes = {
-    "POST /api/exercises"        = "exercise-management"
-    "GET /api/exercises"         = "exercise-management"
-    "GET /api/exercises/{id}"    = "exercise-management"
-    "PUT /api/exercises/{id}"    = "exercise-management"
-    "DELETE /api/exercises/{id}" = "exercise-management"
-    "GET /api/sessions"          = "exercise-management"
-    "POST /api/sessions"         = "exercise-management"
-    "GET /api/muscle-groups"     = "exercise-management"
-    "GET /api/weekly-stats"      = "exercise-management" # Reverted to generic path for compatibility
 
-    "POST /api/exercises/{id}/complete"  = "exercise-rewards"
-    "GET /api/exercises/rewards"         = "exercise-rewards"
-    "POST /api/reward/shiny"             = "exercise-rewards"
-    "POST /api/reward/check-eligibility" = "exercise-rewards"
-    "GET /api/reward/history"            = "exercise-rewards"
-    "POST /api/reward/milestone"         = "exercise-rewards"
 
     "POST /api/screen-time"              = "screen-time-management"
     "GET /api/screen-time"               = "screen-time-management"
@@ -82,7 +58,6 @@ locals {
     "GET /api/collection/icons"                     = "pokemon-collection"
     "GET /api/collection/all-pokemon"               = "pokemon-collection"
     "GET /api/collection/evolution/{baseImageName}" = "pokemon-collection"
-    "POST /api/collection/reward"                   = "pokemon-collection"
     "GET /api/collection/starters"                  = "pokemon-collection"
     "GET /api/collection/pokemon/{id}"              = "pokemon-collection"
 
@@ -110,11 +85,7 @@ locals {
     "GET /api/guest/all-pokemon"               = "guest-mode"
     "GET /api/guest/pokemon/{stableId}"        = "guest-mode"
     "GET /api/guest/evolution/{baseImageName}" = "guest-mode"
-    "GET /api/guest/exercises"                 = "guest-mode"
-    "GET /api/guest/muscle-groups"             = "guest-mode"
-    "GET /api/guest/weekly-stats"              = "guest-mode"
-    "GET /api/guest/eggs"                      = "guest-mode"
-    "GET /api/guest/sessions"                  = "guest-mode"
+
     "GET /api/guest/starter-pokemon"           = "guest-mode"
     "GET /api/guest/items"                     = "guest-mode"
   }

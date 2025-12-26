@@ -13,7 +13,7 @@ const { logger } = require('../../shared/logger');
  * - GET /icons - 포켓몬 아이콘 컬렉션
  * - GET /all-pokemon - 모든 보유 포켓몬 (세대별 정렬용)
  * - GET /evolution/{baseImageName} - 진화 트리 조회
- * - POST /reward - 운동 보상 이로치 포켓몬 지급
+ * - GET /evolution/{baseImageName} - 진화 트리 조회
  */
 
 const handler = async (event, context) => {
@@ -45,8 +45,7 @@ const handler = async (event, context) => {
     return await getAllUserPokemon(event, db);
   } else if (method === 'GET' && routePath.includes('/evolution/')) {
     return await getEvolutionTree(event, db, pathParameters.baseImageName);
-  } else if (method === 'POST' && routePath.endsWith('/reward')) {
-    return await rewardShinyPokemonForExercise(event, db);
+
 
   } else if (method === 'GET' && routePath.endsWith('/starters')) {
     return await getStarterPokemon(event, db);
@@ -799,77 +798,6 @@ async function getEvolutionTree(event, db, baseImageName) {
   return createSuccessResponse(result.rows[0]?.evolution_tree || {});
 }
 
-/**
- * 운동 보상 이로치 포켓몬 지급
- */
-async function rewardShinyPokemonForExercise(event, db) {
-  const { userId, requestBody } = await authenticateAndParseBody(event);
-
-  return await db.transaction(async (client) => {
-    // 제외할 플래그 이름 목록 (Legendary, Mythical, Paradox, UltraBeast)
-    const excludedFlags = ['Legendary', 'Mythical', 'Paradox', 'UltraBeast'];
-
-    // 사용자가 일반 버전은 보유했지만 이로치는 없는 포켓몬 중 랜덤 선택
-    const rewardPokemonResult = await client.query(`
-      SELECT p.stable_id
-      FROM pokemon p
-      WHERE 
-        -- 사용자가 일반 버전을 보유한 포켓몬
-        p.stable_id IN (
-          SELECT pokemon_stable_id 
-          FROM user_pokemon_collection 
-          WHERE user_id = ? 
-            AND is_shiny = false
-        )
-        -- 이로치 버전은 아직 없는 포켓몬
-        AND p.stable_id NOT IN (
-          SELECT pokemon_stable_id 
-          FROM user_pokemon_collection 
-          WHERE user_id = ? 
-            AND is_shiny = true
-        )
-        -- 제외 플래그가 없는 포켓몬만
-        AND NOT EXISTS (
-          SELECT 1 
-          FROM pokemon_flag_relations pfr
-          JOIN pokemon_flags pf ON pf.name = pfr.flag_name
-          WHERE pfr.pokemon_stable_id = p.stable_id
-            AND pf.name IN (?, ?, ?, ?)
-        )
-      ORDER BY RAND()
-      LIMIT 1
-    `, [userId, userId, ...excludedFlags]);
-
-    if (rewardPokemonResult.rows.length === 0) {
-      return createSuccessResponse({
-        success: false,
-        reward_pokemon: null,
-        is_shiny: false,
-        message: '획득 가능한 이로치 포켓몬이 없습니다.'
-      });
-    }
-
-    const rewardPokemon = rewardPokemonResult.rows[0].stable_id;
-
-    // 선택된 포켓몬을 이로치로 추가
-    await client.query(`
-      INSERT INTO user_pokemon_collection (user_id, pokemon_stable_id, is_shiny, obtained_reason)
-      VALUES (?, ?, true, '운동 보상')
-      ON DUPLICATE KEY UPDATE obtained_reason = VALUES(obtained_reason)
-    `, [userId, rewardPokemon]);
-
-
-
-    logger.info('Shiny pokemon rewarded (Exercise)', { userId, pokemonId: rewardPokemon });
-
-    return createSuccessResponse({
-      success: true,
-      reward_pokemon: rewardPokemon,
-      is_shiny: true,
-      message: '이로치 포켓몬을 획득했습니다!'
-    });
-  });
-}
 
 /**
  * 포켓몬 상세 데이터 조회

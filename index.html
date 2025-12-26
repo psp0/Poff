@@ -292,95 +292,7 @@
           </div>
         </div>
 
-        <!-- Tab 4: Exercise -->
-        <div id="view-exercise" class="tab-view">
-          <!-- Pokedex Header -->
-          <div class="pokedex-header">
-            <div class="pokedex-curve-bg"></div>
-            <div class="pokedex-eyes-container">
-              <div class="pokedex-eye left">
-                <div class="pokedex-eye-line"></div>
-              </div>
-              <div class="pokedex-eye right">
-                <div class="pokedex-eye-line"></div>
-              </div>
-            </div>
-          </div>
 
-          <div class="pokedex-screen">
-            <!-- 운동 관리 섹션 -->
-            <div class="content-section" id="exercise-section">
-              <div class="exercise-section-header">
-                <h3>헬스</h3>
-                <div class="exercise-header-actions" style="display: flex; gap: 8px; align-items: center;">
-                  <button class="exercise-weekly-menu-btn" id="open-exercise-weekly-modal" title="이번주 헬스 진행률">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </button>
-                  <button class="exercise-list-menu-btn" id="open-exercise-list-modal" title="헬스 목록 보기">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                  </button>
-                  <button class="add-exercise-floating-btn" id="open-add-exercise-modal" title="새 운동 등록">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-
-              <!-- 헬스 세션 기록 폼 -->
-              <div class="card-box" style="padding: 24px 20px;">
-                <!-- Row 1: Exercise (Full) -->
-                <div class="form-group" style="margin-bottom: 16px;">
-                  <label style="margin-bottom: 6px; font-weight: 600; color: #4a5568; font-size: 14px;">운동 선택</label>
-                  <select id="session-exercise-select"
-                    style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; height: 48px; background-color: #f8fafc;">
-                    <option value="">운동을 선택하세요</option>
-                  </select>
-                </div>
-
-                <!-- Row 2: Sets + Date -->
-                <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-                  <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                    <label style="margin-bottom: 6px; font-weight: 600; color: #4a5568; font-size: 14px;">세트</label>
-                    <input type="tel" id="session-sets-input" placeholder="3" inputmode="numeric" pattern="[0-9]*"
-                      style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; height: 48px; text-align: center; background-color: #f8fafc;" />
-                  </div>
-                  <div class="form-group" style="flex: 2; margin-bottom: 0;">
-                    <label style="margin-bottom: 6px; font-weight: 600; color: #4a5568; font-size: 14px;">운동 날짜</label>
-                    <input type="date" id="session-date-input"
-                      style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; height: 48px; background-color: #f8fafc;" />
-                  </div>
-                </div>
-
-                <!-- Row 3: Memo -->
-                <div class="form-group" style="margin-bottom: 20px;">
-                  <label style="margin-bottom: 6px; font-weight: 600; color: #4a5568; font-size: 14px;">메모
-                    (선택사항)</label>
-                  <textarea id="session-notes-input" placeholder="특이사항 기록" rows="2"
-                    style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; resize: none; background-color: #f8fafc;"></textarea>
-                </div>
-
-                <!-- Button -->
-                <div style="text-align: center;">
-                  <button class="submit-btn" id="log-session-btn"
-                    style="padding: 14px; font-size: 16px; font-weight: 700; border-radius: 12px; box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);">
-                    세션 기록
-                  </button>
-                </div>
-                <div id="session-form-result" class="result-message" style="display: none;"></div>
-              </div>
-
-
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- Tab Bar Navigation -->
@@ -414,16 +326,7 @@
           </div>
           <span>스크린타임</span>
         </button>
-        <button class="tab-item" data-tab="exercise">
-          <div class="tab-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-              stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M6.5 6.5v11M17.5 6.5v11M6.5 12h11M4 8v8M20 8v8M2 10v4M22 10v4" />
-            </svg>
-          </div>
-          <span>헬스</span>
-        </button>
+
       </nav>
 
       <!-- Settings Panel (Overlay) -->
@@ -708,151 +611,15 @@
       </div>
     </div>
 
-    <!-- 운동 수정 모달 -->
-    <div id="exercise-edit-modal" class="modal" style="z-index: 2100;">
-      <div class="modal-content" style="max-width: 400px;">
-        <div class="modal-header">
-          <h3 class="modal-title">운동 수정</h3>
-          <button class="close-btn" id="exercise-edit-close">&times;</button>
-        </div>
-        <div class="exercise-edit-body" style="padding-top: 20px;">
-          <div class="form-group">
-            <label>운동 이름</label>
-            <input type="text" id="edit-exercise-name" placeholder="운동 이름" />
-          </div>
-          <div class="form-group">
-            <label>중량 (kg)</label>
-            <input type="tel" id="edit-exercise-weight" placeholder="중량" inputmode="decimal" />
-          </div>
-          <div class="form-group">
-            <label id="edit-exercise-intensity-label">횟수</label>
-            <input type="tel" id="edit-exercise-reps" placeholder="횟수" inputmode="decimal" />
-          </div>
-          <input type="hidden" id="edit-exercise-id" />
-          <input type="hidden" id="edit-exercise-intensity-type" />
-          <div style="display: flex; gap: 10px; margin-top: 24px;">
-            <button id="exercise-edit-cancel-btn" class="submit-btn"
-              style="flex: 1; background: #e2e8f0; color: #4a5568;">취소</button>
-            <button id="exercise-edit-save-btn" class="submit-btn" style="flex: 1;">저장</button>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- 운동 삭제 확인 모달 -->
-    <div id="exercise-delete-modal" class="modal" style="z-index: 2100;">
-      <div class="modal-content" style="max-width: 360px; text-align: center;">
-        <div style="font-size: 48px; margin-bottom: 16px;">🗑️</div>
-        <h3 style="margin: 0 0 12px 0; color: #2d3748;">운동 삭제</h3>
-        <p id="exercise-delete-message" style="margin: 0 0 24px 0; color: #718096; line-height: 1.5;">이 운동을 삭제하시겠습니까?
-        </p>
-        <input type="hidden" id="delete-exercise-id" />
-        <div style="display: flex; gap: 10px;">
-          <button id="exercise-delete-cancel-btn" class="submit-btn"
-            style="flex: 1; background: #e2e8f0; color: #4a5568;">취소</button>
-          <button id="exercise-delete-confirm-btn" class="submit-btn" style="flex: 1; background: #e53e3e;">삭제</button>
-        </div>
-      </div>
-    </div>
 
-    <!-- 주간 헬스 진행률 모달 -->
-    <div id="exercise-weekly-modal" class="modal" style="z-index: 2100;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 class="modal-title">이번 주 헬스 진행률</h3>
-          <div class="modal-header-actions" style="display: flex; gap: 8px; align-items: center;">
-            <button class="refresh-btn" id="refresh-progress-modal-btn" title="새로고침"
-              style="width: 32px; height: 32px; padding: 4px; border: none;">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-            <button class="close-btn" id="exercise-weekly-close">&times;</button>
-          </div>
-        </div>
-        <div class="modal-body" style="padding-top: 10px;">
 
-          <div id="weekly-progress-modal-details">
-            <p style="text-align: center; color: #666; margin: 20px 0;">데이터를 불러오는 중...</p>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- 새 운동 등록 모달 -->
-    <div id="add-exercise-modal" class="modal" style="z-index: 2000;">
-      <div class="modal-content add-exercise-modal-content">
-        <div class="modal-header">
-          <h3 class="modal-title">💪 새 운동 등록</h3>
-          <button class="close-btn" id="add-exercise-modal-close">&times;</button>
-        </div>
 
-        <div class="add-exercise-modal-body">
-          <div class="form-group">
-            <label>근육부위</label>
-            <select id="muscle-group-select">
-              <option value="">근육부위를 선택하세요</option>
-            </select>
-          </div>
 
-          <div class="form-group">
-            <label>운동 이름</label>
-            <input type="text" id="exercise-name-input" placeholder="예: 벤치프레스, 스쿼트, 데드리프트" />
-          </div>
 
-          <div class="exercise-form-row">
-            <div class="form-group">
-              <label>중량 (kg)</label>
-              <input type="tel" id="exercise-weight-input" placeholder="60" inputmode="decimal" />
-            </div>
-            <div class="form-group">
-              <div class="intensity-header">
-                <label id="exercise-intensity-label">횟수</label>
-                <div class="segmented-control" id="exercise-intensity-control">
-                  <input type="radio" name="intensity-type" id="type-reps" value="reps" checked>
-                  <label for="type-reps">Reps</label>
-                  <input type="radio" name="intensity-type" id="type-rpe" value="rpe">
-                  <label for="type-rpe">RPE</label>
-                </div>
-              </div>
-              <input type="tel" id="exercise-reps-input" placeholder="10" inputmode="decimal" />
-              <small id="rpe-helper-text" class="rpe-helper">RPE (자각도): 1(쉬움) ~ 10(한계)</small>
-            </div>
-          </div>
 
-          <div id="exercise-form-result" class="result-message" style="display: none;"></div>
 
-          <div class="add-exercise-modal-actions">
-            <button class="submit-btn cancel-btn" id="add-exercise-modal-cancel">취소</button>
-            <button class="submit-btn" id="add-exercise-btn">등록하기</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 등록된 운동 목록 모달 -->
-    <div id="exercise-list-modal" class="modal" style="z-index: 2000;">
-      <div class="modal-content exercise-list-modal-content">
-        <div class="modal-header exercise-list-modal-header">
-          <h3 class="modal-title">📋 등록된 운동 목록</h3>
-          <div class="exercise-list-header-actions">
-            <button class="refresh-btn exercise-list-header-btn" id="refresh-exercises-btn" title="새로고침">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-            <button class="close-btn" id="exercise-list-modal-close">&times;</button>
-          </div>
-        </div>
-        <div class="exercise-list-modal-body">
-          <div id="user-exercises-list">
-            <p style="text-align: center; color: #666; margin: 20px 0;">운동을 등록해보세요!</p>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- 약관 동의 모달 -->
     <div id="terms-modal" class="modal">
@@ -900,8 +667,7 @@
                 본 서비스는 사용자의 건강 관리를 보조하기 위한 기록 도구일 뿐이며, 의학적 진단, 치료, 처방을 제공하지 않습니다. 건강상의 문제가 발생할 경우 반드시 전문 의료기관을 방문해야
                 합니다.<br><br>
 
-                <strong>제3조 (서비스의 내용)</strong><br>
-                회사는 회원에게 운동 기록, 휴대폰 사용 패턴 분석 및 통계 기능을 제공합니다.<br><br>
+                회사는 회원에게 휴대폰 사용 패턴 분석 및 통계 기능을 제공합니다.<br><br>
 
                 <strong>제4조 (책임의 한계)</strong><br>
                 천재지변, AWS 등 클라우드 서비스 장애, 또는 회원의 귀책사유로 인한 데이터 유실에 대해 회사는 고의 또는 중과실이 없는 한 책임을 지지 않습니다.
@@ -974,24 +740,23 @@
               <div class="terms-row">
                 <label class="terms-label">
                   <input type="checkbox" class="terms-req-check" onchange="checkTermsStatus()">
-                  <span><strong class="terms-required">[필수]</strong> 민감정보(운동·건강 정보) 수집·이용에 별도로 동의합니다.</span>
+                  <span><strong class="terms-required">[필수]</strong> 민감정보(생활습관 정보) 수집·이용에 별도로 동의합니다.</span>
                 </label>
                 <button class="terms-toggle-btn" onclick="toggleTermsDetail('terms-detail-3')">보기</button>
               </div>
               <div id="terms-detail-3" class="terms-detail">
                 <p>
-                  본 서비스는 개인의 건강 및 생활습관 관리를 위해 아래와 같은
-                  <strong>민감정보(건강정보)</strong>를 수집·이용합니다.
+                  본 서비스는 개인의 생활습관 관리를 위해 아래와 같은
+                  <strong>민감정보</strong>를 수집·이용합니다.
                 </p>
 
                 <p><strong>1. 수집 항목</strong><br>
-                  - 운동 기록(운동 종류, 수행 시간, 강도 등)<br>
                   - 휴대폰 사용 패턴, 디지털 웰빙 관련 데이터(앱 사용 시간)
                 </p>
 
                 <p><strong>2. 이용 목적</strong><br>
                   - 개인별 라이프로그 대시보드 제공 및 기록 저장<br>
-                  - 운동 및 생활 패턴 저장<br>
+                  - 생활 패턴 저장<br>
                   - 목표 달성 현황 관리 및 맞춤형 피드백 기능 제공
                 </p>
 
@@ -1002,7 +767,7 @@
 
                 <p><strong>4. 동의 거부에 대한 안내</strong><br>
                   귀하는 위와 같은 민감정보 제공에 대한 동의를 거부할 권리가 있습니다.<br>
-                  다만, 동의를 거부하는 경우 운동 기록 분석 등 관련 기능의 이용이 제한될 수 있습니다.
+                  다만, 동의를 거부하는 경우 스크린타임 기록 분석 등 관련 기능의 이용이 제한될 수 있습니다.
                 </p>
 
                 <p><strong>5. 권리 행사 및 문의</strong><br>
@@ -1100,9 +865,7 @@
             <p>
               ✨스크린타임을 줄이면 추가 포켓몬을 얻어요!
             </p>
-            <p>
-              ✨운동세션을 기록하면 이로치 포켓몬을 얻어요!
-            </p>
+
           </div>
 
           <button id="starter-modal-close-btn" class="starter-modal-btn">
