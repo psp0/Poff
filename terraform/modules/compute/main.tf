@@ -36,6 +36,11 @@ locals {
       timeout     = 30
       memory_size = 256
     }
+    sleep-management = {
+      handler     = "functions/sleep-management/index.handler"
+      timeout     = 30
+      memory_size = 256
+    }
   }
 
   api_routes = {
@@ -88,6 +93,11 @@ locals {
 
     "GET /api/guest/starter-pokemon"           = "guest-mode"
     "GET /api/guest/items"                     = "guest-mode"
+
+    # Sleep Management
+    "POST /api/sleep"        = "sleep-management"
+    "GET /api/sleep/status"  = "sleep-management"
+    "POST /api/sleep/reward" = "sleep-management"
   }
 }
 

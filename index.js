@@ -237,14 +237,17 @@ function initializeFirebaseListener() {
               // Notify other modules with a slight delay to ensure listeners are ready
               setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('user-synced', { detail: { userId: currentUserId } }));
+                hideGlobalLoading(); // 로딩 종료
               }, 500);
             }
           } else {
             console.error("Sync failed: No data returned");
             authMessage.textContent = "사용자 동기화 실패";
+            hideGlobalLoading(); // 실패 시에도 로딩 종료
           }
         } catch (e) {
           console.error("Sync error:", e);
+          hideGlobalLoading(); // 에러 시에도 로딩 종료
         }
       } else {
         console.log("No user logged in");
@@ -276,12 +279,14 @@ function initializeFirebaseListener() {
           }
 
           showToast('체험 모드로 시작합니다.');
+          hideGlobalLoading(); // 게스트 모드 로딩 종료
         } else {
           // Explicit Auth Mode: Show Login
           window.authState = 'unauthenticated';
           authDiv.style.display = "flex";
           document.body.style.overflow = 'hidden';
           contentDiv.style.display = "none";
+          hideGlobalLoading(); // 로그인 화면 표시 시 로딩 종료
         }
       }
     });
@@ -302,6 +307,7 @@ function initializeFirebaseListener() {
 }
 
 // Start listening
+showGlobalLoading('로딩 중...');
 initializeFirebaseListener();
 
 // 스프라이트 애니메이션 관련 데이터
@@ -427,6 +433,13 @@ window.addEventListener('resize', adjustDescriptionVisibility);
 // 포켓몬 데이터를 화면에 표시하는 함수
 // 포켓몬 데이터를 화면에 표시하는 함수
 async function displayPokemon(pokemonStableId, isShiny = false) {
+  const flipper = document.getElementById('pokemonFlipper');
+  const descEl = document.getElementById('display-description');
+
+  // 1. 즉시 숨김 (이전 포켓몬 잔상 방지)
+  if (flipper) flipper.style.opacity = '0';
+  if (descEl) descEl.style.opacity = '0';
+
   // 플리퍼 정면 초기화 (애니메이션 포함)
   if (typeof resetFlipperToFront === 'function') {
     resetFlipperToFront();
@@ -444,7 +457,7 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
 
   // UI 텍스트 업데이트 (존재하는 경우)
   const nameEl = document.getElementById('display-name');
-  const descEl = document.getElementById('display-description');
+  // descEl already selected above
   const typesContainer = document.getElementById('display-types');
   const hashtagsContainer = document.getElementById('display-hashtags');
 
@@ -681,6 +694,7 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
 
         // 아이템 보유량 확인
         try {
+          showGlobalLoading('정보 확인 중...');
           const headers = await getAuthHeaders();
           const itemsResponse = await fetch('/api/user/items', { headers });
           if (itemsResponse.ok) {
@@ -691,6 +705,8 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
           }
         } catch (err) {
           console.error('Failed to fetch items:', err);
+        } finally {
+          hideGlobalLoading();
         }
 
         const safeName = escapeHtml(pokemonData.pokemon.name);
@@ -708,6 +724,7 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
 
         if (confirmed) {
           try {
+            showGlobalLoading('이로치 해제 중...');
             const headers = await getAuthHeaders();
             const response = await fetch('/api/pokemon/unlock-shiny', {
               method: 'POST',
@@ -731,6 +748,8 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
           } catch (err) {
             console.error(err);
             showToast('오류가 발생했습니다.');
+          } finally {
+            hideGlobalLoading();
           }
         }
       }
@@ -772,12 +791,21 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
     }
   }
 
-  // 스프라이트 설정
+  // 스프라이트 설정 (비동기 로드 대기)
   const frontSpeed = pokemonData.pokemon.front_animation_speed !== undefined ? pokemonData.pokemon.front_animation_speed : 2;
   const backSpeed = pokemonData.pokemon.back_animation_speed !== undefined ? pokemonData.pokemon.back_animation_speed : 2;
 
-  setupSprite('sprite-front', pokemonData.front_image, frontSpeed);
-  setupSprite('sprite-back', pokemonData.back_image, backSpeed);
+  await Promise.all([
+    setupSprite('sprite-front', pokemonData.front_image, frontSpeed),
+    setupSprite('sprite-back', pokemonData.back_image, backSpeed)
+  ]);
+
+  // 2. 이미지 로드 완료 후 표시
+  // requestAnimationFrame을 사용하여 DOM 업데이트 후 스타일 적용 보장
+  requestAnimationFrame(() => {
+    if (flipper) flipper.style.opacity = '1';
+    if (descEl) descEl.style.opacity = '1';
+  });
 
   // 울음소리 재생
   if (pokemonData.cry_sound && isCrySoundEnabled) {
@@ -1061,6 +1089,10 @@ async function loadUserPokemonIcons() {
   try {
     // 로그인 체크 (인증 상태 기반)
     if (!currentUserId && !window.isGuest()) {
+      // 로딩 중이면 메시지 표시하지 않음 (글로벌 로딩이 덮고 있거나 아직 판단 전)
+      if (window.authState === 'loading') {
+        return;
+      }
       statusMsg.textContent = '로그인이 필요합니다.';
       statusMsg.style.display = 'block';
       grid.style.display = 'none';
@@ -1246,6 +1278,24 @@ function hideLoadingState() {
     requestAnimationFrame(() => {
       displayArea.classList.remove('fading');
     });
+  }
+}
+
+// 글로벌 로딩 오버레이 표시
+function showGlobalLoading(message = '잠시만 기다려주세요...') {
+  const overlay = document.getElementById('global-loading-overlay');
+  const msgEl = overlay.querySelector('.loading-message');
+  if (overlay && msgEl) {
+    msgEl.textContent = message;
+    overlay.classList.add('visible');
+  }
+}
+
+// 글로벌 로딩 오버레이 숨김
+function hideGlobalLoading() {
+  const overlay = document.getElementById('global-loading-overlay');
+  if (overlay) {
+    overlay.classList.remove('visible');
   }
 }
 
@@ -1683,6 +1733,11 @@ if (evolutionClose && evolutionModal) {
   evolutionClose.addEventListener("click", () => {
     evolutionModal.style.display = "none";
     document.body.style.overflow = ''; // 배경 스크롤 복원
+    
+    // 도감 설명 등 콘텐츠 초기화 (잔상 방지)
+    const descEl = document.getElementById('display-description');
+    if (descEl) descEl.textContent = '';
+    
     onModalClose();
   });
 }
@@ -1740,109 +1795,109 @@ if (favoriteBtn) {
 
 // PNG 이미지 로드하여 프레임 수 계산 및 애니메이션 설정
 function setupSprite(spriteId, imageUrl, animationSpeed = 2) {
-  const sprite = document.getElementById(spriteId);
+  return new Promise((resolve) => {
+    const sprite = document.getElementById(spriteId);
 
-  if (!sprite) return;
+    if (!sprite) {
+      resolve();
+      return;
+    }
 
-  // imageUrl이 null이거나 비어있으면 스프라이트를 숨기고 종료
-  if (!imageUrl) {
-    sprite.style.display = 'none';
-    console.log(`✗ ${spriteId}: 이미지 URL이 없습니다.`);
-    return;
-  }
+    // imageUrl이 null이거나 비어있으면 스프라이트를 숨기고 종료
+    if (!imageUrl) {
+      sprite.style.display = 'none';
+      console.log(`✗ ${spriteId}: 이미지 URL이 없습니다.`);
+      resolve();
+      return;
+    }
 
-  // 유효한 URL인 경우 스프라이트 표시
-  sprite.style.display = '';
+    // 유효한 URL인 경우 스프라이트 표시
+    sprite.style.display = '';
 
-  const img = new Image();
-  img.onload = () => {
-    const height = img.naturalHeight;
-    const width = img.naturalWidth;
+    const img = new Image();
+    img.onload = () => {
+      const height = img.naturalHeight;
+      const width = img.naturalWidth;
 
-    // 프레임 수 계산: 가로 / 세로
-    const frames = Math.max(1, Math.round(width / height));  // 최소 1프레임 보장
+      // 프레임 수 계산: 가로 / 세로
+      const frames = Math.max(1, Math.round(width / height));  // 최소 1프레임 보장
 
-    // pokemon-flipper의 크기를 이미지 한 프레임 크기로 설정
-    // const flipper = document.getElementById('pokemonFlipper');
-    // if (flipper) {
-    //   flipper.style.width = height + 'px';
-    //   flipper.style.height = height + 'px';
-    // }
+      // 1프레임 이미지는 애니메이션 없이 정적 표시
+      if (frames === 1) {
+        sprite.style.width = height + 'px';
+        sprite.style.height = height + 'px';
+        sprite.style.backgroundSize = `auto ${height}px`;
+        sprite.style.backgroundImage = `url("${imageUrl}")`;
+        sprite.style.backgroundPosition = '0 0';
+        sprite.style.opacity = '1'; // 이미지 로드 완료 후 표시
 
-    // 1프레임 이미지는 애니메이션 없이 정적 표시
-    if (frames === 1) {
+        console.log(`✓ ${spriteId}: 정적 이미지 (${width}×${height}px)`);
+        resolve();
+        return;
+      }
+
+      // Pokemon Essentials / RPG Maker 방식의 속도 계산 로직 적용
+      const ANIMATION_FRAME_DELAY = 90;
+      const SPRITE_SPEED = animationSpeed;
+
+      let timePerFrame = ((SPRITE_SPEED / 2) * ANIMATION_FRAME_DELAY) / 1000;
+
+      // 프레임 수에 비례한 duration 계산 (프레임당 일정 시간)
+      const duration = frames * timePerFrame;
+
+      // 스프라이트 데이터 저장
+      spriteData[spriteId] = {
+        frames: frames,
+        width: width,
+        height: height,
+        duration: duration,
+        timePerFrame: timePerFrame,
+        frameSize: height
+      };
+
+      // CSS 동적 생성
+      const styleId = `sprite-style-${spriteId}`;
+      let styleEl = document.getElementById(styleId);
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        document.head.appendChild(styleEl);
+      }
+
+      const animName = `sprite-anim-dynamic-${spriteId}`;
+      styleEl.textContent = `
+          @keyframes ${animName} {
+            from { background-position: 0 0; }
+            to { background-position: -${width}px 0; }
+          }
+        `;
+
+      // 스프라이트 크기를 이미지 세로 크기에 맞춰 설정
       sprite.style.width = height + 'px';
       sprite.style.height = height + 'px';
       sprite.style.backgroundSize = `auto ${height}px`;
       sprite.style.backgroundImage = `url("${imageUrl}")`;
-      sprite.style.backgroundPosition = '0 0';
-      sprite.style.opacity = '1'; // 이미지 로드 완료 후 표시
+      sprite.style.animation = `${animName} ${duration}s steps(${frames}) infinite`;
 
-      console.log(`✓ ${spriteId}: 정적 이미지 (${width}×${height}px)`);
-      return;
-    }
+      // Add transition class and trigger reflow
+      sprite.classList.add('pokemon-sprite-image');
+      requestAnimationFrame(() => {
+        sprite.classList.add('loaded');
+        sprite.style.opacity = '1'; // 이미지 로드 완료 후 표시
+      });
 
-    // Pokemon Essentials / RPG Maker 방식의 속도 계산 로직 적용
-    // 공식: ((speed / 2) * delay) / 1000
-    // speed: 애니메이션 속도 (Normal = 2, Fast = 1)
-    // delay: 프레임 딜레이 (기본값 90, 빠르게 하려면 60, 30 등으로 감소)
-    const ANIMATION_FRAME_DELAY = 90; // 60 -> 0.06s/frame (약 16fps)
-    const SPRITE_SPEED = animationSpeed; // 전달받은 속도 사용 (기본값 2)
-
-    let timePerFrame = ((SPRITE_SPEED / 2) * ANIMATION_FRAME_DELAY) / 1000;
-
-    // 프레임 수에 비례한 duration 계산 (프레임당 일정 시간)
-    const duration = frames * timePerFrame;
-
-    // 스프라이트 데이터 저장
-    spriteData[spriteId] = {
-      frames: frames,
-      width: width,
-      height: height,
-      duration: duration,
-      timePerFrame: timePerFrame,
-      frameSize: height
+      console.log(`✓ ${spriteId}: ${frames}프레임 애니메이션 설정 완료`);
+      resolve();
     };
 
-    // CSS 동적 생성
-    const styleId = `sprite-style-${spriteId}`;
-    let styleEl = document.getElementById(styleId);
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = styleId;
-      document.head.appendChild(styleEl);
-    }
+    img.onerror = () => {
+      console.error(`Error loading image for ${spriteId}: ${imageUrl}`);
+      // 에러 발생 시에도 resolve하여 진행이 멈추지 않게 함
+      resolve();
+    };
 
-    const animName = `sprite-anim-dynamic-${spriteId}`;
-    styleEl.textContent = `
-        @keyframes ${animName} {
-          from { background-position: 0 0; }
-          to { background-position: -${width}px 0; }
-        }
-      `;
-
-    // 스프라이트 크기를 이미지 세로 크기에 맞춰 설정 (배틀필드와 동일)
-    sprite.style.width = height + 'px';
-    sprite.style.height = height + 'px';
-    sprite.style.backgroundSize = `auto ${height}px`;
-    sprite.style.backgroundImage = `url("${imageUrl}")`;
-    sprite.style.animation = `${animName} ${duration}s steps(${frames}) infinite`;
-
-    // Add transition class and trigger reflow
-    sprite.classList.add('pokemon-sprite-image');
-    requestAnimationFrame(() => {
-      sprite.classList.add('loaded');
-      sprite.style.opacity = '1'; // 이미지 로드 완료 후 표시
-    });
-
-    console.log(`✓ ${spriteId}: ${frames} 프레임, ${width}×${height}px, ${duration.toFixed(1)}초 (프레임당 ${timePerFrame}초)`);
-  };
-
-  img.onerror = () => {
-    console.error(`이미지 로드 실패: ${imageUrl}`);
-  };
-
-  img.src = imageUrl;
+    img.src = imageUrl;
+  });
 }
 
 // 포켓몬 스프라이트 설정 함수
@@ -2190,6 +2245,10 @@ window.addEventListener('click', (e) => {
   if (e.target === evolutionModal) {
     evolutionModal.style.display = 'none';
     document.body.style.overflow = ''; // 배경 스크롤 복원
+    
+    const descEl = document.getElementById('display-description');
+    if (descEl) descEl.textContent = '';
+
     onModalClose();
   }
   if (e.target === detailModal) {
@@ -2204,6 +2263,43 @@ async function openEggModal() {
   await loadUserEggs();
 }
 
+// 부화기 로딩 상태 렌더링 (스켈레톤 UI)
+function renderLoadingIncubators() {
+  const containers = [
+    document.getElementById('incubator-slots'),
+    document.getElementById('incubator-slots-modal')
+  ];
+
+  containers.forEach(container => {
+    if (!container) return;
+    container.innerHTML = '';
+
+    for (let i = 0; i < 3; i++) {
+      const slotDiv = document.createElement('div');
+      slotDiv.className = 'incubator-slot empty'; // 레이아웃 유지를 위해 클래스 사용
+
+      // 알 이미지 스켈레톤
+      const imgSkeleton = document.createElement('div');
+      imgSkeleton.className = 'skeleton';
+      imgSkeleton.style.width = '60px';
+      imgSkeleton.style.height = '60px';
+      imgSkeleton.style.borderRadius = '50%';
+      imgSkeleton.style.marginBottom = '10px';
+
+      // 텍스트 스켈레톤
+      const textSkeleton = document.createElement('div');
+      textSkeleton.className = 'skeleton';
+      textSkeleton.style.width = '80px';
+      textSkeleton.style.height = '14px';
+      textSkeleton.style.borderRadius = '4px';
+
+      slotDiv.appendChild(imgSkeleton);
+      slotDiv.appendChild(textSkeleton);
+      container.appendChild(slotDiv);
+    }
+  });
+}
+
 // 사용자 알 목록 및 부적 개수 로드
 async function loadUserEggs() {
   try {
@@ -2212,6 +2308,8 @@ async function loadUserEggs() {
       renderIncubators([], 0);
       return;
     }
+
+    renderLoadingIncubators(); // 로딩 UI 표시
 
     // 실제 API 호출
     try {
@@ -2938,6 +3036,7 @@ async function fetchUserItems() {
 // 실제 진화 API 호출
 async function executeEvolution(currentId, targetId, cost, baseImageName) {
   try {
+    showGlobalLoading('진화 중...'); // 로딩 시작
     const headers = await getAuthHeaders();
     const response = await fetch('/api/pokemon/evolve', {
       method: 'POST',
@@ -2966,13 +3065,24 @@ async function executeEvolution(currentId, targetId, cost, baseImageName) {
 
   } catch (e) {
     showToast(e.message);
+  } finally {
+    hideGlobalLoading(); // 로딩 종료
   }
 }
 
 // 포켓몬 진화 처리 (UI 호출용)
 async function handleEvolutionClick(currentStableId, targetStableId, targetName, cost, baseImageName) {
-  const items = await fetchUserItems();
-  const candyCount = items['Rare Candy']?.quantity || 0;
+  let candyCount = 0;
+  
+  try {
+    showGlobalLoading('정보 확인 중...');
+    const items = await fetchUserItems();
+    candyCount = items['Rare Candy']?.quantity || 0;
+  } catch (e) {
+    console.error('Failed to fetch items:', e);
+  } finally {
+    hideGlobalLoading();
+  }
 
   if (candyCount < cost) {
     showToast(`이상한 사탕이 부족합니다..!\n보유: ${candyCount}개 / 필요: ${cost}개`);
@@ -2996,13 +3106,21 @@ async function handleEvolutionClick(currentStableId, targetStableId, targetName,
 
 // 폼 해제 처리 (UI 호출용)
 async function handleFormUnlockClick(targetStableId, targetName, baseImageName, isRarePokemon = false) {
-  const items = await fetchUserItems();
   const itemName = isRarePokemon ? 'Awakening Charm' : 'Mystic Charm';
   const itemNameKo = isRarePokemon ? '각성의 부적' : '신비의 부적';
   const itemImage = isRarePokemon ? IMAGE_URLS.AWAKENING_CHARM : IMAGE_URLS.MYSTIC_CHARM;
-
-  const charmCount = items[itemName]?.quantity || 0;
   const cost = 1;
+  let charmCount = 0;
+
+  try {
+    showGlobalLoading('정보 확인 중...');
+    const items = await fetchUserItems();
+    charmCount = items[itemName]?.quantity || 0;
+  } catch (e) {
+    console.error('Failed to fetch items:', e);
+  } finally {
+    hideGlobalLoading();
+  }
 
   if (charmCount < cost) {
     showToast(`${itemNameKo}이 부족합니다...!`);
@@ -3021,6 +3139,7 @@ async function handleFormUnlockClick(targetStableId, targetName, baseImageName, 
 
   if (confirmed) {
     try {
+      showGlobalLoading('폼 해제 중...'); // 로딩 시작
       const headers = await getAuthHeaders();
       const response = await fetch('/api/pokemon/unlock-form', {
         method: 'POST',
@@ -3044,6 +3163,8 @@ async function handleFormUnlockClick(targetStableId, targetName, baseImageName, 
 
     } catch (e) {
       showToast(e.message);
+    } finally {
+      hideGlobalLoading(); // 로딩 종료
     }
   }
 }
@@ -4693,7 +4814,8 @@ function setupGuestModeUI() {
   // 저장 관련 버튼들에 비활성화 스타일 적용
   const saveButtons = [
     'submitScreenTimeBtn',      // 스크린타임 저장
-    'validateScreenTimeBtn'     // 스크린타임 검증
+    'validateScreenTimeBtn',    // 스크린타임 검증
+    'submitSleepBtn'            // 수면 저장
   ];
 
   saveButtons.forEach(btnId => {
@@ -4718,7 +4840,8 @@ function setupGuestModeUI() {
 function clearGuestModeUI() {
   const saveButtons = [
     'submitScreenTimeBtn',
-    'validateScreenTimeBtn'
+    'validateScreenTimeBtn',
+    'submitSleepBtn'
   ];
 
   saveButtons.forEach(btnId => {
@@ -4733,3 +4856,688 @@ function clearGuestModeUI() {
     eggSearchInput.placeholder = '🔍 알 검색...';
   }
 }
+
+// ==========================================
+// Sleep Mode Logic (v2.0 - with Rewards)
+// ==========================================
+class SleepTracker {
+  constructor() {
+    this.storageKey = 'sleepSession';
+    this.queueKey = 'sleepSyncQueue';
+    this.wakeLock = null;
+    this.timerInterval = null;
+    this.wakeUpTimeout = null;
+    this.sleepStatus = null;
+
+    this.elements = {
+      startBtn: document.getElementById('startSleepBtn'),
+      stopBtn: document.getElementById('stopSleepBtn'),
+      refreshBtn: document.getElementById('refreshSleepBtn'),
+      overlay: document.getElementById('sleepOverlay'),
+      timer: document.getElementById('sleepTimer'),
+      statusBadge: document.getElementById('sleepStatusBadge'),
+      percentageText: document.getElementById('currentPercentage'),
+      timeHint: document.getElementById('sleepTimeHint'),
+      pokemonIcons: document.getElementById('sleepPokemonIcons'),
+      message: document.getElementById('sleepMessage')
+    };
+
+    this.init();
+  }
+
+  init() {
+    if (this.elements.startBtn) {
+      this.elements.startBtn.addEventListener('click', () => this.startSleep());
+    }
+    if (this.elements.stopBtn) {
+      this.elements.stopBtn.addEventListener('click', () => this.finishSleep());
+    }
+    if (this.elements.refreshBtn) {
+      this.elements.refreshBtn.addEventListener('click', () => this.refreshStatus());
+    }
+
+    // Setup Mascots (Komala & Musharna)
+    this.setupMascots();
+
+    // Visibility Change Listener
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        this.handleVisibleState();
+      } else if (document.visibilityState === 'hidden') {
+        this.handleHiddenState();
+      }
+    });
+
+    // Also check on touchstart for iOS safety
+    document.addEventListener('touchstart', () => {
+      if (document.visibilityState === 'visible') {
+        this.handleVisibleState();
+      }
+    }, { passive: true });
+
+    // Check status on load
+    this.checkSleepStatus();
+
+    // Try to sync any queued data
+    this.syncData();
+
+    // Listen for user-synced event to retry sync
+    window.addEventListener('user-synced', () => {
+      this.syncData();
+      this.loadSleepStatus();
+    });
+
+    // Load sleep status when sleep tab is activated
+    const sleepTabBtn = document.querySelector('[data-tab="sleep"]');
+    if (sleepTabBtn) {
+      sleepTabBtn.addEventListener('click', () => {
+        setTimeout(() => this.loadSleepStatus(), 100);
+      });
+    }
+  }
+
+  setupMascots() {
+    const overlay = this.elements.overlay;
+    if (!overlay) return;
+
+    // 기존 moon icon 찾기
+    const moonIcon = overlay.querySelector('.sleep-moon-icon');
+
+    // 이미 교체되었는지 확인
+    if (!moonIcon && overlay.querySelector('.sleep-mascot-container')) return;
+
+    // 컨테이너 생성
+    const container = document.createElement('div');
+    container.className = 'sleep-mascot-container';
+
+    // 자말라 (Left)
+    const komalaUrl = getPokemonImageUrl('KOMALA', '', 'front');
+    const komalaImg = document.createElement('img');
+    komalaImg.src = komalaUrl;
+    komalaImg.className = 'sleep-mascot left';
+    komalaImg.style.setProperty('--scale-x', '1'); // 정방향
+
+    // 몽얌나 (Right)
+    const musharnaUrl = getPokemonImageUrl('MUSHARNA', '', 'front');
+    const musharnaImg = document.createElement('img');
+    musharnaImg.src = musharnaUrl;
+    musharnaImg.className = 'sleep-mascot right';
+    musharnaImg.style.setProperty('--scale-x', '-1'); // CSS animation용 변수 (반전 유지하며 float)
+
+    // Zzz 효과
+    const zzzLeft = document.createElement('div');
+    zzzLeft.className = 'sleep-zzz left';
+    zzzLeft.textContent = 'Zzz...';
+
+    const zzzRight = document.createElement('div');
+    zzzRight.className = 'sleep-zzz right';
+    zzzRight.textContent = 'Zzz...';
+
+    container.appendChild(zzzLeft);
+    container.appendChild(komalaImg);
+    container.appendChild(musharnaImg);
+    container.appendChild(zzzRight);
+
+    if (moonIcon) {
+      moonIcon.replaceWith(container);
+    } else {
+      // moon icon을 못 찾았으면 content의 첫 번째 자식으로 삽입 (fallback)
+      const content = overlay.querySelector('.sleep-content');
+      if (content) {
+        content.prepend(container);
+      }
+    }
+  }
+
+  async requestWakeLock() {
+    if ('wakeLock' in navigator) {
+      try {
+        this.wakeLock = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock active');
+      } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+      }
+    }
+  }
+
+  releaseWakeLock() {
+    if (this.wakeLock) {
+      this.wakeLock.release();
+      this.wakeLock = null;
+      console.log('Wake Lock released');
+    }
+  }
+
+  startSleep() {
+    // Check if already slept today
+    if (this.sleepStatus && !this.sleepStatus.canSleepToday) {
+      this.showMessage('이미 오늘은 수면을 기록했습니다.', 'warning');
+      return;
+    }
+
+    // Step 1: Sleep Prep
+    localStorage.setItem('sleepPrep', 'true');
+    this.showOverlay(Date.now());
+    this.requestWakeLock();
+  }
+
+  handleHiddenState() {
+    // Step 2: Sleep Start
+    if (localStorage.getItem('sleepPrep') === 'true') {
+      const startTime = Date.now();
+      const session = {
+        status: 'sleeping',
+        startTime: startTime
+      };
+      localStorage.setItem(this.storageKey, JSON.stringify(session));
+      localStorage.removeItem('sleepPrep');
+      console.log('Sleep started at', new Date(startTime).toLocaleTimeString());
+    }
+
+    // If already sleeping, cancel any wake-up timeout (user went back to sleep)
+    if (this.wakeUpTimeout) {
+      clearTimeout(this.wakeUpTimeout);
+      this.wakeUpTimeout = null;
+      console.log('Sleep resumed (screen off)');
+    }
+  }
+
+  handleVisibleState() {
+    // Step 4: Wake up (Provisional)
+    const sessionStr = localStorage.getItem(this.storageKey);
+    if (!sessionStr) return;
+
+    const session = JSON.parse(sessionStr);
+    if (session.status === 'sleeping') {
+      // Restore UI
+      this.showOverlay(session.startTime);
+
+      // Start 5-minute timer to auto-finish if user stays active
+      if (!this.wakeUpTimeout) {
+        console.log('Wake up detected. Starting 5-min timer.');
+        this.wakeUpTimeout = setTimeout(() => {
+          console.log('Auto-finishing sleep due to 5 min activity');
+          this.finishSleep();
+        }, 5 * 60 * 1000);
+      }
+    }
+  }
+
+  finishSleep() {
+    // 1. 세션 정보 확인
+    const sessionStr = localStorage.getItem(this.storageKey);
+    if (!sessionStr) {
+      this.hideOverlay();
+      this.releaseWakeLock();
+      return;
+    }
+
+    const session = JSON.parse(sessionStr);
+    const endTime = Date.now();
+    const startTime = session.startTime;
+    const duration = endTime - startTime;
+
+    // 4 hours in ms = 14,400,000
+    const MIN_SLEEP_DURATION = 14400000;
+
+    // 2. 중요: 로컬 스토리지 세션 삭제 (가장 먼저 실행하여 상태 리셋 보장)
+    localStorage.removeItem(this.storageKey);
+    console.log('Sleep session cleared from localStorage');
+
+    // 3. UI 및 리소스 정리
+    this.hideOverlay();
+    this.releaseWakeLock();
+    if (this.wakeUpTimeout) {
+      clearTimeout(this.wakeUpTimeout);
+      this.wakeUpTimeout = null;
+    }
+
+    // 4. 수면 시간 검증 및 처리
+    if (duration < MIN_SLEEP_DURATION) {
+      showToast('수면 시간이 너무 짧아 기록되지 않았어요 (4시간 미만)');
+      // 상태 리프레시 (서버는 "아직 안 잤음" 상태일 것이므로 UI가 "수면 가능"으로 돌아감)
+      this.loadSleepStatus();
+    } else {
+      const sleepLog = {
+        start: startTime,
+        end: endTime,
+        duration: duration
+      };
+
+      // 동기화 큐에 추가
+      this.addToSyncQueue(sleepLog);
+
+      const hours = Math.floor(duration / 3600000);
+      const minutes = Math.floor((duration % 3600000) / 60000);
+
+      // 서버 동기화 시도
+      this.syncData().then((data) => {
+        if (data && data.success) {
+          const result = data.data;
+          if (result.rewardedPokemon && result.rewardedPokemon.length > 0) {
+            showToast(`✨ ${result.rewardedPokemon.length}마리의 이로치를 획득했습니다!`);
+            this.showMessage(`${result.rewardedPokemon.map(p => p.name).join(', ')} 이로치 획득!`, 'success');
+
+            if (typeof loadUserPokemonIcons === 'function') {
+              loadUserPokemonIcons();
+            }
+          } else {
+            showToast(`수면 시간 기록됨: ${hours}시간 ${minutes}분`);
+          }
+        } else {
+          // 오프라인이거나 실패 시 로컬 메시지
+          showToast(`수면 시간 기록됨: ${hours}시간 ${minutes}분 (동기화 대기)`);
+        }
+        // 동기화 후 최신 상태 로드 (서버의 "수면 완료" 상태 반영)
+        this.loadSleepStatus();
+      });
+    }
+  }
+
+  // Legacy cancel method (optional, if we want a specific cancel button)
+  cancelSleep() {
+    this.finishSleep(); // Just map to finish for now
+  }
+
+  showOverlay(startTime) {
+    if (this.elements.overlay) {
+      this.elements.overlay.style.display = 'flex';
+      void this.elements.overlay.offsetWidth;
+      this.elements.overlay.classList.add('active');
+    }
+
+    this.updateTimer(startTime);
+    if (this.timerInterval) clearInterval(this.timerInterval);
+    this.timerInterval = setInterval(() => this.updateTimer(startTime), 1000);
+  }
+
+  hideOverlay() {
+    if (this.elements.overlay) {
+      this.elements.overlay.style.display = 'none';
+      this.elements.overlay.classList.remove('active');
+    }
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+  }
+
+  updateTimer(startTime) {
+    if (!this.elements.timer) return;
+    const diff = Date.now() - startTime;
+    const hours = Math.floor(diff / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    this.elements.timer.textContent =
+      `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  checkSleepStatus() {
+    // On load, just check if we should show overlay
+    const sessionStr = localStorage.getItem(this.storageKey);
+    if (sessionStr) {
+      const session = JSON.parse(sessionStr);
+      if (session.status === 'sleeping') {
+        this.showOverlay(session.startTime);
+      }
+    }
+  }
+
+  addToSyncQueue(log) {
+    let queue = [];
+    try {
+      queue = JSON.parse(localStorage.getItem(this.queueKey) || '[]');
+    } catch (e) {
+      queue = [];
+    }
+    queue.push(log);
+    localStorage.setItem(this.queueKey, JSON.stringify(queue));
+  }
+
+  async syncData() {
+    if (!window.isAuthenticated()) return;
+
+    let queue = [];
+    try {
+      queue = JSON.parse(localStorage.getItem(this.queueKey) || '[]');
+    } catch (e) {
+      return;
+    }
+
+    if (queue.length === 0) return;
+
+    const userId = window.getCurrentUserId ? window.getCurrentUserId() : null;
+    if (!userId) return;
+
+    console.log(`Syncing ${queue.length} sleep logs...`);
+
+    let lastResponseData = null;
+    const newQueue = [];
+    for (const log of queue) {
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch('/api/sleep', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            userId: userId,
+            start: log.start,
+            end: log.end,
+            duration: log.duration
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Sync failed');
+        }
+        lastResponseData = await response.json();
+      } catch (err) {
+        console.error('Sleep sync error:', err);
+        newQueue.push(log);
+      }
+    }
+
+    localStorage.setItem(this.queueKey, JSON.stringify(newQueue));
+    return lastResponseData;
+  }
+
+  // ==========================================
+  // Sleep Reward UI Methods
+  // ==========================================
+
+  async loadSleepStatus() {
+    if (!window.isAuthenticated()) {
+      this.renderGuestState();
+      return;
+    }
+
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/sleep/status', { headers });
+
+      if (!response.ok) {
+        throw new Error('Failed to load sleep status');
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        this.sleepStatus = data.data.sleepStatus;
+        this.renderSleepRewardUI(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load sleep status:', err);
+      this.showMessage('수면 상태를 불러오는데 실패했습니다.', 'error');
+    }
+  }
+
+  renderGuestState() {
+    if (this.elements.statusBadge) {
+      this.elements.statusBadge.textContent = '체험 모드';
+      this.elements.statusBadge.className = 'sleep-status-badge';
+    }
+    if (this.elements.percentageText) {
+      this.elements.percentageText.textContent = '--%';
+    }
+    if (this.elements.timeHint) {
+      this.elements.timeHint.textContent = '로그인 후 이용 가능합니다';
+    }
+    if (this.elements.refreshBtn) {
+      this.elements.refreshBtn.disabled = true;
+    }
+    if (this.elements.startBtn) {
+      this.elements.startBtn.disabled = true;
+    }
+  }
+
+  renderSleepRewardUI(data) {
+    const { todayPokemon, sleepStatus } = data;
+
+    // Update status badge
+    if (this.elements.statusBadge) {
+      if (sleepStatus.alreadyRewarded) {
+        this.elements.statusBadge.textContent = '보상 완료';
+        this.elements.statusBadge.className = 'sleep-status-badge rewarded';
+      } else if (!sleepStatus.canSleepToday) {
+        this.elements.statusBadge.textContent = '수면 기록됨';
+        this.elements.statusBadge.className = 'sleep-status-badge already-slept';
+      } else {
+        this.elements.statusBadge.textContent = '수면 가능';
+        this.elements.statusBadge.className = 'sleep-status-badge can-sleep';
+      }
+    }
+
+    // Determine which percentage to show
+    const displayPercentage = sleepStatus.canSleepToday
+      ? sleepStatus.expectedPercentage
+      : sleepStatus.currentRewardPercentage;
+
+    // Update percentage text
+    if (this.elements.percentageText) {
+      this.elements.percentageText.textContent = `${Math.round(displayPercentage)}%`;
+    }
+
+    // Update time hint
+    if (this.elements.timeHint) {
+      if (sleepStatus.alreadyRewarded) {
+        this.elements.timeHint.textContent = '오늘의 수면 보상을 받았습니다!';
+      } else if (!sleepStatus.canSleepToday) {
+        this.elements.timeHint.textContent = '수면 종료 후 보상받기를 눌러주세요';
+      } else {
+        const msg = sleepStatus.isWakeUpDayOff
+          ? '내일 쉬는 날 기준 (02시까지 가능)'
+          : '지금 자면 받을 수 있는 이로치';
+        this.elements.timeHint.textContent = msg;
+      }
+    }
+
+    // Progress bar logic removed (replaced by snake connectors)
+
+    // Render Pokemon icons and Time Markers
+    this.renderPokemonIcons(todayPokemon, displayPercentage, sleepStatus.rewardTable);
+
+    // Update button states
+    if (this.elements.refreshBtn) {
+      this.elements.refreshBtn.disabled = sleepStatus.alreadyRewarded;
+    }
+    if (this.elements.startBtn) {
+      this.elements.startBtn.disabled = !sleepStatus.canSleepToday;
+    }
+
+    this.hideMessage();
+  }
+
+  renderPokemonIcons(pokemon, percentage, rewardTable = null) {
+    if (!this.elements.pokemonIcons) return;
+
+    this.elements.pokemonIcons.innerHTML = '';
+
+    if (!pokemon || pokemon.length === 0) {
+      const noMsg = document.createElement('div');
+      noMsg.className = 'no-pokemon-message';
+      noMsg.innerHTML = `
+        <p>오늘 획득한 포켓몬이 없습니다.<br>포켓몬을 획득하면 이로치 보상이 표시됩니다.</p>
+      `;
+      this.elements.pokemonIcons.appendChild(noMsg);
+      return;
+    }
+
+    // 1. Define Markers from API data
+    let markers = [];
+    if (rewardTable) {
+      markers = Object.entries(rewardTable).map(([hour, percent]) => ({
+        label: hour.padStart(2, '0'),
+        percent: percent,
+        type: 'marker'
+      }));
+    }
+
+    // 2. Assign percent to Pokemon
+    const totalPokemon = pokemon.length;
+    const pokemonWithPercent = pokemon.map((p, index) => ({
+      ...p,
+      percent: ((totalPokemon - index) / (totalPokemon + 1)) * 100,
+      type: 'pokemon'
+    }));
+
+    // 3. Merge and Sort
+    // Sort by percent descending.
+    // If percents are equal (or very close), Markers should come BEFORE Pokemon
+    let mergedList = [...pokemonWithPercent, ...markers];
+    mergedList.sort((a, b) => {
+      if (Math.abs(a.percent - b.percent) < 0.1) {
+        return a.type === 'marker' ? -1 : 1;
+      }
+      return b.percent - a.percent;
+    });
+
+    // 4. Grid Setup
+    const totalItems = mergedList.length;
+    const cols = 4;
+    const rows = Math.ceil(totalItems / cols);
+    const cellWidth = 100 / cols;
+    const cellHeightPx = 80; // Fixed height per row in pixels
+    const totalHeightPx = Math.max(rows, 3) * cellHeightPx;
+
+    // Set container height dynamically
+    if (this.elements.pokemonIcons) {
+      this.elements.pokemonIcons.style.height = `${totalHeightPx}px`;
+    }
+
+    let prevX = null;
+    let prevY = null;
+    let prevObtainable = true;
+
+    mergedList.forEach((item, index) => {
+      const isObtainable = item.percent <= percentage;
+
+      // Grid Coordinates
+      const row = Math.floor(index / cols);
+      let col = index % cols;
+      if (row % 2 === 1) col = cols - 1 - col;
+
+      const x = (col * cellWidth) + (cellWidth / 2);
+      const y = (row * cellHeightPx) + (cellHeightPx / 2);
+
+      if (item.type === 'pokemon') {
+        // Render Pokemon
+        const milestoneEl = document.createElement('div');
+        milestoneEl.className = `sleep-milestone ${isObtainable ? 'obtainable' : 'missed'}`;
+        milestoneEl.style.left = `${x}%`;
+        milestoneEl.style.top = `${y}px`;
+        milestoneEl.title = `${item.name} (필요 달성률: ${Math.round(item.percent)}%)`;
+
+        // Icon Box
+        const iconBox = document.createElement('div');
+        iconBox.className = 'sleep-pokemon-icon';
+
+        const img = document.createElement('img');
+        img.src = item.icon_shiny_url;
+        img.alt = item.name;
+        img.onerror = () => {
+          if (img.dataset.retry) {
+            img.onerror = null;
+            return;
+          }
+          img.dataset.retry = 'true';
+          const normalUrl = item.icon_shiny_url.replace('Icons%20shiny', 'Icons');
+          img.src = normalUrl;
+        };
+        iconBox.appendChild(img);
+
+        // Label
+        const labelEl = document.createElement('div');
+        labelEl.className = 'milestone-label';
+        labelEl.textContent = `${Math.round(item.percent)}%`;
+
+        milestoneEl.appendChild(iconBox);
+        milestoneEl.appendChild(labelEl);
+        this.elements.pokemonIcons.appendChild(milestoneEl);
+      } else {
+        // Render Marker
+        const markerEl = document.createElement('div');
+        markerEl.className = `time-marker-item ${isObtainable ? 'active' : ''}`;
+        markerEl.style.left = `${x}%`;
+        markerEl.style.top = `${y}px`;
+        markerEl.textContent = item.label;
+        markerEl.title = `${item.label}시 (${item.percent}%)`;
+
+        this.elements.pokemonIcons.appendChild(markerEl);
+      }
+
+      // Draw Connector
+      if (index > 0 && prevX !== null && prevY !== null) {
+        this.drawConnector(prevX, prevY, x, y, prevObtainable && isObtainable);
+      }
+
+      prevX = x;
+      prevY = y;
+      prevObtainable = isObtainable;
+    });
+  }
+
+  drawConnector(x1, y1, x2, y2, isActive) {
+    const connector = document.createElement('div');
+    connector.className = `snake-connector ${isActive ? 'active' : ''}`;
+
+    // Get container dimensions to convert % to px
+    const container = this.elements.pokemonIcons;
+    const w = container.offsetWidth;
+
+    const px1 = (x1 / 100) * w;
+    const py1 = y1; // Already in px
+    const px2 = (x2 / 100) * w;
+    const py2 = y2; // Already in px
+
+    const length = Math.sqrt(Math.pow(px2 - px1, 2) + Math.pow(py2 - py1, 2));
+    const angle = Math.atan2(py2 - py1, px2 - px1) * (180 / Math.PI);
+
+    // Style
+    connector.style.width = `${length}px`;
+    connector.style.height = '4px'; // Thickness
+    connector.style.left = `${x1}%`;
+    connector.style.top = `${y1}px`;
+    connector.style.transform = `rotate(${angle}deg)`;
+
+    this.elements.pokemonIcons.prepend(connector); // Behind icons
+  }
+
+  async refreshStatus() {
+    if (!window.isAuthenticated()) {
+      showToast('로그인이 필요합니다.');
+      return;
+    }
+
+    if (this.elements.refreshBtn) {
+      this.elements.refreshBtn.disabled = true;
+    }
+
+    try {
+      showToast('상태를 새로고침합니다...');
+      await this.loadSleepStatus();
+    } catch (err) {
+      console.error('Failed to refresh status:', err);
+    } finally {
+      if (this.elements.refreshBtn) {
+        this.elements.refreshBtn.disabled = this.sleepStatus?.alreadyRewarded;
+      }
+    }
+  }
+
+  showMessage(text, type = 'info') {
+    if (!this.elements.message) return;
+    this.elements.message.textContent = text;
+    this.elements.message.className = `sleep-message ${type}`;
+  }
+
+  hideMessage() {
+    if (!this.elements.message) return;
+    this.elements.message.className = 'sleep-message';
+    this.elements.message.textContent = '';
+  }
+}
+
+// Initialize Sleep Mode on Load
+document.addEventListener('DOMContentLoaded', () => {
+  window.sleepTracker = new SleepTracker();
+});
+

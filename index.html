@@ -292,6 +292,75 @@
           </div>
         </div>
 
+        <!-- Tab 4: Sleep -->
+        <div id="view-sleep" class="tab-view">
+          <!-- Pokedex Header -->
+          <div class="pokedex-header">
+            <div class="pokedex-curve-bg"></div>
+            <div class="pokedex-eyes-container">
+              <div class="pokedex-eye left">
+                <div class="pokedex-eye-line"></div>
+              </div>
+              <div class="pokedex-eye right">
+                <div class="pokedex-eye-line"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pokedex-screen">
+            <div class="content-section sleep-section">
+              <div class="sleep-header">
+                <h3>수면 보상</h3>
+                <div class="sleep-status-badge" id="sleepStatusBadge"></div>
+              </div>
+
+              <!-- 수면 보상 프로그레스 영역 -->
+              <div class="sleep-reward-container">
+                <div class="sleep-reward-info" id="sleepRewardInfo">
+                  <span class="percentage-text" id="currentPercentage">0%</span>
+                  <span class="time-hint" id="sleepTimeHint">지금 자면 받을 수 있는 이로치</span>
+                </div>
+
+                <!-- 프로그레스바 영역 (제거됨, 아이콘만 표시) -->
+                <div class="sleep-progress-wrapper">
+                  <div class="pokemon-icons-row" id="sleepPokemonIcons">
+                    <!-- 포켓몬 아이콘이 동적으로 배치됨 -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- 하단 액션 버튼 영역 -->
+              <div class="sleep-actions">
+                <button id="refreshSleepBtn" class="refresh-sleep-btn" title="새로고침">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                    width="20" height="20">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  REFRESH
+                </button>
+                <button id="startSleepBtn" class="start-sleep-btn">
+                  <span class="btn-icon">😴</span>
+                  <span class="btn-text">수면 시작</span>
+                </button>
+              </div>
+
+              <!-- 수면 상태 메시지 -->
+              <div class="sleep-message" id="sleepMessage"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sleep Mode Overlay -->
+        <div id="sleepOverlay" class="sleep-overlay" style="display: none;">
+          <div class="sleep-content">
+            <div class="sleep-moon-icon">🌙</div>
+            <h2>수면 모드 실행 중</h2>
+            <p>이 화면을 벗어나지 말고<br>화면을 잠궈주세요.</p>
+            <div class="sleep-timer" id="sleepTimer">00:00:00</div>
+            <button id="stopSleepBtn" class="cancel-btn">수면 종료</button>
+          </div>
+        </div>
 
       </div>
 
@@ -325,6 +394,16 @@
             </svg>
           </div>
           <span>스크린타임</span>
+        </button>
+        <button class="tab-item" data-tab="sleep">
+          <div class="tab-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          </div>
+          <span>수면</span>
         </button>
 
       </nav>
@@ -1300,6 +1379,12 @@
     <!-- 메인 스크립트 (Vite 빌드 시 자동 교체됨) -->
     <script type="module" src="/index.js"></script>
     <script type="module" src="/pwa.js"></script>
+
+  <!-- Global Loading Overlay -->
+  <div id="global-loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-message">잠시만 기다려주세요...</div>
+  </div>
 </body>
 
 </html>

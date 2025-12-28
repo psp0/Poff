@@ -125,7 +125,8 @@ body {
 /* Home Tab Specific Styles */
 #view-home,
 #view-eggs,
-#view-screentime {
+#view-screentime,
+#view-sleep {
   background-color: #CD5C5C;
   /* IndianRed */
   overflow-x: hidden;
@@ -1243,7 +1244,8 @@ body.modal-open {
 .pokemon-detail-content {
   max-width: 900px;
   width: 95%;
-  max-height: 90vh;
+  height: 100%;
+  max-height: 95vh !important;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1309,9 +1311,14 @@ body.modal-open {
 
 /* 진화 섹션 */
 .evolution-section {
-  margin-top: 24px;
+  margin-top: 12px;
   background: #ffffff;
   border-radius: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .evolution-header {
@@ -1381,14 +1388,12 @@ body.modal-open {
   align-items: flex-start;
   justify-content: space-evenly;
   /* 레벨들을 균등하게 배치 */
-  overflow-x: auto;
-  overflow-y: auto;
-  height: 270px;
-  /* Limit height to force scrolling */
+  overflow: auto;
   flex: 1;
   /* Take remaining space and scroll */
   /* SVG 화살표 절대 위치 기준점 */
   padding-top: 10px;
+  width: 100%;
 }
 
 .evolution-level {
@@ -1838,7 +1843,7 @@ body.modal-open {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
   user-select: none;
-  opacity: 0.2;
+  opacity: 0.5;
 }
 
 .nav-arrow:hover {
@@ -5423,4 +5428,607 @@ body:has(.auth-section:not([style*="display: none"])) {
   background-color: #edf2f7;
   color: #718096;
   text-decoration: line-through;
+}
+
+/* Sleep Mode Overlay Styles */
+.sleep-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #0f0f1a;
+  /* Deep night blue/black */
+  color: #e0e0ff;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.sleep-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+}
+
+/* Sleep Mascots (Komala & Musharna) */
+.sleep-mascot-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 320px;
+  /* 너무 멀어지지 않게 제한 */
+  margin-bottom: 20px;
+  position: relative;
+  z-index: 10;
+}
+
+.sleep-mascot {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+  animation: float-sleep 4s ease-in-out infinite;
+}
+
+/* 왼쪽 자말라 (약간 늦게 둥둥) */
+.sleep-mascot.left {
+  animation-delay: 0s;
+}
+
+/* 오른쪽 몽얌나 (반전시켜서 안쪽 보게 함 & 타이밍 다르게) */
+.sleep-mascot.right {
+  transform: scaleX(-1);
+  /* 원본이 왼쪽을 보면 반전 필요, 오른쪽 보면 불필요. 보통 Front는 왼쪽 하단을 봄 -> 반전하면 오른쪽 하단(중앙) 봄 */
+  animation-delay: 2s;
+}
+
+/* 자는 표시 (Zzz...) */
+.sleep-zzz {
+  position: absolute;
+  top: -10px;
+  font-weight: bold;
+  color: #a5b4fc;
+  font-size: 20px;
+  opacity: 0;
+  animation: zzz-float 3s linear infinite;
+}
+
+.sleep-zzz.left {
+  left: 20px;
+  animation-delay: 1s;
+}
+
+.sleep-zzz.right {
+  right: 20px;
+  animation-delay: 3s;
+}
+
+@keyframes float-sleep {
+
+  0%,
+  100% {
+    transform: translateY(0) scaleX(var(--scale-x, 1));
+  }
+
+  50% {
+    transform: translateY(-10px) scaleX(var(--scale-x, 1));
+  }
+}
+
+@keyframes zzz-float {
+  0% {
+    transform: translate(0, 0) scale(0.8);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(15px, -20px) scale(1.2);
+    opacity: 0;
+  }
+}
+
+/* 기존 아이콘 스타일 무력화 혹은 숨김 (JS에서 교체하겠지만 안전장치) */
+.sleep-moon-icon {
+  display: none;
+}
+
+/* Restored Sleep Content Styles */
+.sleep-content h2 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+}
+
+.sleep-content p {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: #a0a0b0;
+  margin: 0;
+}
+
+.sleep-timer {
+  font-family: monospace;
+  font-size: 2.5rem;
+  color: #a5b4fc;
+  /* Adjusted color for better visibility on dark bg */
+  margin: 20px 0;
+  font-weight: bold;
+  text-shadow: 0 0 10px rgba(72, 61, 139, 0.5);
+}
+
+.sleep-content .cancel-btn {
+  padding: 12px 30px;
+  font-size: 1rem;
+  border-radius: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 20px;
+}
+
+.sleep-content .cancel-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(0.95);
+}
+
+/* ==========================================
+   Sleep Reward Section Styles
+   ========================================== */
+
+.sleep-section {
+  padding: 20px;
+}
+
+.sleep-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.sleep-header h3 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.sleep-status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sleep-status-badge.can-sleep {
+  background: linear-gradient(135deg, #34d399, #10b981);
+  color: white;
+}
+
+.sleep-status-badge.already-slept {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: white;
+}
+
+.sleep-status-badge.rewarded {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+}
+
+/* Sleep Reward Container */
+.sleep-reward-container {
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+  border-radius: 16px;
+  padding: 24px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 25px rgba(30, 27, 75, 0.4);
+}
+
+.sleep-reward-info {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.percentage-text {
+  display: block;
+  font-size: 48px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+
+.time-hint {
+  display: block;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 8px;
+}
+
+/* Progress Wrapper - 한 화면 뱀형 레이아웃 컨테이너 */
+.sleep-progress-wrapper {
+  position: relative;
+  width: 100%;
+  height: 350px;
+  /* Fixed height for the viewport */
+  margin-top: 10px;
+  overflow-y: auto;
+  /* Enable vertical scroll */
+  overflow-x: hidden;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+}
+
+/* Custom Scrollbar for better look */
+.sleep-progress-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sleep-progress-wrapper::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sleep-progress-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+/* Pokemon Icons Container */
+.pokemon-icons-row {
+  position: relative;
+  /* Change to relative to allow height to grow and be scrollable */
+  width: 100%;
+  min-height: 100%;
+  pointer-events: none;
+}
+
+/* Milestone Container - 개별 항목 (JS에서 top/left 제어) */
+.sleep-milestone {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  /* 중심점 기준 배치 */
+  pointer-events: auto;
+  z-index: 10;
+  transition: all 0.3s ease;
+}
+
+/* Pokemon Icon Box */
+.sleep-pokemon-icon {
+  position: relative;
+  width: 48px;
+  /* 고정 크기 */
+  height: 48px;
+  background: #1e1b4b;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 이미지 중앙 정렬 */
+  overflow: hidden;
+  /* 넘치는 이미지 자르기 */
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+  /* 연결선보다 위 */
+}
+
+/* 2프레임 이미지 처리 (확실한 크핑 & 중앙 정렬 개선) */
+.sleep-pokemon-icon img {
+  height: 100%;
+  width: auto;
+  min-width: 200%;
+  flex-shrink: 0;
+  object-fit: cover;
+  object-position: left center;
+  /* 왼쪽 프레임 표시 */
+  image-rendering: pixelated;
+  /* 이미지가 약간 내려가 보인다면 translateY로 미세 조정 */
+  transform: scale(1.3) translateY(-1px);
+  transform-origin: 25% 50%;
+}
+
+/* 상태별 스타일 */
+.sleep-milestone.obtainable .sleep-pokemon-icon {
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  border-color: #fbbf24;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+}
+
+.sleep-milestone.obtainable:hover .sleep-pokemon-icon {
+  transform: scale(1.15);
+  z-index: 20;
+}
+
+.sleep-milestone.missed .sleep-pokemon-icon {
+  filter: grayscale(100%) contrast(0.8);
+  opacity: 0.7;
+  border-color: #4b5563;
+  background: #1f2937;
+}
+
+.sleep-milestone.missed .sleep-pokemon-icon img {
+  filter: grayscale(100%);
+}
+
+/* Percentage Label */
+.milestone-label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1px 5px;
+  border-radius: 8px;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px black;
+  z-index: 3;
+}
+
+.sleep-milestone.obtainable .milestone-label {
+  color: #fbbf24;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+/* Time Marker Item (Grid Item) */
+.time-marker-item {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: #2d3748;
+  border: 2px solid #718096;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.time-marker-item.active {
+  background: #fbbf24;
+  border-color: #f59e0b;
+  color: #744210;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* Snake Connectors (연결선) */
+.snake-connector {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.2);
+  transform-origin: 0 50%;
+  z-index: 1;
+  border-radius: 2px;
+  margin-top: -2px;
+  /* Center the 4px line vertically */
+}
+
+.snake-connector.active {
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
+}
+
+/* Sleep Actions */
+.sleep-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.refresh-sleep-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.refresh-sleep-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+}
+
+.refresh-sleep-btn:active {
+  transform: translateY(0);
+}
+
+.refresh-sleep-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.start-sleep-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.start-sleep-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+}
+
+.start-sleep-btn:active {
+  transform: translateY(0);
+}
+
+.start-sleep-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.start-sleep-btn .btn-icon {
+  font-size: 20px;
+}
+
+/* Sleep Message */
+.sleep-message {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+  display: none;
+}
+
+.sleep-message.info {
+  display: block;
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.sleep-message.success {
+  display: block;
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.sleep-message.warning {
+  display: block;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.sleep-message.error {
+  display: block;
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #991b1b;
+  border: 1px solid #f87171;
+}
+
+/* No Pokemon State */
+.no-pokemon-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.no-pokemon-message .emoji {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.no-pokemon-message p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Global Loading Overlay */
+#global-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+#global-loading-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-left-color: #CD5C5C;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.loading-message {
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+#auth,
+#content {
+  display: none;
 }
