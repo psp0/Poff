@@ -35,6 +35,8 @@ const screenTimeManagement = require('/lambda/functions/screen-time-management')
 const userManagement = require('/lambda/functions/user-management');
 const pokemonManagement = require('/lambda/functions/pokemon-management');
 const guestMode = require('/lambda/functions/guest-mode');
+const sleepManagement = require('/lambda/functions/sleep-management');
+
 
 // Middleware to convert Express req/res to Lambda event/context
 function lambdaAdapter(handler) {
@@ -67,12 +69,15 @@ function lambdaAdapter(handler) {
 // Config Route
 app.get('/api/config', (req, res) => {
     res.json({
-        firebase: {
-            apiKey: process.env.VITE_FIREBASE_API_KEY,
-            authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-            projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-            appId: process.env.VITE_FIREBASE_APP_ID,
-            messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        success: true,
+        data: {
+            firebase: {
+                apiKey: process.env.VITE_FIREBASE_API_KEY,
+                authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+                projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+                appId: process.env.VITE_FIREBASE_APP_ID,
+                messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+            }
         }
     });
 });
@@ -123,6 +128,11 @@ app.get('/api/guest/evolution/:baseImageName', lambdaAdapter(guestMode));
 app.get('/api/guest/eggs', lambdaAdapter(guestMode));
 
 app.get('/api/guest/starter-pokemon', lambdaAdapter(guestMode));
+
+// Sleep Management Routes
+app.post('/api/sleep', lambdaAdapter(sleepManagement));
+app.get('/api/sleep/status', lambdaAdapter(sleepManagement));
+app.post('/api/sleep/reward', lambdaAdapter(sleepManagement));
 
 // Health check
 app.get('/health', (req, res) => {
