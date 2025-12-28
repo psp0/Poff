@@ -197,6 +197,11 @@ class PokemonParser {
                     habitatKo = this.koreanHabitats["Rough Terrain"] || data.habitat;
                 }
             }
+            
+            // Default to 'rare' if no habitat
+            if (!habitatKo || !data.habitat) {
+                habitatKo = '희귀';
+            }
 
             // Base Pokemon record
             const record = {
@@ -209,7 +214,7 @@ class PokemonParser {
                 pokedex: this.koreanPokedex[data.pokedex] || data.pokedex,
                 generation: data.generation,
                 habitat: habitatKo,
-                habitat_en: data.habitat?.toLowerCase() || null,
+                habitat_en: data.habitat?.toLowerCase() || 'rare',
                 height: data.height,
                 weight: data.weight,
                 base_hp: data.base_hp,
@@ -298,6 +303,11 @@ class PokemonParser {
                             formHabitat = this.koreanHabitats["Rough Terrain"] || merged.habitat;
                         }
                     }
+                    
+                    // Default to 'rare' if no habitat
+                    if (!formHabitat || !merged.habitat) {
+                        formHabitat = 'rare';
+                    }
 
                     const formRecord = {
                         name: `${koreanName} (${formNameKor})`,
@@ -309,7 +319,7 @@ class PokemonParser {
                         pokedex: this.koreanPokedex[merged.pokedex] || merged.pokedex,
                         generation: merged.generation,
                         habitat: formHabitat,
-                        habitat_en: merged.habitat?.toLowerCase() || null,
+                        habitat_en: merged.habitat?.toLowerCase() || 'rare',
                         height: merged.height,
                         weight: merged.weight,
                         base_hp: merged.base_hp,
