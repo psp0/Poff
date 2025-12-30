@@ -1,7 +1,7 @@
 {
-    "name": "pokehabit-api-server",
+    "name": "poff-api-server",
     "version": "1.0.0",
-    "description": "Local development API server for Pokehabit",
+    "description": "Local development API server for Poff",
     "main": "server.js",
     "scripts": {
         "dev": "nodemon src/server.js",

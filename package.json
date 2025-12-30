@@ -1,5 +1,5 @@
 {
-  "name": "pokehabit",
+  "name": "poff",
   "version": "1.0.0",
   "description": "Pokemon Habit Collection",
   "private": true,
@@ -12,7 +12,7 @@
     "dev:down": "cd local-dev && docker-compose down",
     "dev:downv": "cd local-dev && docker-compose down -v",
     "dev:logs": "cd local-dev && docker-compose logs -f",
-    "dev:seed": "cd seeder && npm install && DB_HOST=127.0.0.1 DB_USER=admin DB_PASSWORD=pokehabit123 DB_NAME=pokehabit ASSETS_DIR=../pokehabit-assets npm run seed:local && DB_HOST=127.0.0.1 DB_USER=admin DB_PASSWORD=pokehabit123 DB_NAME=pokehabit npm run seed:holidays:local",
+    "dev:seed": "cd seeder && npm install && DB_HOST=127.0.0.1 DB_USER=admin DB_PASSWORD=poff123 DB_NAME=poff ASSETS_DIR=../poff-assets npm run seed:local && DB_HOST=127.0.0.1 DB_USER=admin DB_PASSWORD=poff123 DB_NAME=poff npm run seed:holidays:local",
     "dev:restart": "cd local-dev && docker-compose restart api-server",
     "db:migrate": "cd migrations && npm install && npm run migrate:up",
     "db:revert": "cd migrations && npm run migrate:down",

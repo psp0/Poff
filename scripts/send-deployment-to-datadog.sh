@@ -75,7 +75,7 @@ EVENT_PAYLOAD=$(cat <<EOF
     "deployment_status:$DEPLOYMENT_STATUS",
     "version:$VERSION",
     "deployer:$DEPLOYER",
-    "service:pokehabit"
+    "service:poff"
   ],
   "source_type_name": "GITHUB_ACTIONS"
 }
@@ -101,25 +101,25 @@ METRICS_PAYLOAD=$(cat <<EOF
       "metric": "deployment.count",
       "points": [[${TIMESTAMP}, 1]],
       "type": "count",
-      "tags": ["environment:$ENVIRONMENT", "status:$DEPLOYMENT_STATUS", "service:pokehabit"]
+      "tags": ["environment:$ENVIRONMENT", "status:$DEPLOYMENT_STATUS", "service:poff"]
     },
     {
       "metric": "deployment.duration",
       "points": [[${TIMESTAMP}, ${DURATION_SECONDS}]],
       "type": "gauge",
-      "tags": ["environment:$ENVIRONMENT", "status:$DEPLOYMENT_STATUS", "service:pokehabit"]
+      "tags": ["environment:$ENVIRONMENT", "status:$DEPLOYMENT_STATUS", "service:poff"]
     },
     {
       "metric": "deployment.infra_duration",
       "points": [[${TIMESTAMP}, ${INFRA_DURATION}]],
       "type": "gauge",
-      "tags": ["environment:$ENVIRONMENT", "service:pokehabit"]
+      "tags": ["environment:$ENVIRONMENT", "service:poff"]
     },
     {
       "metric": "deployment.rollback",
       "points": [[${TIMESTAMP}, ${IS_ROLLBACK}]],
       "type": "count",
-      "tags": ["environment:$ENVIRONMENT", "service:pokehabit"]
+      "tags": ["environment:$ENVIRONMENT", "service:poff"]
     }
   ]
 }

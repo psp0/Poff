@@ -386,11 +386,11 @@ jobs:
           ENV="prod"
           echo "Storing infrastructure parameters in SSM for environment: $ENV"
           
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/rds_endpoint" --value "${{ steps.set-outputs.outputs.rds_endpoint }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/rds_port" --value "${{ steps.set-outputs.outputs.rds_port }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/database_name" --value "${{ steps.set-outputs.outputs.database_name }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/nat_instance_id" --value "${{ steps.set-outputs.outputs.nat_instance_id }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/s3_bucket" --value "${{ steps.set-outputs.outputs.s3_bucket }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/rds_endpoint" --value "${{ steps.set-outputs.outputs.rds_endpoint }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/rds_port" --value "${{ steps.set-outputs.outputs.rds_port }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/database_name" --value "${{ steps.set-outputs.outputs.database_name }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/nat_instance_id" --value "${{ steps.set-outputs.outputs.nat_instance_id }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/s3_bucket" --value "${{ steps.set-outputs.outputs.s3_bucket }}" --type "String" --overwrite
           
           echo "✅ Parameters stored successfully"
 
@@ -473,7 +473,7 @@ jobs:
               --exclude "*.DS_Store"
           fi
           
-          # Note: pokehabit-assets are uploaded separately via scripts/upload-assets.sh
+          # Note: poff-assets are uploaded separately via scripts/upload-assets.sh
           # This avoids storing large binary files in Git
           
           echo "✅ Frontend files uploaded successfully"
@@ -601,7 +601,7 @@ jobs:
       rds_port: ${{ needs.deploy-production.outputs.rds_port }}
       database_name: ${{ needs.deploy-production.outputs.database_name }}
       nat_instance_id: ${{ needs.deploy-production.outputs.nat_instance_id }}
-      assets_bucket_name: "pokehabit-prod-assets"
+      assets_bucket_name: "poff-prod-assets"
     secrets: inherit
 
 
@@ -773,7 +773,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: success
-          channel: '#pokehabit-deployments'
+          channel: '#poff-deployments'
           text: |
             ✅ *운영 환경 배포 성공!*
             
@@ -855,7 +855,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          channel: '#pokehabit-alerts'
+          channel: '#poff-alerts'
           text: |
             🚨 *운영 환경 배포 실패!*
             

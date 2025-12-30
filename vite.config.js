@@ -22,6 +22,6 @@ export default defineConfig({
     minify: 'esbuild',
   },
 
-  // 정적 파일 폴더 (pokehabit-assets 제외 - API에서 제공)
+  // 정적 파일 폴더 (poff-assets 제외 - API에서 제공)
   publicDir: 'public',
 });

@@ -71,7 +71,7 @@ secrets/
 !*.pub
 
 # Project-specific large assets / trash
-pokehabit-assets/*
+poff-assets/*
 trash*/ 
 
 # Misc

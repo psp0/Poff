@@ -171,7 +171,7 @@ jobs:
           NAT_INSTANCE_ID=$(terraform output -raw nat_instance_id 2>/dev/null || echo "")
           RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
           DATABASE_NAME=$(terraform output -raw database_name)
-          ASSETS_BUCKET_NAME="pokehabit-${ENV}-assets"
+          ASSETS_BUCKET_NAME="poff-${ENV}-assets"
           RDS_PORT=$(terraform output -raw rds_port)
           
           echo "nat_instance_id=$NAT_INSTANCE_ID" >> $GITHUB_OUTPUT
@@ -223,7 +223,7 @@ jobs:
         id: db-creds
         run: |
           ENV="${{ steps.set-env.outputs.environment }}"
-          PROJECT_NAME="pokehabit"
+          PROJECT_NAME="poff"
           
           USER_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/username"
           PASS_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/password"
@@ -295,7 +295,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: success
-          channel: '#pokehabit-deployments'
+          channel: '#poff-deployments'
           text: |
             ✅ *데이터베이스 시딩 성공!*
             
@@ -329,7 +329,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          channel: '#pokehabit-alerts'
+          channel: '#poff-alerts'
           text: |
             🚨 *데이터베이스 시딩 실패!*
             

@@ -18,7 +18,7 @@ async function main() {
     // 1. Initialize asset loader based on environment
     const loader = isProduction
         ? new S3Loader(process.env.S3_BUCKET_NAME, process.env.S3_BASE_PATH || '')
-        : new FileSystemLoader(process.env.ASSETS_DIR || '../pokehabit-assets');
+        : new FileSystemLoader(process.env.ASSETS_DIR || '../poff-assets');
 
     // 2. Initialize database connection (MySQL for both local and RDS)
     const db = await connectMySQL();

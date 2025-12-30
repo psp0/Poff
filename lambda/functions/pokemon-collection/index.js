@@ -812,7 +812,7 @@ async function getPokemonData(event, db, stableId) {
     return createErrorResponse('Pokemon stable ID is required', 400);
   }
 
-  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '/pokehabit-assets').replace(/\/$/, '') + '/';
+  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '/poff-assets').replace(/\/$/, '') + '/';
 
   const query = `
     SELECT 
@@ -938,7 +938,7 @@ async function getPokemonData(event, db, stableId) {
  * Base 플래그를 가진 포켓몬들을 반환
  */
 async function getStarterPokemon(event, db) {
-  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '/pokehabit-assets').replace(/\/$/, '') + '/';
+  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '/poff-assets').replace(/\/$/, '') + '/';
 
   const query = `
     SELECT 

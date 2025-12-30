@@ -91,7 +91,7 @@ function showIOSInstallBanner() {
 
         if (textEl) {
             textEl.innerHTML = `
-                <strong>PokeHabit 앱 설치(iOS)</strong>
+                <strong>Poff 앱 설치(iOS)</strong>
                 <span>하단 <svg style="width:16px;height:16px;vertical-align:middle;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> 공유 버튼 → 홈 화면에 추가</span>
             `;
         }

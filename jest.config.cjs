@@ -1,5 +1,5 @@
 /**
- * Jest Configuration for PokeHabit Lambda Functions
+ * Jest Configuration for Poff Lambda Functions
  * 
  * 커버리지 설정 및 GitHub Flow를 위한 품질 게이트 포함
  */

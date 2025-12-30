@@ -1,7 +1,7 @@
 variable "project_name" {
   description = "The name of the project (used for resource naming)"
   type        = string
-  default     = "pokehabit"
+  default     = "poff"
 
   validation {
     condition     = can(regex("^[a-z0-9-]+", var.project_name))

@@ -155,21 +155,21 @@ jobs:
           echo "Fetching infrastructure details from SSM for environment: $ENV"
           
           # Fetch parameters individually for better error handling
-          NAT_INSTANCE_ID=$(aws ssm get-parameter --name "/pokehabit/$ENV/infrastructure/nat_instance_id" --query "Parameter.Value" --output text 2>/dev/null || echo "")
-          RDS_ENDPOINT=$(aws ssm get-parameter --name "/pokehabit/$ENV/infrastructure/rds_endpoint" --query "Parameter.Value" --output text 2>/dev/null || echo "")
-          RDS_PORT=$(aws ssm get-parameter --name "/pokehabit/$ENV/infrastructure/rds_port" --query "Parameter.Value" --output text 2>/dev/null || echo "3306")
-          DATABASE_NAME=$(aws ssm get-parameter --name "/pokehabit/$ENV/infrastructure/database_name" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          NAT_INSTANCE_ID=$(aws ssm get-parameter --name "/poff/$ENV/infrastructure/nat_instance_id" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          RDS_ENDPOINT=$(aws ssm get-parameter --name "/poff/$ENV/infrastructure/rds_endpoint" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          RDS_PORT=$(aws ssm get-parameter --name "/poff/$ENV/infrastructure/rds_port" --query "Parameter.Value" --output text 2>/dev/null || echo "3306")
+          DATABASE_NAME=$(aws ssm get-parameter --name "/poff/$ENV/infrastructure/database_name" --query "Parameter.Value" --output text 2>/dev/null || echo "")
           
           echo "Debug: Retrieved NAT_INSTANCE_ID: '$NAT_INSTANCE_ID'"
           echo "Debug: Retrieved RDS_ENDPOINT: '$RDS_ENDPOINT'"
           
           if [ -z "$NAT_INSTANCE_ID" ]; then
-            echo "::error::NAT_INSTANCE_ID is empty! Please check if '/pokehabit/$ENV/infrastructure/nat_instance_id' exists in SSM Parameter Store."
+            echo "::error::NAT_INSTANCE_ID is empty! Please check if '/poff/$ENV/infrastructure/nat_instance_id' exists in SSM Parameter Store."
             exit 1
           fi
           
           if [ -z "$RDS_ENDPOINT" ]; then
-            echo "::error::RDS_ENDPOINT is empty! Please check if '/pokehabit/$ENV/infrastructure/rds_endpoint' exists in SSM Parameter Store."
+            echo "::error::RDS_ENDPOINT is empty! Please check if '/poff/$ENV/infrastructure/rds_endpoint' exists in SSM Parameter Store."
             exit 1
           fi
           
@@ -205,8 +205,8 @@ jobs:
         id: db-creds
         run: |
           ENV="${{ needs.determine-environment.outputs.environment }}"
-          # Project name is fixed as 'pokehabit' in Terraform variables
-          PROJECT_NAME="pokehabit"
+          # Project name is fixed as 'poff' in Terraform variables
+          PROJECT_NAME="poff"
           
           USER_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/username"
           PASS_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/password"
@@ -384,7 +384,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: success
-          channel: '#pokehabit-deployments'
+          channel: '#poff-deployments'
           text: |
             ✅ *데이터베이스 마이그레이션 성공!*
             
@@ -402,7 +402,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          channel: '#pokehabit-alerts'
+          channel: '#poff-alerts'
           text: |
             🚨 *데이터베이스 마이그레이션 실패!*
             

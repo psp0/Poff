@@ -1,5 +1,5 @@
 {
-    "name": "pokehabit-migrations",
+    "name": "poff-migrations",
     "version": "1.0.0",
     "description": "Database migrations for Pokemon Habit Collection",
     "private": true,

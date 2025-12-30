@@ -1,8 +1,8 @@
-// PokeHabit Service Worker - Optimized for Vite + CloudFront
+// Poff Service Worker - Optimized for Vite + CloudFront
 // Version: Update this when you need to force cache refresh
 const CACHE_VERSION = 'v1.0.1';
-const CACHE_NAME = `pokehabit-${CACHE_VERSION}`;
-const RUNTIME_CACHE = `pokehabit-runtime-${CACHE_VERSION}`;
+const CACHE_NAME = `poff-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `poff-runtime-${CACHE_VERSION}`;
 
 // Core assets to cache on install (only files that don't have hash in Vite build)
 const PRECACHE_URLS = [
@@ -42,7 +42,7 @@ self.addEventListener('activate', (event) => {
                 return Promise.all(
                     cacheNames.map((cacheName) => {
                         // Delete old caches that don't match current version
-                        if (cacheName.startsWith('pokehabit-') && cacheName !== CACHE_NAME && cacheName !== RUNTIME_CACHE) {
+                        if (cacheName.startsWith('poff-') && cacheName !== CACHE_NAME && cacheName !== RUNTIME_CACHE) {
                             console.log('[SW] Deleting old cache:', cacheName);
                             return caches.delete(cacheName);
                         }

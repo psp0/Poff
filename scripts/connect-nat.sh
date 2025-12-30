@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# PokeHabit NAT Instance Connection Script via SSM
+# Poff NAT Instance Connection Script via SSM
 # This script fetches the NAT instance ID from AWS SSM Parameter Store and connects to it.
 
-PROJECT="pokehabit"
+PROJECT="poff"
 ENV="dev"
 PROFILE=${1:-""} # Get profile from first argument, default to empty
 PARAM_PATH="/$PROJECT/$ENV/infrastructure/nat_instance_id"
 
 echo "----------------------------------------------------"
-echo "🎣 PokeHabit NAT Connector (SSM)"
+echo "🎣 Poff NAT Connector (SSM)"
 [ -n "$PROFILE" ] && echo "👤 Profile: $PROFILE"
 echo "----------------------------------------------------"
 

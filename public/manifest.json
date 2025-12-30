@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "PokeHabit",
-  "short_name": "PokeHabit",
-  "description": "포켓몬 습관 형성 앱",
+  "name": "Poff",
+  "short_name": "Poff",
+  "description": "포켓몬 디지털 디톡스 앱",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

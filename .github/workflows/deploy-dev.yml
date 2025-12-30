@@ -562,7 +562,7 @@ jobs:
       rds_port: ${{ needs.deploy-dev.outputs.rds_port }}
       database_name: ${{ needs.deploy-dev.outputs.database_name }}
       nat_instance_id: ${{ needs.deploy-dev.outputs.nat_instance_id }}
-      assets_bucket_name: "pokehabit-dev-assets"
+      assets_bucket_name: "poff-dev-assets"
     secrets:
       AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
       AWS_EXECUTION_ROLE_ARN: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
@@ -652,7 +652,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: success
-          channel: '#pokehabit-deployments'
+          channel: '#poff-deployments'
           text: |
             ✅ *개발 환경 배포 성공!*
             
@@ -713,7 +713,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          channel: '#pokehabit-alerts'
+          channel: '#poff-alerts'
           text: |
             🚨 *개발 환경 배포 실패!*
             

@@ -3,7 +3,7 @@
 # ============================================================================
 # Only files listed here will be uploaded from base/info/ directories.
 # Lines starting with # are comments and will be ignored.
-# Paths are relative to pokehabit-assets/
+# Paths are relative to poff-assets/
 # ============================================================================
 
 # Korean Core Text Files

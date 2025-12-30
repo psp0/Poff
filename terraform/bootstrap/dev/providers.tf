@@ -3,9 +3,9 @@ provider "aws" {
   region  = var.aws_region
   profile = "dev"
 
-  assume_role {
-    role_arn = "arn:aws:iam::604225987817:role/pokehabit-dev-execution-role"
-  }
+  # assume_role {
+  #   role_arn = "arn:aws:iam::604225987817:role/poff-dev-execution-role"
+  # }
 }
 
 # Terraform 버전 요구사항

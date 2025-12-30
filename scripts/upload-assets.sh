@@ -1,5 +1,5 @@
 #!/bin/bash
-# Upload pokehabit-assets to S3
+# Upload poff-assets to S3
 # Usage: ./scripts/upload-assets.sh <dev|prod> [--dry-run] [--delete]
 
 set -e
@@ -7,7 +7,7 @@ set -e
 # === Configuration ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-ASSETS_DIR="$PROJECT_ROOT/pokehabit-assets"
+ASSETS_DIR="$PROJECT_ROOT/poff-assets"
 MANIFEST_FILE="$SCRIPT_DIR/assets-manifest.txt"
 
 # === Parse Arguments ===
@@ -50,7 +50,7 @@ fi
 [[ ! -d "$ASSETS_DIR" ]] && { echo "❌ Error: Assets directory not found"; exit 1; }
 
 # === Get S3 Bucket (convention-based naming) ===
-ASSETS_BUCKET_NAME="pokehabit-${ENV}-assets"
+ASSETS_BUCKET_NAME="poff-${ENV}-assets"
 echo "✅ Assets Bucket: $ASSETS_BUCKET_NAME"
 
 # === Sync Function ===
@@ -98,7 +98,7 @@ upload_manifest_files() {
 
 # === Main ===
 echo ""
-echo "━━━ Pokehabit Assets Upload ━━━"
+echo "━━━ Poff Assets Upload ━━━"
 echo "Environment: $ENV | Profile: ${AWS_PROFILE:-default} | Dry-run: ${DRY_RUN:-no} | Delete: ${DELETE:-no}"
 echo ""
 

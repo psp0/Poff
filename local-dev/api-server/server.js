@@ -24,7 +24,7 @@ const pool = mysql.createPool({
 global.dbPool = pool;
 
 // Serve static assets
-app.use('/assets', express.static('/pokehabit-assets'));
+app.use('/assets', express.static('/poff-assets'));
 
 // Import Lambda handlers
 const pokemonCollection = require('/lambda/functions/pokemon-collection');
@@ -144,7 +144,7 @@ app.get('/health', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Pokehabit API server running on port ${PORT}`);
+    console.log(`🚀 Poff API server running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV}`);
     console.log(`🗄️  Database: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
 });

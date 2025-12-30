@@ -33,7 +33,7 @@ variable "aws_infra_role_arn" {
 variable "project_name" {
   description = "A prefix for all resource names to ensure uniqueness."
   type        = string
-  default     = "pokehabit"
+  default     = "poff"
 }
 
 variable "environment" {
@@ -168,7 +168,7 @@ variable "lambda_log_retention_days" {
 variable "api_cors_allowed_origins" {
   description = "CORS allowed origins for API Gateway"
   type        = list(string)
-  default     = ["https://dev.pokehabit.psp0.tech", "http://localhost:8080"]
+  default     = ["https://dev.poff.psp0.tech", "http://localhost:8080"]
 }
 
 variable "api_throttling_burst_limit" {
@@ -196,7 +196,7 @@ variable "enable_cloudfront" {
 variable "cloudfront_custom_domain_name" {
   description = "Custom domain name for CloudFront"
   type        = string
-  default     = "dev.pokehabit.psp0.tech"
+  default     = "dev.poff.psp0.tech"
 }
 
 variable "cloudfront_subject_alternative_names" {

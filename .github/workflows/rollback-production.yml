@@ -511,7 +511,7 @@ jobs:
           status: custom
           custom_payload: |
             {
-              "channel": "#pokehabit-alerts",
+              "channel": "#poff-alerts",
               "attachments": [{
                 "color": "warning",
                 "blocks": [
@@ -533,7 +533,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          channel: '#pokehabit-alerts'
+          channel: '#poff-alerts'
           text: |
             🚨 *운영 환경 롤백 실패!*
             

@@ -3,16 +3,16 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="description" content="PokeHabit - 포켓몬과 생활습관 개선 앱" />
+  <meta name="description" content="Poff - 포켓몬과 함께 디지털 디톡스 앱" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>PokeHabit - 포켓몬과 생활습관 개선</title>
+  <title>Poff - 포켓몬과 디지털 디톡스</title>
   <meta name="theme-color" content="#CD5C5C" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />
   <link rel="manifest" href="/manifest.json" />
   <!-- iOS PWA 필수 메타 태그 -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="PokeHabit" />
+  <meta name="apple-mobile-web-app-title" content="Poff" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <!-- CSS 직접 로드 (Vite 개발 서버 없이도 동작하도록) -->
   <link rel="stylesheet" href="./index.css" />
@@ -75,10 +75,10 @@
   <div id="pwa-install-banner" class="pwa-install-banner hidden">
     <div class="pwa-install-content">
       <div class="pwa-install-icon">
-        <img id="pwa-icon-img" alt="PokeHabit" width="40" height="40">
+        <img id="pwa-icon-img" alt="Poff" width="40" height="40">
       </div>
       <div class="pwa-install-text">
-        <strong>PokeHabit 앱 설치</strong>
+        <strong>Poff 앱 설치</strong>
         <span>홈 화면에 추가하여 더 편리하게!</span>
       </div>
       <button id="pwa-install-btn" class="pwa-install-btn">설치</button>
@@ -94,9 +94,9 @@
           <div id="auth-sprite" class="sprite"></div>
         </div>
       </div>
-      <h1 class="auth-app-name">PokeHabit</h1>
-      <p class="auth-tagline">포켓몬과 함께하는 습관 관리</p>
-
+      <h1 class="auth-app-name">Poff</h1>
+      <p class="auth-tagline">폰을 끄면 깨어나는 포켓몬 세상</p>
+<!-- 포켓몬과 함께하는 디지털 디톡스 -->
       <div class="auth-buttons">
         <button id="googleLoginBtn" class="google-btn">
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo">
@@ -130,7 +130,7 @@
 
           <div class="pokedex-screen">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-              <h2 style="margin: 0;">PokeHabit</h2>
+              <h2 style="margin: 0;">Poff</h2>
               <div class="header-controls" style="display: flex; gap: 12px; align-items: center;">
                 <button onclick="openInfoModal()" title="프로젝트 정보"
                   style="display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; color: #4a5568; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
@@ -425,7 +425,7 @@
             <h3 class="settings-section-title">앱 설정</h3>
             <div class="settings-box">
               <div class="settings-item">
-                <span class="settings-item-label">울음소리</span>
+                <span class="settings-item-label">포켓몬 울음소리</span>
                 <div class="toggle-switch active" id="cry-sound-toggle">
                   <div class="toggle-knob"></div>
                 </div>
@@ -709,7 +709,7 @@
 
         <div class="modal-body">
           <p class="terms-intro">
-            PokeHabit 서비스 이용을 위해 아래 필수 약관에 동의해 주세요.
+            Poff 서비스 이용을 위해 아래 필수 약관에 동의해 주세요.
           </p>
 
           <!-- 전체 동의 박스 -->
@@ -924,7 +924,7 @@
     <div id="starter-welcome-modal" class="modal starter-modal">
       <div class="modal-content starter-modal-content">
         <div class="modal-header starter-modal-header">
-          <h3 class="modal-title starter-modal-title">🎉 PokeHabit에 오신 것을 환영합니다!</h3>
+          <h3 class="modal-title starter-modal-title">🎉 Poff에 오신 것을 환영합니다!</h3>
         </div>
 
         <div class="starter-modal-body">

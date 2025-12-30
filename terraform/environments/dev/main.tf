@@ -1,4 +1,4 @@
-# Refactored modular structure for Pokehabit infrastructure
+# Refactored modular structure for Poff infrastructure
 # This uses the new separated modules for better maintainability
 
 # Get current AWS account and region info
