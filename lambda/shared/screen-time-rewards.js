@@ -94,9 +94,20 @@ function calculateRewardTier(changePercentage, hours) {
  */
 function getLastWeekDates(date) {
     const recordDate = new Date(date);
-    const dayOfWeek = recordDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    let dayOfWeek = recordDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
 
-    // Calculate start of the current week (Sunday)
+    // Treat Sunday as 7 to align with Monday-Sunday week logic for "previous week" calculation
+    if (dayOfWeek === 0) {
+        dayOfWeek = 7;
+    }
+
+    // Calculate start of the current week (Monday-based logic applied to Sunday-based dates)
+    // If today is Sunday (7), we go back 7 days to get to previous Sunday?
+    // No, the function returns Sunday-based dates.
+    // If input is Jan 5 (Sun), we want lastWeekStart = Dec 22 (Sun).
+    // Jan 5 - 7 = Dec 29 (Sun). This is "currentWeekStart" (start of the week ending Jan 5).
+    // Dec 29 - 7 = Dec 22 (Sun). This is "lastWeekStart".
+
     const currentWeekStart = new Date(recordDate);
     currentWeekStart.setDate(recordDate.getDate() - dayOfWeek);
 

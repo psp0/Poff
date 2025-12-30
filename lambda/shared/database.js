@@ -242,7 +242,7 @@ class DatabaseConnection {
     ];
 
     return connectionErrorCodes.some(code =>
-      error.code === code || error.message.includes(code)
+      error.code === code || (error.message && error.message.includes(code))
     );
   }
 

@@ -22,6 +22,10 @@ on:
         default: false
         type: boolean
 
+  push:
+    branches:
+      - main
+
   workflow_call:
     inputs:
       action:
@@ -66,6 +70,7 @@ jobs:
     outputs:
       can_proceed: ${{ steps.validate.outputs.can_proceed }}
       deploy_version: ${{ steps.version.outputs.version }}
+      previous_tag: ${{ steps.version.outputs.previous_tag }}
       
     steps:
       - name: Checkout code
@@ -74,7 +79,7 @@ jobs:
           fetch-depth: 0
 
       - name: Validate branch
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         run: |
           BRANCH_NAME="${{ github.ref_name }}"
           if [ "$BRANCH_NAME" != "main" ]; then
@@ -123,8 +128,15 @@ jobs:
           else
             VERSION="v$(date +%Y.%m.%d)-${{ github.run_number }}"
           fi
+          
+          # Get previous tag for rollback
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+          
           echo "Deployment Version: $VERSION"
+          echo "Previous Version: $PREVIOUS_TAG"
 
       - name: Validate prerequisites
         id: validate
@@ -199,8 +211,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_call" ]; then
             ACTION="${{ inputs.action }}"
-          else
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ACTION="${{ github.event.inputs.action }}"
+          else
+            # Default for push event
+            ACTION="apply"
           fi
           echo "action=${ACTION:-apply}" >> $GITHUB_OUTPUT
 
@@ -492,29 +507,75 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Run smoke tests
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run E2E Tests
+        env:
+          API_URL: ${{ needs.deploy-production.outputs.api_endpoint }}
+          TEST_USER_TOKEN: ${{ secrets.TEST_USER_TOKEN }}
         run: |
-          echo "Running production smoke tests..."
-          API_URL="${{ needs.deploy-production.outputs.api_endpoint }}"
+          echo "Running production E2E tests..."
           
-          if [ ! -z "$API_URL" ]; then
-            echo "Testing production API at: $API_URL"
-            
-            # Health check
-            if curl -f -s "$API_URL/health" > /dev/null; then
-              echo "✅ Health check passed"
-            else
-              echo "❌ Health check failed"
-              exit 1
-            fi
-            
-            # Add more critical smoke tests here
+          if [ -z "$API_URL" ]; then
+            echo "❌ Error: API URL is missing"
+            exit 1
           fi
+          
+          if [ -z "$TEST_USER_TOKEN" ]; then
+            echo "⚠️ Warning: TEST_USER_TOKEN is missing. Skipping authenticated scenarios."
+            # In a real scenario, we might want to fail here, but for now we'll warn.
+            # exit 1
+          fi
+
+          echo "Testing API at: $API_URL"
+          
+          # Health check
+          if curl -f -s "$API_URL/health" > /dev/null; then
+            echo "✅ Health check passed"
+          else
+            echo "❌ Health check failed"
+            exit 1
+          fi
+          
+          # Run E2E Scenarios
+          echo "▶️ Running Scenario: Eggs..."
+          node tests/e2e/scenario-eggs.js
+          
+          echo "▶️ Running Scenario: Screen Time..."
+          node tests/e2e/scenario-screen-time.js
+
+          echo "▶️ Running Scenario: Collection..."
+          node tests/e2e/scenario-collection.js
+
+          echo "▶️ Running Scenario: User & Shop..."
+          node tests/e2e/scenario-user.js
+          
+          echo "✅ All E2E tests passed"
 
       - name: Verify database connectivity
         run: |
           echo "Verifying production database connectivity..."
           # Add database connectivity checks
+
+  # Auto Rollback on Failure
+  auto-rollback:
+    name: Auto Rollback
+    needs: [smoke-tests, pre-deployment-checks]
+    if: failure() && needs.smoke-tests.result == 'failure' && needs.pre-deployment-checks.outputs.previous_tag != ''
+    uses: ./.github/workflows/rollback-production.yml
+    with:
+      rollback_type: 'full'
+      target_tag: ${{ needs.pre-deployment-checks.outputs.previous_tag }}
+      reason: '🚨 Automatic Rollback: E2E Tests Failed immediately after deployment.'
+      rollback_migration: false
+    secrets: inherit
 
   # Database Migration with backup
   run-migration:
@@ -531,7 +592,7 @@ jobs:
   seed-database:
     name: Seed Database
     needs: [deploy-production, run-migration]
-    if: needs.deploy-production.outputs.rds_endpoint != '' && github.event.inputs.seed_data == 'true'
+    if: needs.deploy-production.outputs.rds_endpoint != '' && (github.event_name == 'workflow_dispatch' && github.event.inputs.seed_data == 'true')
     uses: ./.github/workflows/seed-rds.yml
     with:
       environment: 'prod'

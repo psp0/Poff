@@ -106,7 +106,7 @@ async function getScreenTimeRecords(event, db) {
     const countQuery = `
       SELECT COUNT(*) as total
       FROM screen_time
-      WHERE ${whereConditions.slice(0, -2).join(' AND ')}
+      WHERE ${whereConditions.join(' AND ')}
     `;
 
     const countResult = await db.query(countQuery, queryParams_array.slice(0, -2));
@@ -429,7 +429,7 @@ async function getWeeklyStats(event, db) {
             'hours', usage_hours,
             'minutes', usage_minutes,
             'totalMinutes', total_minutes
-          ) ORDER BY date
+          )
         ) FROM daily_stats) as daily_records,
         ws.days_logged,
         ws.total_minutes,
@@ -552,13 +552,13 @@ async function getMonthlyStats(event, db) {
             'minutes', usage_minutes,
             'totalMinutes', total_minutes,
             'dayOfWeek', day_of_week
-          ) ORDER BY date
+          )
         ) FROM daily_stats) as daily_records,
         (SELECT JSON_ARRAYAGG(
           JSON_OBJECT(
             'week', week_number,
             'avgMinutes', ROUND(avg_minutes, 1)
-          ) ORDER BY week_number
+          )
         ) FROM weekly_averages) as weekly_averages,
         COUNT(*) as days_logged,
         SUM(total_minutes) as total_minutes,

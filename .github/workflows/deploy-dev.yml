@@ -571,9 +571,28 @@ jobs:
       SLACK_WEBHOOK_DEPLOY: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
       SLACK_WEBHOOK_ALERT: ${{ secrets.SLACK_WEBHOOK_ALERT }}
 
+  smoke-test:
+    name: Smoke Test
+    needs: deploy-dev
+    if: needs.deploy-dev.result == 'success' && needs.deploy-dev.outputs.api_endpoint != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Run Smoke Test
+        env:
+          API_URL: ${{ needs.deploy-dev.outputs.api_endpoint }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "Error: API_URL is missing"
+            exit 1
+          fi
+          node scripts/smoke-test.js
+
   notify:
     name: Notify Deployment Status
-    needs: [deploy-dev, run-migration, seed-database]
+    needs: [deploy-dev, run-migration, seed-database, smoke-test]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -607,7 +626,8 @@ jobs:
           # Determine overall deployment status
           if [[ "${{ needs.deploy-dev.result }}" == "success" && \
                 "${{ needs.run-migration.result }}" == "success" && \
-                ("${{ needs.seed-database.result }}" == "success" || "${{ needs.seed-database.result }}" == "skipped") ]]; then
+                ("${{ needs.seed-database.result }}" == "success" || "${{ needs.seed-database.result }}" == "skipped") && \
+                "${{ needs.smoke-test.result }}" == "success" ]]; then
             DEPLOYMENT_STATUS="success"
           else
             DEPLOYMENT_STATUS="failure"
@@ -628,7 +648,7 @@ jobs:
             "${{ github.sha }}"
 
       - name: Notify Slack on Success
-        if: needs.deploy-dev.result == 'success' && needs.run-migration.result == 'success' && (needs.seed-database.result == 'success' || needs.seed-database.result == 'skipped')
+        if: needs.deploy-dev.result == 'success' && needs.run-migration.result == 'success' && (needs.seed-database.result == 'success' || needs.seed-database.result == 'skipped') && needs.smoke-test.result == 'success'
         uses: 8398a7/action-slack@v3
         with:
           status: success
@@ -642,12 +662,13 @@ jobs:
             *배포 정보:*
             API: ${{ needs.deploy-dev.outputs.api_endpoint }}
             시딩: ${{ needs.seed-database.result }}
+            스모크 테스트: ✅ 통과
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
       - name: Determine Failure Details
         id: failure_details
-        if: needs.deploy-dev.result == 'failure' || needs.run-migration.result == 'failure' || needs.seed-database.result == 'failure'
+        if: needs.deploy-dev.result == 'failure' || needs.run-migration.result == 'failure' || needs.seed-database.result == 'failure' || needs.smoke-test.result == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -664,6 +685,9 @@ jobs:
           elif [ "${{ needs.seed-database.result }}" == "failure" ]; then
             FAILED_JOB="Seed Database"
             FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Seed Database")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.smoke-test.result }}" == "failure" ]; then
+            FAILED_JOB="Smoke Test"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Smoke Test")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
           else
             FAILED_JOB="Unknown Job"
             FAILED_STEP="Unknown Step"
@@ -682,9 +706,10 @@ jobs:
           echo "deploy_status=$(get_status_text ${{ needs.deploy-dev.result }})" >> $GITHUB_OUTPUT
           echo "migration_status=$(get_status_text ${{ needs.run-migration.result }})" >> $GITHUB_OUTPUT
           echo "seed_status=$(get_status_text ${{ needs.seed-database.result }})" >> $GITHUB_OUTPUT
+          echo "smoke_status=$(get_status_text ${{ needs.smoke-test.result }})" >> $GITHUB_OUTPUT
 
       - name: Notify Slack on Failure
-        if: needs.deploy-dev.result == 'failure' || needs.run-migration.result == 'failure' || needs.seed-database.result == 'failure'
+        if: needs.deploy-dev.result == 'failure' || needs.run-migration.result == 'failure' || needs.seed-database.result == 'failure' || needs.smoke-test.result == 'failure'
         uses: 8398a7/action-slack@v3
         with:
           status: failure
@@ -702,6 +727,7 @@ jobs:
             배포: ${{ steps.failure_details.outputs.deploy_status }}
             마이그레이션: ${{ steps.failure_details.outputs.migration_status }}
             시딩: ${{ steps.failure_details.outputs.seed_status }}
+            스모크 테스트: ${{ steps.failure_details.outputs.smoke_status }}
             
             *실패 로그 (마지막 20줄):*
             ```
