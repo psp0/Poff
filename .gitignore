@@ -76,3 +76,9 @@ trash*/
 
 # Misc
 crash.log
+
+# Testing
+coverage/
+jest-junit.xml
+junit.xml
+.jest-cache/

@@ -96,7 +96,7 @@ async function getGuestPokemonDetail(stableId, isShiny) {
   }
 
   const row = rows[0];
-  const hasShiny = row.has_icon_shiny || row.has_front_shiny;
+  const hasShiny = !!(row.has_icon_shiny || row.has_front_shiny);
 
   return buildPokemonResponse(row, row.is_favorite, isShiny && hasShiny, hasShiny);
 }

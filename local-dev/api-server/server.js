@@ -110,8 +110,11 @@ app.get('/api/weekly-stats', lambdaAdapter(exerciseManagement));
 app.post('/api/exercise/rewards', lambdaAdapter(exerciseRewards));
 
 // Screen Time Management Routes
+app.get('/api/screen-time', lambdaAdapter(screenTimeManagement));
 app.post('/api/screen-time', lambdaAdapter(screenTimeManagement));
+app.delete('/api/screen-time/:date', lambdaAdapter(screenTimeManagement));
 app.post('/api/screen-time/validate', lambdaAdapter(screenTimeManagement));
+app.get('/api/screen-time/weekly-stats', lambdaAdapter(screenTimeManagement)); // Changed path to avoid conflict? Or is it just /weekly-stats?
 
 
 
