@@ -2788,8 +2788,8 @@ body.modal-open {
 
 .unlock-badge {
   position: absolute;
-  top: -8px;
-  right: -8px;
+  top: -1px;
+  right: 56px;
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -2797,22 +2797,9 @@ body.modal-open {
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   z-index: 10;
-  animation: bounce 2s infinite;
 }
 
-.unlock-badge.evolution {
-  background-color: #9ca0ce;
-  /* Blue */
-  color: white;
-}
-
-.unlock-badge.form {
-  background-color: #8fc3b8;
-  /* Purple */
-  color: white;
-}
 
 @keyframes bounce {
 
