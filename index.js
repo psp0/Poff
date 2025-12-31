@@ -5541,3 +5541,14 @@ document.addEventListener('DOMContentLoaded', () => {
   window.sleepTracker = new SleepTracker();
 });
 
+// Initialize Pokemon filter modal when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof initPokemonFilter === 'function') {
+    try {
+      initPokemonFilter();
+    } catch (e) {
+      console.error('initPokemonFilter 호출 중 오류:', e);
+    }
+  }
+});
+
