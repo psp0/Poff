@@ -2128,19 +2128,11 @@ function initTouchEvents() {
     const touch = Array.from(e.touches).find(t => t.identifier === touchIdentifier);
     if (!touch) return;
 
-    // 쓰로틀링: 16ms(60fps) 간격으로만 처리
-    const now = Date.now();
-    if (now - lastTouchTime < 16) return;
-    lastTouchTime = now;
-
     const deltaX = touch.clientX - startX;
-    const rotationChange = deltaX * 0.5;
+    const rotationChange = deltaX * 1.5; // 마우스 이벤트와 동일한 민감도
 
-    // requestAnimationFrame으로 부드러운 렌더링
-    requestAnimationFrame(() => {
-      currentRotation += rotationChange;
-      flipper.style.transform = `translate(-50%, -50%) rotateY(${currentRotation}deg)`;
-    });
+    currentRotation += rotationChange;
+    flipper.style.transform = `translate(-50%, -50%) rotateY(${currentRotation}deg)`;
 
     startX = touch.clientX;
 
