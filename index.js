@@ -268,13 +268,13 @@ function initializeFirebaseListener() {
           const screenTimePreview = document.getElementById('screenTimePreview');
           if (screenTimePreview) {
             screenTimePreview.textContent = '📱 2시간 30분 (예시)';
-            screenTimePreview.style.color = '#4F46E5';
+            screenTimePreview.style.color = '#CD5C5C';
           }
 
           const logoutBtn = document.getElementById("logoutBtn");
           if (logoutBtn) {
             logoutBtn.textContent = "로그인하여 시작하기";
-            logoutBtn.style.backgroundColor = "#667eea";
+            logoutBtn.style.backgroundColor = "#CD5C5C";
             logoutBtn.style.color = "white";
           }
 
@@ -1733,11 +1733,11 @@ if (evolutionClose && evolutionModal) {
   evolutionClose.addEventListener("click", () => {
     evolutionModal.style.display = "none";
     document.body.style.overflow = ''; // 배경 스크롤 복원
-    
+
     // 도감 설명 등 콘텐츠 초기화 (잔상 방지)
     const descEl = document.getElementById('display-description');
     if (descEl) descEl.textContent = '';
-    
+
     onModalClose();
   });
 }
@@ -2237,7 +2237,7 @@ window.addEventListener('click', (e) => {
   if (e.target === evolutionModal) {
     evolutionModal.style.display = 'none';
     document.body.style.overflow = ''; // 배경 스크롤 복원
-    
+
     const descEl = document.getElementById('display-description');
     if (descEl) descEl.textContent = '';
 
@@ -3065,7 +3065,7 @@ async function executeEvolution(currentId, targetId, cost, baseImageName) {
 // 포켓몬 진화 처리 (UI 호출용)
 async function handleEvolutionClick(currentStableId, targetStableId, targetName, cost, baseImageName) {
   let candyCount = 0;
-  
+
   try {
     showGlobalLoading('정보 확인 중...');
     const items = await fetchUserItems();
@@ -3205,7 +3205,7 @@ window.checkTermsStatus = function () {
   if (submitBtn) {
     if (allChecked) {
       submitBtn.disabled = false;
-      submitBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+      submitBtn.style.background = 'linear-gradient(135deg, #CD5C5C 0%, #B04040 100%)';
       submitBtn.style.color = 'white';
       submitBtn.style.cursor = 'pointer';
       submitBtn.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
@@ -4140,11 +4140,11 @@ async function exchangeItem(costItemName, costAmount, rewardItemName, rewardAmou
     `<div style="text-align: center;">
        <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px;">
          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-           <span style="font-size: 10px; color: #ef4444; font-weight: 600; background: #fef2f2; padding: 2px 8px; border-radius: 4px;">소모</span>
+           <span style="font-size: 10px; color: #CD5C5C; font-weight: 600; background: #FFF5F5; padding: 2px 8px; border-radius: 4px;">소모</span>
            <div style="width: 56px; height: 56px; background: #fef2f2; border-radius: 12px; display: flex; align-items: center; justify-content: center; border: 1px solid #fecaca; position: relative;">
              <img src="${costImgUrl}" width="36" height="36" style="object-fit: contain;" onerror="this.style.display='none'">
            </div>
-           <span id="exchange-cost-count" style="font-size: 13px; color: #ef4444; font-weight: 600;">x${costAmount}</span>
+           <span id="exchange-cost-count" style="font-size: 13px; color: #CD5C5C; font-weight: 600;">x${costAmount}</span>
            <span style="font-size: 11px; color: #666;">${safeCostName}</span>
            <span id="exchange-after-cost" style="font-size: 10px; color: #999;">${currentCostOwned} → ${currentCostOwned - costAmount}</span>
          </div>
@@ -4154,11 +4154,11 @@ async function exchangeItem(costItemName, costAmount, rewardItemName, rewardAmou
            </svg>
          </div>
          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-           <span style="font-size: 10px; color: #10b981; font-weight: 600; background: #ecfdf5; padding: 2px 8px; border-radius: 4px;">획득</span>
+           <span style="font-size: 10px; color: #185888; font-weight: 600; background: #E6F0F6; padding: 2px 8px; border-radius: 4px;">획득</span>
            <div style="width: 56px; height: 56px; background: #ecfdf5; border-radius: 12px; display: flex; align-items: center; justify-content: center; border: 1px solid #a7f3d0; position: relative;">
              <img src="${rewardImgUrl}" width="36" height="36" style="object-fit: contain;" onerror="this.style.display='none'">
            </div>
-           <span id="exchange-reward-count" style="font-size: 13px; color: #10b981; font-weight: 600;">x${rewardAmount}</span>
+           <span id="exchange-reward-count" style="font-size: 13px; color: #185888; font-weight: 600;">x${rewardAmount}</span>
            <span style="font-size: 11px; color: #666;">${safeRewardName}</span>
            <span id="exchange-after-reward" style="font-size: 10px; color: #999;">${currentRewardOwned} → ${currentRewardOwned + rewardAmount}</span>
          </div>
@@ -4168,8 +4168,7 @@ async function exchangeItem(costItemName, costAmount, rewardItemName, rewardAmou
          <span style="font-size: 12px; color: #666;">교환 수량</span>
          <button id="exchange-minus" style="width: 28px; height: 28px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;" disabled>−</button>
          <span id="exchange-quantity" style="font-size: 16px; font-weight: 600; min-width: 24px; text-align: center;">1</span>
-         <button id="exchange-plus" style="width: 28px; height: 28px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;" ${maxExchangeCount <= 1 ? 'disabled' : ''}>＋</button>
-         <span style="font-size: 11px; color: #999;">(최대 ${maxExchangeCount}회)</span>
+         <button id="exchange-plus" style="width: 28px; height: 28px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;" ${maxExchangeCount <= 1 ? 'disabled' : ''}>＋</button>         
        </div>
        ` : ''}
      </div>`,
@@ -4369,7 +4368,7 @@ function updateScreenTimePreview() {
     preview.style.color = '#EF4444';
   } else {
     preview.textContent = `📱 ${hours}시간 ${minutes}분`;
-    preview.style.color = '#4F46E5';
+    preview.style.color = '#CD5C5C';
   }
 }
 
@@ -5422,19 +5421,29 @@ class SleepTracker {
         const iconBox = document.createElement('div');
         iconBox.className = 'sleep-pokemon-icon';
 
-        const img = document.createElement('img');
-        img.src = item.icon_shiny_url;
-        img.alt = item.name;
-        img.onerror = () => {
-          if (img.dataset.retry) {
-            img.onerror = null;
-            return;
-          }
-          img.dataset.retry = 'true';
-          const normalUrl = item.icon_shiny_url.replace('Icons%20shiny', 'Icons');
-          img.src = normalUrl;
+        // Use pokemon-sprite logic for half-split effect
+        const loadAndSetupSprite = (url, isRetry = false) => {
+          const img = new Image();
+          img.onload = () => {
+            const spriteDiv = document.createElement('div');
+            spriteDiv.className = 'pokemon-sprite';
+            spriteDiv.dataset.src = url;
+            iconBox.innerHTML = ''; // Clear previous content
+            iconBox.appendChild(spriteDiv);
+            if (typeof setupPokemonSprite === 'function') {
+              setupPokemonSprite(spriteDiv);
+            }
+          };
+          img.onerror = () => {
+            if (!isRetry) {
+              const normalUrl = url.replace('Icons%20shiny', 'Icons');
+              loadAndSetupSprite(normalUrl, true);
+            }
+          };
+          img.src = url;
         };
-        iconBox.appendChild(img);
+
+        loadAndSetupSprite(item.icon_shiny_url);
 
         // Label
         const labelEl = document.createElement('div');
