@@ -143,7 +143,7 @@ async function searchPokemonEggs(event, db) {
         eb.name,
         eb.image_name,
         eb.base_stat_total,
-        ROUND(eb.base_stat_total * 0.1, 1) as hatch_hours,  -- 테스트: 초 단위
+        ROUND(eb.base_stat_total * 0.1, 1) as hatch_hours,  -- 시간 단위
         -- 사용자가 이미 이 포켓몬을 보유하고 있는지 확인
         CASE 
           WHEN ? IS NOT NULL THEN 
@@ -290,7 +290,7 @@ async function acquireEgg(event, db) {
     }
 
     const basePokemon = basePokemonResult.rows[0];
-    const hatchSeconds = basePokemon.base_stat_total * 0.1; // 테스트: 초 단위
+    const hatchHours = basePokemon.base_stat_total * 0.1; // 시간 단위
 
     // 4. Base 포켓몬으로 알 생성
     await client.query(`
@@ -300,9 +300,9 @@ async function acquireEgg(event, db) {
       )
       VALUES (
         ?, ?, ?, 
-        NOW(), DATE_ADD(NOW(), INTERVAL ? SECOND), FALSE  -- 테스트: 초 단위
+        NOW(), DATE_ADD(NOW(), INTERVAL ? HOUR), FALSE
       )
-    `, [userId, basePokemon.stable_id, targetSlot, hatchSeconds]);
+    `, [userId, basePokemon.stable_id, targetSlot, hatchHours]);
 
     logger.info('Egg acquired', { userId, pokemonStableId, slotIndex: targetSlot, remainingCharms });
     return createSuccessResponse({
