@@ -775,14 +775,14 @@ button:active {
 
 .toggle-slider {
   position: relative;
-  width: 44px;
-  height: 24px;
+  width: 48px;
+  height: 28px;
   background: #d1d5db;
-  border-radius: 12px;
+  border-radius: 14px;
   transition: background 0.2s ease;
   flex-shrink: 0;
-  border: 2px solid rgba(0, 0, 0, 0.15);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .toggle-slider::after {
@@ -794,12 +794,13 @@ button:active {
   height: 20px;
   background: white;
   border-radius: 50%;
-  transition: transform 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .screen-time-toggle input:checked+.toggle-slider {
   background: var(--primary-color);
+  border-color: var(--primary-hover);
 }
 
 .screen-time-toggle input:checked+.toggle-slider::after {
@@ -2519,13 +2520,14 @@ body.modal-open {
 
 /* 토글 스위치 */
 .toggle-switch {
-  width: 44px;
-  height: 24px;
+  width: 48px;
+  height: 28px;
   background: #cbd5e0;
-  border-radius: 12px;
+  border-radius: 14px;
   position: relative;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
 }
 
 .toggle-switch.active {
@@ -2541,7 +2543,7 @@ body.modal-open {
   background: white;
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: transform 0.3s;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toggle-switch.active .toggle-knob {
@@ -5467,13 +5469,13 @@ body:has(.auth-section:not([style*="display: none"])) {
   align-items: center;
   width: 100%;
   max-width: 320px;
-    margin-bottom: 20px;
+  margin-bottom: 20px;
   position: relative;
   z-index: 10;
 }
 
 
-  
+
 .sleep-mascot {
   width: 96px;
   height: 96px;
@@ -5481,8 +5483,7 @@ body:has(.auth-section:not([style*="display: none"])) {
   background-repeat: no-repeat;
   background-position: 0 0;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
-scale: 2.5;
-
+  scale: 2;
 }
 
 
@@ -5494,7 +5495,7 @@ scale: 2.5;
   top: -10px;
   left: 50%;
   margin-left: 20px;
-    font-weight: bold;
+  font-weight: bold;
   color: #a5b4fc;
   font-size: 20px;
   opacity: 0;
