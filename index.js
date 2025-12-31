@@ -4866,7 +4866,7 @@ class SleepTracker {
       refreshBtn: document.getElementById('refreshSleepBtn'),
       overlay: document.getElementById('sleepOverlay'),
       timer: document.getElementById('sleepTimer'),
-      statusBadge: document.getElementById('sleepStatusBadge'),
+
       percentageText: document.getElementById('currentPercentage'),
       timeHint: document.getElementById('sleepTimeHint'),
       pokemonIcons: document.getElementById('sleepPokemonIcons'),
@@ -4941,43 +4941,32 @@ class SleepTracker {
     const container = document.createElement('div');
     container.className = 'sleep-mascot-container';
 
-    // 자말라 (Left)
-    const komalaUrl = getPokemonImageUrl('KOMALA', '', 'front');
-    const komalaImg = document.createElement('img');
-    komalaImg.src = komalaUrl;
-    komalaImg.className = 'sleep-mascot left';
-    komalaImg.style.setProperty('--scale-x', '1'); // 정방향
-
-    // 몽얌나 (Right)
-    const musharnaUrl = getPokemonImageUrl('MUSHARNA', '', 'front');
-    const musharnaImg = document.createElement('img');
-    musharnaImg.src = musharnaUrl;
-    musharnaImg.className = 'sleep-mascot right';
-    musharnaImg.style.setProperty('--scale-x', '-1'); // CSS animation용 변수 (반전 유지하며 float)
+    // 자말라 (Center)
+    const komalaUrl = getPokemonImageUrl('KOMALA', '', 'Front');
+    const komalaDiv = document.createElement('div');
+    komalaDiv.id = 'sleep-mascot-komala';
+    komalaDiv.className = 'sleep-mascot';
+    komalaDiv.style.setProperty('--scale-x', '1');
 
     // Zzz 효과
-    const zzzLeft = document.createElement('div');
-    zzzLeft.className = 'sleep-zzz left';
-    zzzLeft.textContent = 'Zzz...';
+    const zzz = document.createElement('div');
+    zzz.className = 'sleep-zzz';
+    zzz.textContent = 'Zzz...';
 
-    const zzzRight = document.createElement('div');
-    zzzRight.className = 'sleep-zzz right';
-    zzzRight.textContent = 'Zzz...';
-
-    container.appendChild(zzzLeft);
-    container.appendChild(komalaImg);
-    container.appendChild(musharnaImg);
-    container.appendChild(zzzRight);
+    container.appendChild(zzz);
+    container.appendChild(komalaDiv);
 
     if (moonIcon) {
       moonIcon.replaceWith(container);
     } else {
-      // moon icon을 못 찾았으면 content의 첫 번째 자식으로 삽입 (fallback)
       const content = overlay.querySelector('.sleep-content');
       if (content) {
         content.prepend(container);
       }
     }
+
+    // 스프라이트 애니메이션 초기화 (div가 DOM에 추가된 후 실행)
+    setupSprite('sleep-mascot-komala', komalaUrl, 3);
   }
 
   async requestWakeLock() {
@@ -5262,10 +5251,7 @@ class SleepTracker {
   }
 
   renderGuestState() {
-    if (this.elements.statusBadge) {
-      this.elements.statusBadge.textContent = '체험 모드';
-      this.elements.statusBadge.className = 'sleep-status-badge';
-    }
+
     if (this.elements.percentageText) {
       this.elements.percentageText.textContent = '--%';
     }
@@ -5283,19 +5269,7 @@ class SleepTracker {
   renderSleepRewardUI(data) {
     const { todayPokemon, sleepStatus } = data;
 
-    // Update status badge
-    if (this.elements.statusBadge) {
-      if (sleepStatus.alreadyRewarded) {
-        this.elements.statusBadge.textContent = '보상 완료';
-        this.elements.statusBadge.className = 'sleep-status-badge rewarded';
-      } else if (!sleepStatus.canSleepToday) {
-        this.elements.statusBadge.textContent = '수면 기록됨';
-        this.elements.statusBadge.className = 'sleep-status-badge already-slept';
-      } else {
-        this.elements.statusBadge.textContent = '수면 가능';
-        this.elements.statusBadge.className = 'sleep-status-badge can-sleep';
-      }
-    }
+
 
     // Determine which percentage to show
     const displayPercentage = sleepStatus.canSleepToday

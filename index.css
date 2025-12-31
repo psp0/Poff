@@ -5459,68 +5459,53 @@ body:has(.auth-section:not([style*="display: none"])) {
   padding: 20px;
 }
 
-/* Sleep Mascots (Komala & Musharna) */
+/* Sleep Mascots (Komala Only) */
+
 .sleep-mascot-container {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   width: 100%;
   max-width: 320px;
-  /* 너무 멀어지지 않게 제한 */
-  margin-bottom: 20px;
+    margin-bottom: 20px;
   position: relative;
   z-index: 10;
 }
 
+
+  
 .sleep-mascot {
   width: 96px;
   height: 96px;
-  object-fit: contain;
   image-rendering: pixelated;
+  background-repeat: no-repeat;
+  background-position: 0 0;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
-  animation: float-sleep 4s ease-in-out infinite;
+scale: 2.5;
+
 }
 
-/* 왼쪽 자말라 (약간 늦게 둥둥) */
-.sleep-mascot.left {
-  animation-delay: 0s;
-}
 
-/* 오른쪽 몽얌나 (반전시켜서 안쪽 보게 함 & 타이밍 다르게) */
-.sleep-mascot.right {
-  transform: scaleX(-1);
-  /* 원본이 왼쪽을 보면 반전 필요, 오른쪽 보면 불필요. 보통 Front는 왼쪽 하단을 봄 -> 반전하면 오른쪽 하단(중앙) 봄 */
-  animation-delay: 2s;
-}
 
 /* 자는 표시 (Zzz...) */
+
 .sleep-zzz {
   position: absolute;
   top: -10px;
-  font-weight: bold;
+  left: 50%;
+  margin-left: 20px;
+    font-weight: bold;
   color: #a5b4fc;
   font-size: 20px;
   opacity: 0;
   animation: zzz-float 3s linear infinite;
-}
-
-.sleep-zzz.left {
-  left: 20px;
   animation-delay: 1s;
 }
 
-.sleep-zzz.right {
-  right: 20px;
-  animation-delay: 3s;
-}
-
 @keyframes float-sleep {
-
-  0%,
-  100% {
+  0%, 100% {
     transform: translateY(0) scaleX(var(--scale-x, 1));
   }
-
   50% {
     transform: translateY(-10px) scaleX(var(--scale-x, 1));
   }
@@ -5614,27 +5599,7 @@ body:has(.auth-section:not([style*="display: none"])) {
   color: var(--text-primary);
 }
 
-.sleep-status-badge {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-}
 
-.sleep-status-badge.can-sleep {
-  background: linear-gradient(135deg, #34d399, #10b981);
-  color: white;
-}
-
-.sleep-status-badge.already-slept {
-  background: linear-gradient(135deg, #f97316, #ea580c);
-  color: white;
-}
-
-.sleep-status-badge.rewarded {
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  color: white;
-}
 
 /* Sleep Reward Container */
 .sleep-reward-container {
