@@ -189,7 +189,7 @@ jobs:
 
       - name: Download Frontend Artifact (Workflow Dispatch)
         if: github.event_name == 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
-        uses: dawidd6/action-download-artifact@v11
+        uses: dawidd6/action-download-artifact@v12
         with:
           workflow: ci.yml
           name: frontend-dist
@@ -212,7 +212,7 @@ jobs:
 
       - name: Download Lambda Artifact (Workflow Dispatch)
         if: github.event_name == 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
-        uses: dawidd6/action-download-artifact@v11
+        uses: dawidd6/action-download-artifact@v12
         with:
           workflow: ci.yml
           name: lambda-packages

@@ -233,7 +233,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Download Frontend Artifact
-        uses: dawidd6/action-download-artifact@v11
+        uses: dawidd6/action-download-artifact@v12
         with:
           workflow: ci.yml
           name: frontend-dist
@@ -241,7 +241,7 @@ jobs:
           path: dist
 
       - name: Download Lambda Artifact
-        uses: dawidd6/action-download-artifact@v11
+        uses: dawidd6/action-download-artifact@v12
         with:
           workflow: ci.yml
           name: lambda-packages
