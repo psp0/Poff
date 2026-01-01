@@ -71,20 +71,7 @@
 </head>
 
 <body>
-  <!-- PWA 설치 배너 (하단에서 올라옴) -->
-  <div id="pwa-install-banner" class="pwa-install-banner hidden">
-    <div class="pwa-install-content">
-      <div class="pwa-install-icon">
-        <img id="pwa-icon-img" alt="Poff" width="40" height="40">
-      </div>
-      <div class="pwa-install-text">
-        <strong>Poff 앱 설치</strong>
-        <span>홈 화면에 추가하여 더 편리하게!</span>
-      </div>
-      <button id="pwa-install-btn" class="pwa-install-btn">설치</button>
-      <button id="pwa-install-close" class="pwa-install-close">&times;</button>
-    </div>
-  </div>
+
 
   <div class="container">
     <!-- 로그인 섹션 -->
@@ -95,7 +82,7 @@
         </div>
       </div>
       <h1 class="auth-app-name">Poff</h1>
-      <p class="auth-tagline">폰을 끄면 깨어나는 포켓몬 세상</p>
+      <p class="auth-tagline">폰을 끄면 보이는 포켓몬 세상</p>
       <!-- 포켓몬과 함께하는 디지털 디톡스 -->
       <div class="auth-buttons">
         <button id="googleLoginBtn" class="google-btn">
@@ -113,132 +100,8 @@
     <div id="content" style="display: none" class="full-height-layout">
 
       <div id="tab-content">
-        <!-- Tab 1: Home (My Pokemon) -->
+        <!-- Tab 1: Home (Screen Time Input) -->
         <div id="view-home" class="tab-view active">
-          <!-- Pokedex Header -->
-          <div class="pokedex-header">
-            <div class="pokedex-curve-bg"></div>
-            <div class="pokedex-eyes-container">
-              <div class="pokedex-eye left">
-                <div class="pokedex-eye-line"></div>
-              </div>
-              <div class="pokedex-eye right">
-                <div class="pokedex-eye-line"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pokedex-screen">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-              <h2 style="margin: 0;">Poff</h2>
-              <div class="header-controls" style="display: flex; gap: 12px; align-items: center;">
-                <button onclick="openInfoModal()" title="프로젝트 정보"
-                  style="display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; color: #4a5568; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
-                  onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
-                  onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'">
-                  <svg xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;" fill="none"
-                    viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-                <button onclick="openShopModal()" title="트레이드 숍"
-                  style="display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; color: #4a5568; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
-                  onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
-                  onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'">
-                  <svg xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;" fill="none"
-                    viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
-                  </svg>
-                </button>
-                <button onclick="openSettings()" title="설정"
-                  style="display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; color: #4a5568; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
-                  onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
-                  onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'">
-                  <svg xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;" fill="none"
-                    viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <!-- 내 포켓몬 아이콘 컬렉션 -->
-            <div class="content-section">
-              <h3>내 포켓몬</h3>
-              <div class="collection-header-btns">
-                <button class="filter-btn corner-btn" id="filterIconsBtn" title="필터">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                  </svg>
-                  <span class="filter-active-badge" id="filterActiveBadge" style="display: none;"></span>
-                </button>
-                <button class="refresh-btn corner-btn" id="refreshIconsBtn" title="새로고침">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-              </div>
-              <div id="iconCollectionGrid" class="collection-grid"></div>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- Tab 2: Eggs -->
-        <div id="view-eggs" class="tab-view">
-          <!-- Pokedex Header -->
-          <div class="pokedex-header">
-            <div class="pokedex-curve-bg"></div>
-            <div class="pokedex-eyes-container">
-              <div class="pokedex-eye left">
-                <div class="pokedex-eye-line"></div>
-              </div>
-              <div class="pokedex-eye right">
-                <div class="pokedex-eye-line"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pokedex-screen">
-            <div class="content-section">
-              <div class="modal-header">
-                <h3 class="modal-title">알 부화기</h3>
-                <div class="charm-count-display">
-                  <img id="ovalCharmIcon" alt="둥근부적" width="24">
-                  <span id="user-charm-count">0</span>
-                </div>
-              </div>
-              <!-- 부화기 슬롯 -->
-              <div class="incubator-section">
-                <div class="incubator-container" id="incubator-slots">
-                  <!-- 슬롯은 JS로 동적 생성됨 -->
-                </div>
-              </div>
-
-              <!-- 하단: 알 검색 -->
-              <div class="egg-search-section">
-                <h4>탐색할 알 검색</h4>
-                <div class="search-box">
-                  <input type="text" id="egg-search-input" placeholder="포켓몬 이름 입력">
-                  <button id="egg-search-btn">검색</button>
-                </div>
-                <div id="egg-search-results" class="egg-results-list">
-                  <!-- 검색 결과 -->
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 3: Screen Time -->
-        <div id="view-screentime" class="tab-view">
           <!-- Pokedex Header -->
           <div class="pokedex-header">
             <div class="pokedex-curve-bg"></div>
@@ -280,7 +143,7 @@
                 <label class="screen-time-toggle">
                   <input type="checkbox" id="isOver10Hours" />
                   <span class="toggle-slider"></span>
-                  <span class="toggle-label">10시간 이상</span>
+                  <span class="toggle-label">10시간 이상이라면</span>
                 </label>
                 <!-- 저장 버튼 -->
                 <button class="submit-btn" id="submitScreenTimeBtn">
@@ -292,7 +155,46 @@
           </div>
         </div>
 
-        <!-- Tab 4: Sleep -->
+    <!-- Tab 2: Pokedex (My Pokemon) -->
+        <div id="view-pokedex" class="tab-view">
+          <!-- Pokedex Header -->
+          <div class="pokedex-header">
+            <div class="pokedex-curve-bg"></div>
+            <div class="pokedex-eyes-container">
+              <div class="pokedex-eye left">
+                <div class="pokedex-eye-line"></div>
+              </div>
+              <div class="pokedex-eye right">
+                <div class="pokedex-eye-line"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pokedex-screen">
+            <!-- 내 포켓몬 아이콘 컬렉션 -->
+            <div class="content-section">
+              <h3>내 포켓몬</h3>
+              <div class="collection-header-btns">
+                <button class="filter-btn corner-btn" id="filterIconsBtn" title="필터">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  <span class="filter-active-badge" id="filterActiveBadge" style="display: none;"></span>
+                </button>
+                <button class="refresh-btn corner-btn" id="refreshIconsBtn" title="새로고침">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+              <div id="iconCollectionGrid" class="collection-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Sleep -->
         <div id="view-sleep" class="tab-view">
           <!-- Pokedex Header -->
           <div class="pokedex-header">
@@ -309,16 +211,19 @@
 
           <div class="pokedex-screen">
             <div class="content-section sleep-section">
-              <div class="sleep-header">
-                <h3>수면 보상</h3>
-
-              </div>
 
               <!-- 수면 보상 프로그레스 영역 -->
               <div class="sleep-reward-container">
                 <div class="sleep-reward-info" id="sleepRewardInfo">
-                  <span class="percentage-text" id="currentPercentage">0%</span>
-                  <span class="time-hint" id="sleepTimeHint">지금 자면 받을 수 있는 이로치</span>
+                  <p class="reward-summary-text">
+                    <span id="sleepTimePrefix">지금 자면</span> 오늘 잡은 포켓몬<br>
+                    <span id="currentPercentage" class="highlight-percentage">0%</span>가 <span
+                      class="highlight-shiny">이로치</span>
+                  </p>
+                  <div class="rule-box">
+                    <p class="time-rule">↘️ 밤 10시부터 확률이 감소해요</p>
+                    <p id="holidayRuleText" class="holiday-rule" style="display:none;">🎉 내일은 쉬는 날! 기준이 완화되었어요</p>
+                  </div>
                 </div>
 
                 <!-- 프로그레스바 영역 (제거됨, 아이콘만 표시) -->
@@ -331,22 +236,135 @@
 
               <!-- 하단 액션 버튼 영역 -->
               <div class="sleep-actions">
-                <button id="refreshSleepBtn" class="refresh-sleep-btn" title="새로고침">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                    width="20" height="20">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  REFRESH
-                </button>
+
                 <button id="startSleepBtn" class="start-sleep-btn">
-                  <span class="btn-icon">😴</span>
+                  <span class="btn-icon">🌜️</span>
                   <span class="btn-text">수면 시작</span>
                 </button>
               </div>
 
               <!-- 수면 상태 메시지 -->
               <div class="sleep-message" id="sleepMessage"></div>
+            </div>
+          </div>
+        </div>
+
+    
+        <!-- Tab 4: Menu -->
+        <div id="view-menu" class="tab-view">
+          <!-- Pokedex Header -->
+          <div class="pokedex-header">
+            <div class="pokedex-curve-bg"></div>
+            <div class="pokedex-eyes-container">
+              <div class="pokedex-eye left">
+                <div class="pokedex-eye-line"></div>
+              </div>
+              <div class="pokedex-eye right">
+                <div class="pokedex-eye-line"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pokedex-screen">
+            <div class="menu-grid">
+              <!-- 알 부화 카드 -->
+              <div class="menu-card" onclick="openEggModal()">
+                <div class="menu-card-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <ellipse cx="12" cy="13" rx="7" ry="9" stroke-width="2" />
+                  </svg>
+                </div>
+                <div class="menu-card-content">
+                  <h4>알 탐색</h4>
+                  <p>원하는 포켓몬이 있다면?</p>
+                </div>
+                <div class="menu-card-arrow">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+
+              <!-- 트레이드 숍 카드 -->
+              <div class="menu-card" onclick="openShopModal()">
+                <div class="menu-card-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                  </svg>
+                </div>
+                <div class="menu-card-content">
+                  <h4>트레이드 숍</h4>
+                  <p>아이템 교환하기</p>
+                </div>
+                <div class="menu-card-arrow">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+
+              <!-- 가이드 카드 -->
+              <div class="menu-card" onclick="openInfoModal()">
+                <div class="menu-card-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div class="menu-card-content">
+                  <h4>가이드</h4>
+                  <p>앱 사용법과 보상 정보</p>
+                </div>
+                <div class="menu-card-arrow">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+
+
+
+
+              <!-- PWA 앱 설치 카드 -->
+              <div class="menu-card" id="pwa-install-card" onclick="handlePwaInstallClick()">
+                <div class="menu-card-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </div>
+                <div class="menu-card-content">
+                  <h4>앱 설치</h4>
+                  <p>홈 화면에 추가하여 편리하게</p>
+                </div>
+                <div class="menu-card-arrow">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+
+              <!-- 설정 카드 -->
+              <div class="menu-card" onclick="openSettings()">
+                <div class="menu-card-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div class="menu-card-content">
+                  <h4>설정</h4>
+                  <p>앱 설정 및 계정 관리</p>
+                </div>
+                <div class="menu-card-arrow">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -376,24 +394,15 @@
           </div>
           <span>홈</span>
         </button>
-        <button class="tab-item" data-tab="eggs">
-          <div class="tab-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-              stroke="currentColor">
-              <ellipse cx="12" cy="13" rx="7" ry="9" stroke-width="2" />
-            </svg>
-          </div>
-          <span>알</span>
-        </button>
-        <button class="tab-item" data-tab="screentime">
+         <button class="tab-item" data-tab="pokedex">
           <div class="tab-icon">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
               stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           </div>
-          <span>스크린타임</span>
+          <span>도감</span>
         </button>
         <button class="tab-item" data-tab="sleep">
           <div class="tab-icon">
@@ -404,8 +413,16 @@
             </svg>
           </div>
           <span>수면</span>
+        </button>       
+        <button class="tab-item" data-tab="menu">
+          <div class="tab-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </div>
+          <span>메뉴</span>
         </button>
-
       </nav>
 
       <!-- Settings Panel (Overlay) -->
@@ -430,23 +447,9 @@
                   <div class="toggle-knob"></div>
                 </div>
               </div>
-              <div class="settings-item clickable" id="showPwaBannerBtn" style="display: none;">
-                <span class="settings-item-label">앱 설치 배너 보기</span>
-                <svg class="chevron-right" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                </svg>
-              </div>
-              <div class="settings-item clickable" id="installAppBtn" style="display: none;">
-                <span class="settings-item-label">앱 설치하기</span>
-                <svg class="chevron-right" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                </svg>
-              </div>
             </div>
           </section>
-
+          <button class="logout-btn" id="logoutBtn" style="margin-top: 10px;">로그아웃</button>
           <!-- 섹션 2: 앱 정보 -->
           <section>
             <div class="disclaimer-box">
@@ -484,7 +487,7 @@
               </div>
             </div>
           </section>
-          <button class="logout-btn" id="logoutBtn" style="margin-top: 10px;">로그아웃</button>
+
           <!-- 섹션 3: 크레딧 -->
           <section>
             <h3 class="settings-section-title">Credits</h3>
@@ -585,6 +588,37 @@
     </div>
 
 
+    <!-- 알 부화 모달 -->
+    <div id="egg-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">알 부화기</h3>
+          <div class="charm-count-display">
+            <img id="ovalCharmIcon" alt="둥근부적" width="24">
+            <span id="user-charm-count">0</span>
+          </div>
+          <button class="close-btn" id="egg-close">&times;</button>
+        </div>
+        <!-- 부화기 슬롯 -->
+        <div class="incubator-section">
+          <div class="incubator-container" id="incubator-slots">
+            <!-- 슬롯은 JS로 동적 생성됨 -->
+          </div>
+        </div>
+
+        <!-- 하단: 알 검색 -->
+        <div class="egg-search-section">
+          <h4>탐색할 알 검색</h4>
+          <div class="search-box">
+            <input type="text" id="egg-search-input" placeholder="포켓몬 이름 입력">
+            <button id="egg-search-btn">검색</button>
+          </div>
+          <div id="egg-search-results" class="egg-results-list">
+            <!-- 검색 결과 -->
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div id="evolution-modal" class="modal">
       <!-- 진화도 모달 (ID 유지, 클래스 변경) -->
@@ -699,6 +733,34 @@
 
 
 
+
+
+    <!-- iOS 설치 안내 모달 -->
+    <div id="ios-install-modal" class="modal" style="z-index: 2100;">
+      <div class="modal-content" style="max-width: 320px; text-align: center;">
+        <div class="modal-header">
+          <h3 class="modal-title">iOS 앱 설치 방법</h3>
+          <button class="close-btn" onclick="closeIosInstallModal()">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 20px 0;">
+          <p style="margin-bottom: 15px; color: #4a5568;">
+            Safari 브라우저 하단의<br>
+            <strong>공유 버튼</strong> <svg style="width:16px;height:16px;vertical-align:middle; display:inline-block;"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+            </svg> 을 누른 후
+          </p>
+          <p style="margin-bottom: 15px; color: #4a5568;">
+            <strong>'홈 화면에 추가'</strong>를 선택해주세요.
+          </p>
+        </div>
+        <div style="margin-top: 20px;">
+          <button onclick="closeIosInstallModal()"
+            style="padding: 10px 20px; border-radius: 8px; border: none; background: #CD5C5C; color: white; font-weight: bold; cursor: pointer; width: 100%;">확인</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 약관 동의 모달 -->
     <div id="terms-modal" class="modal">
@@ -874,14 +936,14 @@
     <div id="initial-screentime-modal" class="modal initial-screentime-modal">
       <div class="modal-content initial-screentime-content">
         <div class="modal-header initial-screentime-header">
-          <h3 class="modal-title initial-screentime-title">📱 잠깐! 첫 보상 기회!</h3>
+          <h3 class="modal-title initial-screentime-title">스타터 포켓몬을 만날시간~!</h3>
         </div>
 
         <div class="initial-screentime-body">
           <div class="reward-preview">
             <div class="reward-icon">🎁</div>
             <p class="reward-text">
-              <strong>지난주 평균 스크린타임</strong>을 알려주시면<br>
+              <strong>지난주 평균 스크린타임</strong>을 입력하시면<br>
               <span class="highlight">스타터 포켓몬 10마리</span>를 드려요!
             </p>
           </div>
@@ -891,20 +953,21 @@
               📊 지난주 평균 스크린타임은?
             </label>
             <p class="screentime-hint">휴대폰 설정 → 스크린타임에서 확인할 수 있어요!</p>
-            <p class="screentime-hint" style="margin-top: 4px;">* 주의 시작: 일요일 ~ 토요일</p>
+            <p class="screentime-hint" style="margin-top: 4px;">한 주의 시작: 일요일 ~ 토요일</p>
 
             <div class="initial-screentime-input-area">
-              <div class="time-input-group">
-                <input type="number" id="initialScreenTimeHours" min="0" max="23" placeholder="0" class="time-input">
-                <span class="time-label">시간</span>
-              </div>
-              <div class="time-input-group">
-                <input type="number" id="initialScreenTimeMinutes" min="0" max="59" placeholder="0" class="time-input">
-                <span class="time-label">분</span>
+              <div class="screen-time-code-container">
+                <input type="text" class="screen-time-digit" id="initialScreenTimeDigit1" maxlength="1"
+                  inputmode="numeric" placeholder="0">
+                <input type="text" class="screen-time-digit" id="initialScreenTimeDigit2" maxlength="1"
+                  inputmode="numeric" placeholder="0">
+                <input type="text" class="screen-time-digit" id="initialScreenTimeDigit3" maxlength="1"
+                  inputmode="numeric" placeholder="0">
+                <input type="text" class="screen-time-digit" id="initialScreenTimeDigit4" maxlength="1"
+                  inputmode="numeric" placeholder="0">
               </div>
             </div>
-
-            <p class="time-preview" id="initialTimePreview">-</p>
+            <p class="time-preview" id="initialTimePreview" style="margin-top: 12px;">-</p>
           </div>
 
           <div class="initial-screentime-actions">
@@ -939,10 +1002,13 @@
 
           <div class="starter-tip-box">
             <p>
-              <strong>포켓몬과 아이템 얻기 팁!</strong>
+              <strong>💡이 앱의 목표💡</strong>
             </p>
             <p>
-              ✨스크린타임을 줄이면 추가 포켓몬을 얻어요!
+              1. 스크린타임 감소
+            </p>
+            <p>
+              2. 밤 10시 이후 수면
             </p>
 
           </div>
@@ -1066,14 +1132,15 @@
     <div id="info-modal" class="modal">
       <div class="modal-content info-modal-content">
         <div class="modal-header">
-          <h3 class="modal-title">보상 규칙</h3>
+          <h3 class="modal-title">가이드</h3>
           <button class="close-btn" id="info-close">&times;</button>
         </div>
 
         <!-- 탭 네비게이션 -->
         <div class="info-tabs">
           <button class="info-tab active" data-tab="overview">📋 요약</button>
-          <button class="info-tab" data-tab="rewards">🎁 상세</button>
+          <button class="info-tab" data-tab="rewards">📱 타임 상세</button>
+          <button class="info-tab" data-tab="sleep">🌙 수면 상세</button>
           <button class="info-tab" data-tab="events">🎉 이벤트</button>
         </div>
 
@@ -1086,38 +1153,20 @@
                 <p>스크린타임을 <strong>조금이라도(-1%)</strong> 줄이면<br><span class="highlight-pokemon">포켓몬</span>을 만날 수 있어요!</p>
               </div>
             </div>
-
-            <div class="quick-summary-grid">
-              <div class="summary-card best">
-                <div class="summary-icon">🏆</div>
-                <div class="summary-label">-40% 이상</div>
-                <div class="summary-value">전설 + 환상 + 기초 3</div>
+            <div class="overview-hero">
+              <div class="overview-main-message">
+                <span class="hero-icon">🎁</span>
+                <p>보상으로 얻은 <strong>아이템</strong>들을 통해<br><span class="highlight-pokemon">다른폼, 진화체</span>를 얻을 수 있어요!</p>
               </div>
-              <div class="summary-card good">
-                <div class="summary-icon">⭐</div>
-                <div class="summary-label">-30% ~ -40%</div>
-                <div class="summary-value">전설 + 기초 3</div>
-              </div>
-              <div class="summary-card normal">
-                <div class="summary-icon">✨</div>
-                <div class="summary-label">-10% ~ -30%</div>
-                <div class="summary-value">기초 2~3마리</div>
-              </div>
-              <div class="summary-card minimal">
-                <div class="summary-icon">🌱</div>
-                <div class="summary-label">-1% ~ -10%</div>
-                <div class="summary-value">기초 2마리</div>
+            </div>
+            <div class="overview-hero">
+              <div class="overview-main-message">
+                <span class="hero-icon">🌙</span>
+                <p><strong>일찍(밤 10시 이후)</strong> 수면을 하면<br><span class="highlight-pokemon">이로치 포켓몬</span>으로 바뀌어요!</p>
               </div>
             </div>
 
-            <div class="overview-warning">
-              <span class="warning-icon">⚠️</span>
-              <span>스크린타임이 <strong>증가</strong>하면 포켓몬 없이 아이템만!</span>
-            </div>
-
-            <div class="overview-tip">
-              💡 더 자세한 보상은 <strong>"상세"</strong> 탭에서 확인하세요
-            </div>
+            
           </div>
 
           <!-- 상세 보상 탭 -->
@@ -1125,98 +1174,82 @@
             <div class="reward-accordion">
               <!-- 감소 그룹 -->
               <div class="accordion-group">
-                <div class="accordion-group-header success">
-                  <span>📉 스크린타임 감소 (포켓몬 획득!)</span>
+                <div class="accordion-group-header">
+                  <span>전주 평균 대비 감소 (포켓몬 획득)</span>
                 </div>
 
                 <div class="accordion-item" data-tier="best">
-                  <div class="accordion-header best-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">🏆</span>
                       <span class="tier-condition">-40% 이상 또는 2시간 이하</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item pokemon"><span class="reward-emoji">🐉</span> 전설/울트라비스트 1</div>
-                      <div class="reward-item pokemon"><span class="reward-emoji">✨</span> 패러독스/환상 1</div>
-                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 3</div>
-                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 5</div>
-                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 6</div>
-                      <div class="reward-item item"><span class="reward-emoji">⚪</span> 둥근부적 2</div>
+                      <div class="reward-item pokemon">전설/울트라비스트 1, 패러독스/환상 1, Base 포켓몬 3</div>                
+                      <div class="reward-item item">신비의 부적 5, 이상한 사탕 6, 둥근부적 2</div>
+                    
                     </div>
                   </div>
                 </div>
 
                 <div class="accordion-item" data-tier="high1">
-                  <div class="accordion-header high-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">⭐</span>
                       <span class="tier-condition">-30% ~ -40% 또는 3시간대</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item pokemon"><span class="reward-emoji">🐉</span> 전설/울트라비스트 1</div>
-                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 3</div>
-                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 5</div>
-                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 6</div>
-                      <div class="reward-item item"><span class="reward-emoji">⚪</span> 둥근부적 2</div>
+                      <div class="reward-item pokemon">전설/울트라비스트 1, Base 포켓몬 3</div>
+                      <div class="reward-item item">신비의 부적 5, 이상한 사탕 6, 둥근부적 2</div>
                     </div>
                   </div>
                 </div>
 
                 <div class="accordion-item" data-tier="high2">
-                  <div class="accordion-header high-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">✨</span>
                       <span class="tier-condition">-20% ~ -30%</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 3</div>
-                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 4</div>
-                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 5</div>
-                      <div class="reward-item item"><span class="reward-emoji">⚪</span> 둥근부적 1</div>
+                      <div class="reward-item pokemon">Base 포켓몬 3</div>
+                      <div class="reward-item item">신비의 부적 4, 이상한 사탕 5, 둥근부적 1</div>
                     </div>
                   </div>
                 </div>
 
                 <div class="accordion-item" data-tier="mid1">
-                  <div class="accordion-header mid-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">💪</span>
                       <span class="tier-condition">-10% ~ -20%</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 2</div>
-                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 3</div>
-                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 4</div>
-                      <div class="reward-item item"><span class="reward-emoji">⚪</span> 둥근부적 1</div>
+                      <div class="reward-item pokemon">Base 포켓몬 2</div>
+                      <div class="reward-item item">신비의 부적 3, 이상한 사탕 4, 둥근부적 1</div>
                     </div>
                   </div>
                 </div>
 
                 <div class="accordion-item" data-tier="mid2">
-                  <div class="accordion-header mid-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">🌱</span>
-                      <span class="tier-condition">-1% ~ -10% (감소 성공!)</span>
+                      <span class="tier-condition">-1% ~ -10% (감소 성공)</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item pokemon"><span class="reward-emoji">🎯</span> 기초 포켓몬 2</div>
-                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 2</div>
-                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 3</div>
+                      <div class="reward-item pokemon">Base 포켓몬 2</div>
+                      <div class="reward-item item">신비의 부적 2, 이상한 사탕 3</div>
                     </div>
                   </div>
                 </div>
@@ -1224,87 +1257,76 @@
 
               <!-- 증가 그룹 -->
               <div class="accordion-group">
-                <div class="accordion-group-header warning">
-                  <span>📈 스크린타임 증가 (아이템만)</span>
+                <div class="accordion-group-header">
+                  <span>전주 평균 대비 증가 (아이템만)</span>
                 </div>
 
                 <div class="accordion-item" data-tier="inc1">
-                  <div class="accordion-header low-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">😅</span>
                       <span class="tier-condition">0% ~ +10% 증가</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item no-pokemon"><span class="reward-emoji">❌</span> 포켓몬 없음</div>
-                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 1</div>
-                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 3</div>
+                      <div class="reward-item item">신비의 부적 1, 이상한 사탕 3</div>
                     </div>
                   </div>
                 </div>
 
                 <div class="accordion-item" data-tier="inc2">
-                  <div class="accordion-header low-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">😓</span>
                       <span class="tier-condition">+10% ~ +20% 증가</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item no-pokemon"><span class="reward-emoji">❌</span> 포켓몬 없음</div>
-                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 1</div>
-                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 2</div>
+                      <div class="reward-item item">신비의 부적 1, 이상한 사탕 2</div>
                     </div>
                   </div>
                 </div>
 
                 <div class="accordion-item" data-tier="inc3">
-                  <div class="accordion-header low-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">😰</span>
                       <span class="tier-condition">+20% ~ +30% 증가</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item no-pokemon"><span class="reward-emoji">❌</span> 포켓몬 없음</div>
-                      <div class="reward-item item"><span class="reward-emoji">🍬</span> 이상한 사탕 2</div>
+                      <div class="reward-item item">이상한 사탕 2</div>
                     </div>
                   </div>
                 </div>
 
                 <div class="accordion-item" data-tier="inc4">
-                  <div class="accordion-header low-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">😢</span>
                       <span class="tier-condition">+30% ~ +40% 증가</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item no-pokemon"><span class="reward-emoji">❌</span> 포켓몬 없음</div>
-                      <div class="reward-item item"><span class="reward-emoji">🔮</span> 신비의 부적 1</div>
+                      <div class="reward-item item">신비의 부적 1</div>
                     </div>
                   </div>
                 </div>
 
                 <div class="accordion-item" data-tier="inc5">
-                  <div class="accordion-header worst-tier">
+                  <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-badge-mini">💀</span>
                       <span class="tier-condition">+40% 이상 증가</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item no-pokemon"><span class="reward-emoji">🚫</span> 보상 없음</div>
+                      <div class="reward-item no-pokemon">보상 없음 (F Rank)</div>
                     </div>
                   </div>
                 </div>

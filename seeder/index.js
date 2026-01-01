@@ -175,12 +175,12 @@ async function insertEvolutions(db, parser) {
 async function insertGuestUserPokemon(db) {
     const GUEST_USER_ID = '00000000-0000-0000-0000-000000000000';
 
-    // 게스트 유저에게 줄 포켓몬 목록 - 4마리만 (1단계 포켓몬)
+// 게스트 유저에게 줄 포켓몬 목록 - 4마리만 (1단계 포켓몬)
     const guestPokemon = [
-        { stable_id: 'BULBASAUR', is_shiny: false, obtained_reason: '체험모드 기본 지급' },  // 이상해씨
-        { stable_id: 'CHARMANDER', is_shiny: false, obtained_reason: '체험모드 기본 지급' }, // 파이리
-        { stable_id: 'SQUIRTLE', is_shiny: false, obtained_reason: '체험모드 기본 지급' },   // 꼬부기
-        { stable_id: 'PIKACHU', is_shiny: false, obtained_reason: '체험모드 기본 지급' }     // 피카켄
+        { stable_id: 'BULBASAUR', is_shiny: false, is_favorite: false, obtained_reason: '체험모드 기본 지급' },  // 이상해씨
+        { stable_id: 'CHARMANDER', is_shiny: false, is_favorite: false, obtained_reason: '체험모드 기본 지급' }, // 파이리
+        { stable_id: 'SQUIRTLE', is_shiny: false, is_favorite: false, obtained_reason: '체험모드 기본 지급' },   // 꼬부기
+        { stable_id: 'PIKACHU', is_shiny: false, is_favorite: true, obtained_reason: '체험모드 기본 지급' }     // 피카켄
     ];
 
     console.log(`Inserting guest user Pokemon collection...`);
@@ -202,10 +202,10 @@ async function insertGuestUserPokemon(db) {
             }
 
             await db.query(`
-                INSERT INTO user_pokemon_collection (user_id, pokemon_stable_id, is_shiny, obtained_reason)
-                VALUES (?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE obtained_reason = VALUES(obtained_reason)
-            `, [GUEST_USER_ID, pokemon.stable_id, pokemon.is_shiny, pokemon.obtained_reason]);
+                INSERT INTO user_pokemon_collection (user_id, pokemon_stable_id, is_shiny, is_favorite, obtained_reason)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE obtained_reason = VALUES(obtained_reason), is_favorite = VALUES(is_favorite)
+            `, [GUEST_USER_ID, pokemon.stable_id, pokemon.is_shiny, pokemon.is_favorite, pokemon.obtained_reason]);
 
             inserted++;
         } catch (err) {

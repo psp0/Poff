@@ -116,6 +116,10 @@ function onModalClose() {
   }
 }
 
+// 전역 노출 (pwa.js 등에서 사용)
+window.onModalOpen = onModalOpen;
+window.onModalClose = onModalClose;
+
 // 로그인 화면 피카츄 스프라이트 초기화
 function initAuthPikachuSprite() {
   const authSprite = document.getElementById('auth-sprite');
@@ -228,6 +232,7 @@ function initializeFirebaseListener() {
               contentDiv.style.display = "none";
               document.getElementById('terms-modal').style.display = 'flex';
               onModalOpen();
+              hideGlobalLoading(); // 약관 모달 표시 시 로딩 종료
             } else {
               // 기존 사용자는 바로 메인 화면 표시
               contentDiv.style.display = "flex";
@@ -883,21 +888,21 @@ if (guestLoginBtn) {
       const screenTimePreview = document.getElementById('screenTimePreview');
       if (screenTimePreview) {
         screenTimePreview.textContent = '📱 2시간 30분 (예시)';
-        screenTimePreview.style.color = '#4F46E5';
+        screenTimePreview.style.color = '#CD5C5C';
       }
 
       // 로그아웃 버튼을 로그인 버튼으로 변경
       const logoutBtn = document.getElementById("logoutBtn");
       if (logoutBtn) {
         logoutBtn.textContent = "로그인하여 시작하기";
-        logoutBtn.style.backgroundColor = "#667eea";
+        logoutBtn.style.backgroundColor = "#CD5C5C";
         logoutBtn.style.color = "white";
       }
 
       // 게스트 모드 UI 설정 (저장 버튼들 비활성화)
       setupGuestModeUI();
 
-      showToast('체험 모드로 시작합니다. 데이터 저장은 로그인 후 가능합니다.');
+      showToast('체험 모드로 시작합니다.');
     } catch (error) {
       console.error("Guest login error:", error);
       showToast('체험 모드 시작 중 오류가 발생했습니다.');
@@ -2255,6 +2260,9 @@ async function openEggModal() {
   await loadUserEggs();
 }
 
+// 전역 함수로 노출 (HTML onclick에서 사용)
+window.openEggModal = openEggModal;
+
 // 부화기 로딩 상태 렌더링 (스켈레톤 UI)
 function renderLoadingIncubators() {
   const containers = [
@@ -2654,7 +2662,7 @@ async function acquireEgg(pokemon) {
   }
 }
 
-function showToast(message) {
+function showToast(message, duration = 2500) {
   const toast = document.createElement('div');
   toast.textContent = message;
   Object.assign(toast.style, {
@@ -2682,8 +2690,10 @@ function showToast(message) {
   setTimeout(() => {
     toast.style.opacity = '0';
     setTimeout(() => toast.remove(), 300);
-  }, 2500);
+  }, duration);
 }
+// 전역 노출 (pwa.js 등 다른 스크립트에서 사용 가능하도록)
+window.showToast = showToast;
 
 
 
@@ -2772,10 +2782,10 @@ async function handleHatch(egg) {
         }
       }
 
-      // 홈 탭으로 자동 이동
-      const homeTabItem = document.querySelector('.tab-item[data-tab="home"]');
-      if (homeTabItem) {
-        homeTabItem.click();
+      // 도감 탭으로 자동 이동 (새 포켓몬 확인)
+      const pokedexTabItem = document.querySelector('.tab-item[data-tab="pokedex"]');
+      if (pokedexTabItem) {
+        pokedexTabItem.click();
       }
     } else {
       throw new Error(result.error || '부화 실패');
@@ -2926,14 +2936,22 @@ function initInfoModalListeners() {
     });
   });
 
-  // 아코디언 헤더 클릭 이벤트
-  document.querySelectorAll('.accordion-header').forEach(header => {
-    header.addEventListener('click', () => {
+  // 아코디언 헤더 클릭 이벤트 (이벤트 위임 사용 - Debugging Added)
+  document.addEventListener('click', (e) => {
+    // console.log('Click detected on:', e.target);
+    const header = e.target.closest('.accordion-header');
+    if (header) {
+      console.log('Accordion Header Clicked!');
       const accordionItem = header.closest('.accordion-item');
       if (accordionItem) {
-        toggleAccordion(accordionItem);
+        console.log('Toggling item:', accordionItem.dataset.tier);
+        try {
+          toggleAccordion(accordionItem);
+        } catch (err) {
+          console.error('Toggle failed:', err);
+        }
       }
-    });
+    }
   });
 }
 
@@ -3244,7 +3262,31 @@ async function handleTermsRefusal() {
   }
 }
 
-// 약관 동의 완료 처리 - 초기 스크린타임 입력 모달로 이동
+// 초기 스크린타임 코드 입력 헬퍼 함수들
+function getInitialScreenTimeCodeValue() {
+  const digits = [];
+  for (let i = 1; i <= 4; i++) {
+    const digit = document.getElementById(`initialScreenTimeDigit${i}`);
+    if (digit && digit.value) {
+      digits.push(digit.value);
+    }
+  }
+  return digits.length > 0 ? parseInt(digits.join('')) : NaN;
+}
+
+function clearInitialScreenTimeCodeInputs() {
+  for (let i = 1; i <= 4; i++) {
+    const digit = document.getElementById(`initialScreenTimeDigit${i}`);
+    if (digit) {
+      digit.value = '';
+    }
+  }
+  const checkbox = document.getElementById('initialIsOver10Hours');
+  if (checkbox) checkbox.checked = false;
+  updateInitialTimePreview();
+}
+
+// 초기 스크린타임 입력 모달 표시
 async function completeTermsAgreement() {
   try {
     // 약관 모달 숨기기
@@ -3267,23 +3309,49 @@ function showInitialScreenTimeModal() {
     modal.style.display = 'flex';
     // onModalOpen 호출 안함: terms-modal에서 연속으로 열리므로 이미 열린 상태
     // 입력 필드 초기화
-    document.getElementById('initialScreenTimeHours').value = '';
-    document.getElementById('initialScreenTimeMinutes').value = '';
-    document.getElementById('initialTimePreview').textContent = '-';
-    document.getElementById('initial-screentime-submit-btn').disabled = true;
+    clearInitialScreenTimeCodeInputs();
   }
 }
 
 // 초기 스크린타임 저장 및 완료 (입력 시)
 async function submitInitialScreenTime() {
-  const hoursInput = document.getElementById('initialScreenTimeHours');
-  const minutesInput = document.getElementById('initialScreenTimeMinutes');
+  const code = getInitialScreenTimeCodeValue();
+  if (isNaN(code)) {
+    showToast('스크린타임을 입력해주세요.');
+    return;
+  }
 
-  const hours = parseInt(hoursInput.value) || 0;
-  const minutes = parseInt(minutesInput.value) || 0;
+  const codeStr = code.toString();
+  let hours, minutes;
+  const isOver10HoursChecked = document.getElementById('initialIsOver10Hours')?.checked || false;
+
+  if (codeStr.length === 4) {
+    hours = parseInt(codeStr.substring(0, 2));
+    minutes = parseInt(codeStr.substring(2, 4));
+  } else if (codeStr.length === 3) {
+    if (isOver10HoursChecked) {
+      hours = parseInt(codeStr.substring(0, 2));
+      minutes = parseInt(codeStr.substring(2, 3));
+    } else {
+      hours = parseInt(codeStr.substring(0, 1));
+      minutes = parseInt(codeStr.substring(1, 3));
+    }
+  } else if (codeStr.length === 2 || codeStr.length === 1) {
+    hours = 0;
+    minutes = code;
+  } else {
+    showToast('올바른 스크린타임을 입력해주세요.');
+    return;
+  }
+
+  if (minutes >= 60 || hours >= 24) {
+    showToast('올바른 시간을 입력해주세요. (분은 59 이하, 시간은 23 이하)');
+    return;
+  }
+
   const totalMinutes = hours * 60 + minutes;
 
-  if (totalMinutes <= 0 || totalMinutes > 1440) {
+  if (totalMinutes <= 0) {
     showToast('올바른 스크린타임을 입력해주세요.');
     return;
   }
@@ -3319,30 +3387,121 @@ async function submitInitialScreenTime() {
 
 // 초기 스크린타임 입력 시간 미리보기 업데이트
 function updateInitialTimePreview() {
-  const hoursInput = document.getElementById('initialScreenTimeHours');
-  const minutesInput = document.getElementById('initialScreenTimeMinutes');
   const preview = document.getElementById('initialTimePreview');
   const submitBtn = document.getElementById('initial-screentime-submit-btn');
+  if (!preview || !submitBtn) return;
 
-  const hours = parseInt(hoursInput.value) || 0;
-  const minutes = parseInt(minutesInput.value) || 0;
-  const totalMinutes = hours * 60 + minutes;
+  const code = getInitialScreenTimeCodeValue();
+  if (isNaN(code)) {
+    preview.textContent = '-';
+    submitBtn.disabled = true;
+    return;
+  }
 
-  if (hours > 0 || minutes > 0) {
-    let previewText = '';
-    if (hours > 0) previewText += `${hours}시간 `;
-    if (minutes > 0) previewText += `${minutes}분`;
-    preview.textContent = previewText.trim() || '-';
+  const codeStr = code.toString();
+  let hours, minutes;
+  const isOver10HoursChecked = document.getElementById('initialIsOver10Hours')?.checked || false;
 
-    // 유효한 입력이면 버튼 활성화
-    if (totalMinutes > 0 && totalMinutes <= 1440) {
-      submitBtn.disabled = false;
+  if (codeStr.length === 4) {
+    hours = parseInt(codeStr.substring(0, 2));
+    minutes = parseInt(codeStr.substring(2, 4));
+  } else if (codeStr.length === 3) {
+    if (isOver10HoursChecked) {
+      hours = parseInt(codeStr.substring(0, 2));
+      minutes = parseInt(codeStr.substring(2, 3));
     } else {
-      submitBtn.disabled = true;
+      hours = parseInt(codeStr.substring(0, 1));
+      minutes = parseInt(codeStr.substring(1, 3));
     }
+  } else if (codeStr.length === 2 || codeStr.length === 1) {
+    hours = 0;
+    minutes = code;
   } else {
     preview.textContent = '-';
     submitBtn.disabled = true;
+    return;
+  }
+
+  if (minutes >= 60) {
+    preview.textContent = '⚠️ 분은 59 이하여야 합니다';
+    preview.style.color = '#EF4444';
+    submitBtn.disabled = true;
+  } else if (hours >= 24) {
+    preview.textContent = '⚠️ 24시간을 넘을 수 없습니다';
+    preview.style.color = '#EF4444';
+    submitBtn.disabled = true;
+  } else {
+    const totalMinutes = hours * 60 + minutes;
+    if (totalMinutes > 0) {
+      preview.textContent = `📱 ${hours}시간 ${minutes}분`;
+      preview.style.color = '#CD5C5C';
+      submitBtn.disabled = false;
+    } else {
+      preview.textContent = '-';
+      submitBtn.disabled = true;
+    }
+  }
+}
+
+function setupInitialScreenTimeCodeInputs() {
+  const digitInputs = [];
+  for (let i = 1; i <= 4; i++) {
+    const input = document.getElementById(`initialScreenTimeDigit${i}`);
+    if (input) {
+      digitInputs.push(input);
+    }
+  }
+
+  digitInputs.forEach((input, index) => {
+    input.addEventListener('input', (e) => {
+      const value = e.target.value;
+      if (!/^\d*$/.test(value)) {
+        e.target.value = value.replace(/\D/g, '');
+        return;
+      }
+      if (value && index < digitInputs.length - 1) {
+        digitInputs[index + 1].focus();
+      }
+      updateInitialTimePreview();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace') {
+        if (!e.target.value && index > 0) {
+          digitInputs[index - 1].focus();
+          digitInputs[index - 1].value = '';
+        }
+        setTimeout(() => updateInitialTimePreview(), 0);
+      }
+      if (e.key === 'ArrowLeft' && index > 0) {
+        e.preventDefault();
+        digitInputs[index - 1].focus();
+      }
+      if (e.key === 'ArrowRight' && index < digitInputs.length - 1) {
+        e.preventDefault();
+        digitInputs[index + 1].focus();
+      }
+    });
+
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+      for (let i = 0; i < pastedData.length && (index + i) < digitInputs.length; i++) {
+        digitInputs[index + i].value = pastedData[i];
+      }
+      const nextIndex = Math.min(index + pastedData.length, digitInputs.length - 1);
+      digitInputs[nextIndex].focus();
+      updateInitialTimePreview();
+    });
+
+    input.addEventListener('focus', () => {
+      input.select();
+    });
+  });
+
+  const isOver10HoursCheckbox = document.getElementById('initialIsOver10Hours');
+  if (isOver10HoursCheckbox) {
+    isOver10HoursCheckbox.addEventListener('change', updateInitialTimePreview);
   }
 }
 
@@ -3382,19 +3541,8 @@ if (document.getElementById('starter-modal-close-btn')) {
 
 // 초기 스크린타임 입력 모달 이벤트 리스너
 document.addEventListener('DOMContentLoaded', () => {
-  // 시간/분 입력 필드 이벤트
-  const hoursInput = document.getElementById('initialScreenTimeHours');
-  const minutesInput = document.getElementById('initialScreenTimeMinutes');
-
-  if (hoursInput) {
-    hoursInput.addEventListener('input', updateInitialTimePreview);
-    hoursInput.addEventListener('focus', () => hoursInput.select());
-  }
-
-  if (minutesInput) {
-    minutesInput.addEventListener('input', updateInitialTimePreview);
-    minutesInput.addEventListener('focus', () => minutesInput.select());
-  }
+  // 4자리 코드 입력 설정
+  setupInitialScreenTimeCodeInputs();
 
   // 제출 버튼
   const submitBtn = document.getElementById('initial-screentime-submit-btn');
@@ -3461,11 +3609,7 @@ async function loadStarterPokemon() {
     });
 
     sortedData.forEach(pokemon => {
-      const type1 = pokemon.type1;
-      const type2 = pokemon.type2;
-      const typeText = type2 ? `${type1}/${type2} 타입` : `${type1} 타입`;
-      const typeClass = getTypeClass(type1);
-      const generationText = `${pokemon.generation}세대`;
+      const typeClass = getTypeClass(pokemon.type1);
 
       const itemDiv = document.createElement('div');
       itemDiv.className = 'starter-pokemon-item';
@@ -3476,8 +3620,7 @@ async function loadStarterPokemon() {
           </div>
         </div>
         <div class="starter-pokemon-info">
-          <div class="starter-pokemon-name">${pokemon.name}</div>
-          <div class="starter-pokemon-type">${generationText} ${typeText}</div>
+          <div class="starter-pokemon-name">${pokemon.name}</div>     
         </div>
       `;
 
@@ -3910,16 +4053,11 @@ const shopCloseBtn = document.getElementById('shop-close');
 
 // 트레이드 숍 레시피 정의
 const shopRecipes = [
-  { cost: 'Shiny Charm', costCount: 1, reward: 'Mystic Charm', rewardCount: 1 },
-  { cost: 'Shiny Charm', costCount: 3, reward: 'Oval Charm', rewardCount: 1 },
-
   { cost: 'Mystic Charm', costCount: 1, reward: 'Shiny Charm', rewardCount: 1 },
   { cost: 'Rare Candy', costCount: 1, reward: 'Shiny Charm', rewardCount: 2 },
   { cost: 'Oval Charm', costCount: 1, reward: 'Shiny Charm', rewardCount: 3 },
   { cost: 'Shiny Charm', costCount: 5, reward: 'Brilliance Charm', rewardCount: 1 },
   { cost: 'Mystic Charm', costCount: 2, reward: 'Awakening Charm', rewardCount: 1 },
-
-
 ];
 
 // 아이템 정보 캐시
@@ -4764,8 +4902,8 @@ function initTabNavigation() {
           window.dispatchEvent(new Event('resize'));
 
           // Load data for specific tabs
-          if (targetTab === 'eggs') {
-            if (typeof loadUserEggs === 'function') loadUserEggs();
+          if (targetTab === 'pokedex') {
+            if (typeof loadUserPokemonIcons === 'function') loadUserPokemonIcons();
           }
         } else {
           view.classList.remove('active');
@@ -4863,12 +5001,13 @@ class SleepTracker {
     this.elements = {
       startBtn: document.getElementById('startSleepBtn'),
       stopBtn: document.getElementById('stopSleepBtn'),
-      refreshBtn: document.getElementById('refreshSleepBtn'),
+
       overlay: document.getElementById('sleepOverlay'),
       timer: document.getElementById('sleepTimer'),
 
       percentageText: document.getElementById('currentPercentage'),
-      timeHint: document.getElementById('sleepTimeHint'),
+      holidayRuleText: document.getElementById('holidayRuleText'),
+      sleepTimePrefix: document.getElementById('sleepTimePrefix'),
       pokemonIcons: document.getElementById('sleepPokemonIcons'),
       message: document.getElementById('sleepMessage')
     };
@@ -4883,9 +5022,7 @@ class SleepTracker {
     if (this.elements.stopBtn) {
       this.elements.stopBtn.addEventListener('click', () => this.finishSleep());
     }
-    if (this.elements.refreshBtn) {
-      this.elements.refreshBtn.addEventListener('click', () => this.refreshStatus());
-    }
+
 
     // Setup Mascots (Komala & Musharna)
     this.setupMascots();
@@ -5239,10 +5376,10 @@ class SleepTracker {
         throw new Error('Failed to load sleep status');
       }
 
-      const data = await response.json();
-      if (data.success) {
-        this.sleepStatus = data.data.sleepStatus;
-        this.renderSleepRewardUI(data.data);
+      const responseData = await response.json();
+      if (responseData.success) {
+        this.sleepStatus = responseData.data.sleepStatus;
+        this.renderSleepRewardUI(responseData);
       }
     } catch (err) {
       console.error('Failed to load sleep status:', err);
@@ -5255,19 +5392,18 @@ class SleepTracker {
     if (this.elements.percentageText) {
       this.elements.percentageText.textContent = '--%';
     }
-    if (this.elements.timeHint) {
-      this.elements.timeHint.textContent = '로그인 후 이용 가능합니다';
+    if (this.elements.holidayRuleText) {
+      this.elements.holidayRuleText.style.display = 'none';
     }
-    if (this.elements.refreshBtn) {
-      this.elements.refreshBtn.disabled = true;
-    }
+
     if (this.elements.startBtn) {
       this.elements.startBtn.disabled = true;
     }
   }
 
-  renderSleepRewardUI(data) {
-    const { todayPokemon, sleepStatus } = data;
+  renderSleepRewardUI(responseData) {
+    const { todayPokemon, sleepStatus } = responseData.data;
+    const timestamp = responseData.timestamp;
 
 
 
@@ -5281,17 +5417,23 @@ class SleepTracker {
       this.elements.percentageText.textContent = `${Math.round(displayPercentage)}%`;
     }
 
-    // Update time hint
-    if (this.elements.timeHint) {
-      if (sleepStatus.alreadyRewarded) {
-        this.elements.timeHint.textContent = '오늘의 수면 보상을 받았습니다!';
-      } else if (!sleepStatus.canSleepToday) {
-        this.elements.timeHint.textContent = '수면 종료 후 보상받기를 눌러주세요';
+    // Update Holiday Rule Visibility
+    if (this.elements.holidayRuleText) {
+      if (sleepStatus.isWakeUpDayOff) {
+        this.elements.holidayRuleText.style.display = 'flex';
       } else {
-        const msg = sleepStatus.isWakeUpDayOff
-          ? '내일 쉬는 날 기준 (02시까지 가능)'
-          : '지금 자면 받을 수 있는 이로치';
-        this.elements.timeHint.textContent = msg;
+        this.elements.holidayRuleText.style.display = 'none';
+      }
+    }
+
+    // Update Sleep Time Prefix (Before 10 PM vs After 10 PM)
+    if (this.elements.sleepTimePrefix) {
+      const serverTime = timestamp ? new Date(timestamp) : new Date();
+      const hour = serverTime.getHours();
+      if (hour < 22) {
+        this.elements.sleepTimePrefix.textContent = '일찍 자면';
+      } else {
+        this.elements.sleepTimePrefix.textContent = '지금 자면';
       }
     }
 
@@ -5301,9 +5443,7 @@ class SleepTracker {
     this.renderPokemonIcons(todayPokemon, displayPercentage, sleepStatus.rewardTable);
 
     // Update button states
-    if (this.elements.refreshBtn) {
-      this.elements.refreshBtn.disabled = sleepStatus.alreadyRewarded;
-    }
+
     if (this.elements.startBtn) {
       this.elements.startBtn.disabled = !sleepStatus.canSleepToday;
     }
@@ -5468,7 +5608,7 @@ class SleepTracker {
 
     // Style
     connector.style.width = `${length}px`;
-    connector.style.height = '4px'; // Thickness
+    connector.style.height = '6px'; // Thickness
     connector.style.left = `${x1}%`;
     connector.style.top = `${y1}px`;
     connector.style.transform = `rotate(${angle}deg)`;
@@ -5476,27 +5616,7 @@ class SleepTracker {
     this.elements.pokemonIcons.prepend(connector); // Behind icons
   }
 
-  async refreshStatus() {
-    if (!window.isAuthenticated()) {
-      showToast('로그인이 필요합니다.');
-      return;
-    }
 
-    if (this.elements.refreshBtn) {
-      this.elements.refreshBtn.disabled = true;
-    }
-
-    try {
-      showToast('상태를 새로고침합니다...');
-      await this.loadSleepStatus();
-    } catch (err) {
-      console.error('Failed to refresh status:', err);
-    } finally {
-      if (this.elements.refreshBtn) {
-        this.elements.refreshBtn.disabled = this.sleepStatus?.alreadyRewarded;
-      }
-    }
-  }
 
   showMessage(text, type = 'info') {
     if (!this.elements.message) return;
