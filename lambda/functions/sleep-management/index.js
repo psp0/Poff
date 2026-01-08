@@ -321,7 +321,7 @@ async function checkWeekendOrHoliday(db, timestamp) {
     // 공휴일 확인
     const dateStr = koreaTime.toISOString().split('T')[0];
     const holidayResult = await db.query(
-        `SELECT 1 FROM holidays WHERE holiday_date = ?`,
+        `SELECT 1 FROM date_info WHERE date = ? AND is_holiday = true`,
         [dateStr]
     );
 
