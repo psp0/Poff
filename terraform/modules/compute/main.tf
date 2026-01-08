@@ -91,8 +91,8 @@ locals {
     "GET /api/guest/pokemon/{stableId}"        = "guest-mode"
     "GET /api/guest/evolution/{baseImageName}" = "guest-mode"
 
-    "GET /api/guest/starter-pokemon"           = "guest-mode"
-    "GET /api/guest/items"                     = "guest-mode"
+    "GET /api/guest/starter-pokemon" = "guest-mode"
+    "GET /api/guest/items"           = "guest-mode"
 
     # Sleep Management
     "POST /api/sleep"        = "sleep-management"
@@ -245,6 +245,7 @@ resource "aws_lambda_function" "functions" {
       # Asset Configuration
       # Empty string allows URLs to start with /custom, /base etc. which matches CloudFront behaviors
       ASSETS_BASE_URL = "/"
+      CORS_ALLOWED_ORIGINS = join(",", var.api_cors_allowed_origins)
     }
   }
 

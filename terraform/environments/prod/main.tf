@@ -90,8 +90,7 @@ module "compute" {
   datadog_extension_version    = var.datadog_extension_version
   datadog_lambda_layer_version = var.datadog_lambda_layer_version
 
-  rds_secret_arn           = module.database.rds_secret_arn
-  enable_rds_secret_access = true
+
 
   firebase_service_account = base64decode(var.firebase_service_account)
 }
