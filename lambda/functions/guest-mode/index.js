@@ -574,6 +574,12 @@ exports.handler = async (event, context) => {
       return success(favorites);
     }
 
+    // /api/guest/today - 오늘 획득한 포켓몬 목록 (게스트 모드)
+    if (path === '/api/guest/today' && httpMethod === 'GET') {
+      const todayPokemon = await getGuestTodayPokemon();
+      return success(todayPokemon);
+    }
+
     // /api/guest/sleep-status - 수면 상태 (게스트 모드)
     if (path === '/api/guest/sleep-status' && httpMethod === 'GET') {
       const sleepStatus = await getGuestSleepStatus();
@@ -686,4 +692,66 @@ async function getGuestSleepStatus() {
     },
     todayDate: koreaTime.toISOString().split('T')[0]
   };
+}
+
+/**
+ * 게스트 유저의 오늘 획득한 포켓몬 조회 (Mock 데이터)
+ * 게스트 유저가 보유한 포켓몬 중 일부를 오늘 획득한 것처럼 표시
+ */
+async function getGuestTodayPokemon() {
+  const assetsBaseUrl = process.env.ASSETS_BASE_URL || '';
+  
+  // 게스트 유저가 보유한 포켓몬 중 최근 획득 몇 마리를 반환
+  const query = `
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.obtained_date,
+      upc.obtained_reason,
+      p.name,
+      p.image_name,
+      p.form_suffix,
+      p.type1,
+      p.type2,
+      p.asset_source,
+      p.has_icon,
+      p.has_icon_shiny,
+      p.image_name AS base_image_name
+    FROM user_pokemon_collection upc
+    JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    WHERE upc.user_id = ?
+    ORDER BY upc.obtained_date DESC
+    LIMIT 5
+  `;
+
+  const result = await db.query(query, [GUEST_USER_ID]);
+  const rows = result.rows || [];
+
+  // 아이콘 URL 생성
+  return rows.map(pokemon => {
+    const isShiny = pokemon.is_shiny;
+    const hasIcon = pokemon.has_icon === 1;
+    const hasIconShiny = pokemon.has_icon_shiny === 1;
+    const formSuffix = pokemon.form_suffix || '';
+    const assetSource = pokemon.asset_source || 'base';
+
+    let iconFolder;
+    if (isShiny && hasIconShiny) {
+      iconFolder = 'img/Icons%20shiny';
+    } else {
+      iconFolder = 'img/Icons';
+    }
+
+    const fileName = hasIcon && formSuffix 
+      ? `${pokemon.image_name}${formSuffix}.png`
+      : `${pokemon.image_name}.png`;
+
+    const icon_url = buildAssetUrl(assetSource, iconFolder, fileName);
+
+    return {
+      ...pokemon,
+      icon_url
+    };
+  });
 }

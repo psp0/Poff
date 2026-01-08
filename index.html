@@ -159,39 +159,79 @@
                   <div id="home-pokemon-name" class="pokemon-name-display"></div>
                 </div>
               </div>
-              <h3>어제 스크린타임 입력</h3>
-              <div class="screen-time-form">
-                <!-- 어제 날짜 표시 (변경 불가) -->
-                <input type="hidden" id="screenTimeDate" />
-                <div class="screen-time-date-row">
-                  <span class="date-display">📅 <span id="yesterdayDate"></span> (어제)</span>
+              <!-- 오늘의 미션 영역 -->
+              <div class="home-missions-section" id="homeMissionsSection">
+                <div class="home-missions-header">
+                  <span class="home-missions-title">📋 오늘의 미션</span>
                 </div>
-                <!-- 시간 입력 -->
-                <div class="screen-time-input-area">
-                  <div class="screen-time-preview" id="screenTimePreview"></div>
-                  <div class="screen-time-code-container">
-                    <input type="text" class="screen-time-digit" id="screenTimeDigit1" maxlength="1" inputmode="numeric"
-                      pattern="[0-9]" placeholder="-" />
-                    <input type="text" class="screen-time-digit" id="screenTimeDigit2" maxlength="1" inputmode="numeric"
-                      pattern="[0-9]" placeholder="-" />
-                    <input type="text" class="screen-time-digit" id="screenTimeDigit3" maxlength="1" inputmode="numeric"
-                      pattern="[0-9]" placeholder="-" />
-                    <input type="text" class="screen-time-digit" id="screenTimeDigit4" maxlength="1" inputmode="numeric"
-                      pattern="[0-9]" placeholder="-" />
+                <div class="mission-card-stack" id="missionCardStack">
+                  <!-- 카드 2: 어제 스크린타임 입력 (뒤쪽 카드) -->
+                  <div class="mission-card screentime-card stacked-card back-card" id="screenTimeCard">
+                    <div class="mission-card-icon">📱</div>
+                    <div class="mission-card-content">
+                      <div class="mission-card-title">어제 얼마나 사용했나요?</div>
+                      <div class="mission-card-subtitle" id="screenTimeCardSubtitle">스크린타임을 기록해주세요</div>
+                    </div>
+                    <div class="mission-card-action" id="screenTimeCardAction" onclick="openScreenTimeModal()">
+                      기록하러 가기 <span class="arrow">›</span>
+                    </div>
+                  </div>
+
+                  <!-- 카드 1: 지난주 평균 검증 (앞쪽 카드 - 우선순위 높음) -->
+                  <div class="mission-card verification-card stacked-card front-card" id="weeklyVerificationCard" style="display: none;">
+                    <div class="mission-card-icon">📊</div>
+                    <div class="mission-card-content">
+                      <div class="mission-card-title">지난주 얼마나 사용했나요?</div>
+                      <div class="mission-card-subtitle">평균 스크린타임을 검증해주세요</div>
+                    </div>
+                    <div class="mission-card-action" onclick="openWeeklyVerificationFromCard()">
+                      검증하러 가기 <span class="arrow">›</span>
+                    </div>
                   </div>
                 </div>
-                <!-- 10시간 이상 토글 -->
-                <label class="screen-time-toggle">
-                  <input type="checkbox" id="isOver10Hours" />
-                  <span class="toggle-slider"></span>
-                  <span class="toggle-label">10시간 이상이라면</span>
-                </label>
-                <!-- 저장 버튼 -->
-                <button class="submit-btn" id="submitScreenTimeBtn">
-                  스크린타임 저장
-                </button>
-                <div id="screenTimeResult" class="result-message" style="display: none;"></div>
               </div>
+              <!-- 오늘 획득한 포켓몬 가로 스크롤 -->
+              <div class="today-pokemon-section" id="todayPokemonSection" style="display: none;">
+                <div class="today-pokemon-header">
+                  <span class="today-pokemon-title">🎉 오늘 획득</span>
+                  <span class="today-pokemon-count" id="todayPokemonCount">0</span>
+                </div>
+                <div class="today-pokemon-scroll" id="todayPokemonScroll">
+                  <!-- 오늘 획득한 포켓몬 아이콘들이 여기에 렌더링됩니다 -->
+                </div>
+              </div>
+
+              <!-- 주간 달성 바 (일요일~토요일) -->
+              <div class="weekly-achievement-section" id="weeklyAchievementSection">
+                <div class="weekly-achievement-header">
+                  <span class="weekly-achievement-title">📊 이번 주 기록</span>
+                </div>
+                <div class="weekly-achievement-bar">
+                  <div class="weekly-day sunday" data-day="0">
+                    <div class="day-circle" id="weeklyDay0">(일)</div>
+                  </div>
+                  <div class="weekly-day" data-day="1">
+                    <div class="day-circle" id="weeklyDay1">(월)</div>
+                  </div>
+                  <div class="weekly-day" data-day="2">
+                    <div class="day-circle" id="weeklyDay2">(화)</div>
+                  </div>
+                  <div class="weekly-day" data-day="3">
+                    <div class="day-circle" id="weeklyDay3">(수)</div>
+                  </div>
+                  <div class="weekly-day" data-day="4">
+                    <div class="day-circle" id="weeklyDay4">(목)</div>
+                  </div>
+                  <div class="weekly-day" data-day="5">
+                    <div class="day-circle" id="weeklyDay5">(금)</div>
+                  </div>
+                  <div class="weekly-day" data-day="6">
+                    <div class="day-circle" id="weeklyDay6">(토)</div>
+                  </div>
+                </div>
+              </div>
+
+
             </div>
           </div>
         </div>
@@ -813,6 +853,91 @@
               <p class="info-text">이 서식지에서는 특정 타입의 포켓몬이 자주 출몰합니다.</p>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 스크린타임 입력 모달 -->
+    <div id="screen-time-modal" class="modal" onclick="if(event.target === this) closeScreenTimeModal()">
+      <div class="modal-content screen-time-modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">📱 어제 스크린타임 입력</h3>
+          <button class="close-btn" onclick="closeScreenTimeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <!-- 어제 날짜 표시 -->
+          <input type="hidden" id="screenTimeDate" />
+          <div class="screen-time-date-row">
+            <span class="date-display">📅 <span id="yesterdayDate"></span> (어제)</span>
+          </div>
+          <!-- 시간 입력 -->
+          <div class="screen-time-input-area">
+            <div class="screen-time-preview" id="screenTimePreview"></div>
+            <div class="screen-time-code-container">
+              <input type="text" class="screen-time-digit" id="screenTimeDigit1" maxlength="1" inputmode="numeric"
+                pattern="[0-9]" placeholder="-" />
+              <input type="text" class="screen-time-digit" id="screenTimeDigit2" maxlength="1" inputmode="numeric"
+                pattern="[0-9]" placeholder="-" />
+              <input type="text" class="screen-time-digit" id="screenTimeDigit3" maxlength="1" inputmode="numeric"
+                pattern="[0-9]" placeholder="-" />
+              <input type="text" class="screen-time-digit" id="screenTimeDigit4" maxlength="1" inputmode="numeric"
+                pattern="[0-9]" placeholder="-" />
+            </div>
+          </div>
+          <!-- 10시간 이상 토글 -->
+          <label class="screen-time-toggle">
+            <input type="checkbox" id="isOver10Hours" />
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">10시간 이상이라면</span>
+          </label>
+          <!-- 저장 버튼 -->
+          <button class="submit-btn" id="submitScreenTimeBtn">
+            스크린타임 저장
+          </button>
+          <div id="screenTimeResult" class="result-message" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 주간 검증 모달 -->
+    <div id="weekly-verification-modal" class="modal" onclick="if(event.target === this) closeWeeklyVerificationModal()">
+      <div class="modal-content screen-time-modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">📊 지난주 평균 검증</h3>
+          <button class="close-btn" onclick="closeWeeklyVerificationModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <!-- 경고 상태 표시 -->
+          <div id="warning-status" class="warning-status" style="display: none;">
+            <span class="warning-icon">⚠️</span>
+            <span>경고 <strong id="warning-count-display">0</strong>회</span>
+            <p id="warning-message" class="warning-message"></p>
+          </div>
+          
+          <!-- 시간 입력 -->
+          <div class="screen-time-input-area">
+            <div class="screen-time-preview" id="weeklyVerificationPreview">-</div>
+            <div class="screen-time-code-container">
+              <input type="text" class="screen-time-digit" id="weeklyDigit1" maxlength="1" inputmode="numeric"
+                pattern="[0-9]" placeholder="-" />
+              <input type="text" class="screen-time-digit" id="weeklyDigit2" maxlength="1" inputmode="numeric"
+                pattern="[0-9]" placeholder="-" />
+              <input type="text" class="screen-time-digit" id="weeklyDigit3" maxlength="1" inputmode="numeric"
+                pattern="[0-9]" placeholder="-" />
+              <input type="text" class="screen-time-digit" id="weeklyDigit4" maxlength="1" inputmode="numeric"
+                pattern="[0-9]" placeholder="-" />
+            </div>
+          </div>
+          <!-- 10시간 이상 토글 -->
+          <label class="screen-time-toggle">
+            <input type="checkbox" id="weeklyIsOver10Hours" />
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">10시간 이상이라면</span>
+          </label>
+          <!-- 제출 버튼 -->
+          <button class="submit-btn" id="weekly-verification-submit-btn" disabled>
+            검증하기
+          </button>
         </div>
       </div>
     </div>
@@ -1617,6 +1742,8 @@
         </div>
       </div>
     </div>
+
+
 
     <!-- 보상 획득 결과 모달 -->
     <div id="reward-result-modal" class="modal reward-modal">

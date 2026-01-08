@@ -45,6 +45,10 @@ const handler = async (event, context) => {
     return await getMonthlyStats(event, db);
   } else if (method === 'POST' && routePath.endsWith('/reward-check')) {
     return await checkScreenTimeReward(event, db);
+  } else if (method === 'GET' && routePath.endsWith('/weekly-verification/status')) {
+    return await getWeeklyVerificationStatus(event, db);
+  } else if (method === 'POST' && routePath.endsWith('/weekly-verification/submit')) {
+    return await submitWeeklyVerification(event, db);
   } else {
     return createErrorResponse('Not Found', 404);
   }
@@ -745,5 +749,307 @@ async function updateWeeklyStats(db, userId, date) {
     // 주간 통계 업데이트 실패는 전체 프로세스를 중단시키지 않음
   }
 }
+
+/**
+ * 주간 검증 상태 확인
+ * 
+ * 검증이 필요한 경우:
+ * - 전주(일요일~토요일)의 7일 데이터가 모두 있음
+ * - 해당 주에 대한 검증이 아직 완료되지 않음
+ */
+/**
+ * 주간 검증 상태 확인
+ * 
+ * 검증이 필요한 경우:
+ * - 전주(일요일~토요일)의 7일 데이터가 모두 있음
+ * - 해당 주에 대한 검증이 아직 완료되지 않음
+ * 
+ * [기준: 일요일 ~ 토요일]
+ * - 오늘(수): 이번주 일요일이 weekStart가 됨? 아니야.
+ * - 검증 대상: 지난주 일요일 ~ 지난주 토요일
+ */
+async function getWeeklyVerificationStatus(event, db) {
+  const auth = await authenticate(event);
+  const userId = auth.userId;
+
+  if (!userId) {
+    return createErrorResponse('User ID is required', 400);
+  }
+
+  try {
+    const today = new Date();
+    const todayDayOfWeek = today.getDay(); // 0=일요일, ..., 3=수요일
+
+    // 이번 주 일요일 계산 (오늘 - 요일)
+    // 예: 1/7(수) -> 1/4(일)
+    const thisWeekSunday = new Date(today);
+    thisWeekSunday.setDate(today.getDate() - todayDayOfWeek);
+    thisWeekSunday.setHours(0, 0, 0, 0);
+
+    // 지난 주 일요일 (= Week Start)
+    // 예: 1/4(일) - 7일 = 12/28(일)
+    const weekStart = new Date(thisWeekSunday);
+    weekStart.setDate(thisWeekSunday.getDate() - 7);
+
+    // 지난 주 토요일 (= Week End)
+    // 예: 12/28(일) + 6일 = 1/3(토)
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+    // 1. 해당 주의 스크린타임 데이터 조회
+    const weekDataResult = await db.query(`
+      SELECT 
+        date,
+        (usage_hours * 60 + usage_minutes) as total_minutes
+      FROM screen_time
+      WHERE user_id = ? 
+        AND date >= ? 
+        AND date <= ?
+      ORDER BY date
+    `, [userId, weekStartStr, weekEndStr]);
+
+    // 2. 7일 데이터가 모두 있는지 확인
+    if (weekDataResult.rows.length < 7) {
+      return createSuccessResponse({
+        needsVerification: false,
+        reason: 'incomplete_data',
+        weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
+        daysLogged: weekDataResult.rows.length
+      });
+    }
+
+    // 3. 평균 계산
+    const totalMinutes = weekDataResult.rows.reduce((sum, row) => sum + parseInt(row.total_minutes), 0);
+    const calculatedAverage = Math.round(totalMinutes / 7);
+
+    // 4. 검증 상태 확인
+    const verificationResult = await db.query(`
+      SELECT 
+        verified,
+        warning_count,
+        user_input_average,
+        penalty_applied
+      FROM screen_time_weekly_stats
+      WHERE user_id = ? 
+        AND week_start_date = ?
+    `, [userId, weekStartStr]);
+
+    // 주간 통계 레코드가 없으면 생성 (검증을 위해)
+    if (verificationResult.rows.length === 0) {
+      await db.query(`
+        INSERT INTO screen_time_weekly_stats (
+          user_id,
+          week_start_date,
+          week_end_date,
+          avg_daily_minutes,
+          total_days_logged,
+          total_minutes
+        ) VALUES (?, ?, ?, ?, 7, ?)
+      `, [userId, weekStartStr, weekEndStr, calculatedAverage, totalMinutes]);
+
+      return createSuccessResponse({
+        needsVerification: true,
+        weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
+        warningCount: 0
+      });
+    }
+
+    const verification = verificationResult.rows[0];
+
+    // 5. 이미 검증 완료된 경우
+    if (verification.verified) {
+      return createSuccessResponse({
+        needsVerification: false,
+        reason: 'already_verified',
+        weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
+        verified: true
+      });
+    }
+
+    // 6. 검증 필요!
+    return createSuccessResponse({
+      needsVerification: true,
+      weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
+      weekStart: weekStartStr,
+      weekEnd: weekEndStr,
+      warningCount: verification.warning_count || 0,
+      penaltyApplied: verification.penalty_applied || false
+    });
+
+  } catch (error) {
+    logger.error('Failed to get weekly verification status', error);
+    return createErrorResponse('Failed to get verification status', 500);
+  }
+}
+
+/**
+ * 주간 검증 제출
+ * 
+ * 사용자가 입력한 평균과 DB 계산 평균을 비교하여 검증
+ * ±10% 이내: 검증 성공
+ * ±10% 초과: 경고 카운트 증가
+ * 3회 경고: 해당 주 포켓몬 삭제 후 warning_count = 0으로 리셋
+ */
+async function submitWeeklyVerification(event, db) {
+  const { userId, requestBody } = await authenticateAndParseBody(event);
+  const { userInputAverage } = requestBody;
+
+  if (!userInputAverage || typeof userInputAverage !== 'number') {
+    return createErrorResponse('userInputAverage (number) is required', 400);
+  }
+
+  try {
+    return await db.transaction(async (client) => {
+      // 1. 현재 검증 대상 주 계산 (getWeeklyVerificationStatus와 동일한 로직)
+      const today = new Date();
+      const todayDayOfWeek = today.getDay();
+
+      const thisWeekSunday = new Date(today);
+      thisWeekSunday.setDate(today.getDate() - todayDayOfWeek);
+      thisWeekSunday.setHours(0, 0, 0, 0);
+
+      const weekStart = new Date(thisWeekSunday);
+      weekStart.setDate(thisWeekSunday.getDate() - 7); // 지난주 일요일
+
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6); // 지난주 토요일
+      weekEnd.setHours(23, 59, 59, 999);
+
+      const weekStartStr = weekStart.toISOString().split('T')[0];
+      const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+      // 2. 주간 통계 조회
+      const statsResult = await client.query(`
+        SELECT 
+          avg_daily_minutes,
+          warning_count,
+          verified
+        FROM screen_time_weekly_stats
+        WHERE user_id = ? 
+          AND week_start_date = ?
+      `, [userId, weekStartStr]);
+
+      if (statsResult.rows.length === 0) {
+        return createErrorResponse('해당 주의 통계 데이터가 없습니다.', 404);
+      }
+
+      const stats = statsResult.rows[0];
+
+      if (stats.verified) {
+        return createErrorResponse('이미 검증이 완료된 주입니다.', 400);
+      }
+
+      const calculatedAvg = Math.round(parseFloat(stats.avg_daily_minutes));
+      const tolerance = 0.1; // 10%
+      const diff = Math.abs(userInputAverage - calculatedAvg);
+      const diffPercentage = diff / calculatedAvg;
+
+      // 3. 검증 성공
+      if (diffPercentage <= tolerance) {
+        await client.query(`
+          UPDATE screen_time_weekly_stats
+          SET 
+            user_input_average = ?,
+            verified = TRUE,
+            verified_at = NOW()
+          WHERE user_id = ? AND week_start_date = ?
+        `, [userInputAverage, userId, weekStartStr]);
+
+        logger.info('Weekly verification success', {
+          userId,
+          weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
+          calculatedAvg,
+          userInputAverage
+        });
+
+        return createSuccessResponse({
+          success: true,
+          verified: true,
+          message: '검증 완료!'
+        });
+      }
+
+      // 4. 검증 실패
+      const currentWarningCount = stats.warning_count || 0;
+      const newWarningCount = currentWarningCount + 1;
+
+      if (newWarningCount >= 3) {
+        // 🚨 3회 도달: 포켓몬 삭제 + warning_count 리셋
+
+        // 해당 주에 획득한 포켓몬 삭제
+        const deleteResult = await client.query(`
+          DELETE FROM user_pokemon_collection
+          WHERE user_id = ?
+            AND DATE(obtained_date) >= ?
+            AND DATE(obtained_date) <= ?
+        `, [userId, weekStartStr, weekEndStr]);
+
+        const deletedCount = deleteResult.rowCount || 0;
+
+        // warning_count = 0으로 리셋, penalty_applied = TRUE
+        await client.query(`
+          UPDATE screen_time_weekly_stats
+          SET 
+            user_input_average = ?,
+            warning_count = 0,
+            penalty_applied = TRUE,
+            verified = FALSE
+          WHERE user_id = ? AND week_start_date = ?
+        `, [userInputAverage, userId, weekStartStr]);
+
+        logger.warn('Weekly verification failed - penalty applied', {
+          userId,
+          weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
+          calculatedAvg,
+          userInputAverage,
+          deletedPokemonCount: deletedCount
+        });
+
+        return createSuccessResponse({
+          success: false,
+          verified: false,
+          warningCount: 3,
+          penalty: true,
+          deletedPokemonCount: deletedCount,
+          message: `세 번째 오입력으로 지난주 획득한 포켓몬 ${deletedCount}마리가 삭제되었습니다.`
+        });
+      }
+
+      // 5. 1~2회 경고
+      await client.query(`
+        UPDATE screen_time_weekly_stats
+        SET 
+          user_input_average = ?,
+          warning_count = ?
+        WHERE user_id = ? AND week_start_date = ?
+      `, [userInputAverage, newWarningCount, userId, weekStartStr]);
+
+      logger.warn('Weekly verification failed - warning issued', {
+        userId,
+        weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
+        warningCount: newWarningCount,
+        calculatedAvg,
+        userInputAverage
+      });
+
+      return createSuccessResponse({
+        success: true,
+        verified: false,
+        warningCount: newWarningCount,
+        penalty: false,
+        message: newWarningCount === 1 ? '입력값과 기록값의 차이가 10% 이상입니다.' : '한 번 더 오입력 시 포켓몬이 모두 삭제됩니다!'
+      });
+    });
+
+  } catch (error) {
+    logger.error('Failed to submit weekly verification', error);
+    return createErrorResponse('Failed to submit verification', 500);
+  }
+}
+
 
 module.exports = { handler: withErrorHandling(handler) };

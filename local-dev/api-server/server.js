@@ -88,6 +88,7 @@ app.post('/api/collection/favorite', lambdaAdapter(pokemonCollection));
 app.get('/api/collection/favorites', lambdaAdapter(pokemonCollection));
 app.get('/api/collection/icons', lambdaAdapter(pokemonCollection));
 app.get('/api/collection/all-pokemon', lambdaAdapter(pokemonCollection));
+app.get('/api/collection/today', lambdaAdapter(pokemonCollection));
 app.get('/api/collection/evolution/:baseImageName', lambdaAdapter(pokemonCollection));
 app.get('/api/collection/pokemon/:stableId', lambdaAdapter(pokemonCollection));
 app.post('/api/collection/reward', lambdaAdapter(pokemonCollection));
@@ -107,6 +108,8 @@ app.post('/api/screen-time', lambdaAdapter(screenTimeManagement));
 app.delete('/api/screen-time/:date', lambdaAdapter(screenTimeManagement));
 app.post('/api/screen-time/validate', lambdaAdapter(screenTimeManagement));
 app.get('/api/screen-time/weekly-stats', lambdaAdapter(screenTimeManagement)); // Changed path to avoid conflict? Or is it just /weekly-stats?
+app.get('/api/weekly-verification/status', lambdaAdapter(screenTimeManagement));
+app.post('/api/weekly-verification/submit', lambdaAdapter(screenTimeManagement));
 
 
 
@@ -130,7 +133,7 @@ app.get('/api/guest/icons', lambdaAdapter(guestMode));
 app.get('/api/guest/all-pokemon', lambdaAdapter(guestMode));
 app.get('/api/guest/pokemon/:stableId', lambdaAdapter(guestMode));
 app.get('/api/guest/evolution/:baseImageName', lambdaAdapter(guestMode));
-
+app.get('/api/guest/today', lambdaAdapter(guestMode));
 app.get('/api/guest/eggs', lambdaAdapter(guestMode));
 
 app.get('/api/guest/starter-pokemon', lambdaAdapter(guestMode));

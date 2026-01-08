@@ -270,9 +270,11 @@ function initializeFirebaseListener() {
               // 기존 사용자는 바로 메인 화면 표시
               contentDiv.style.display = "flex";
               // 로그인 후 초기 데이터 로드
-              await loadUserPokemonIcons();
+              // await loadUserPokemonIcons(); // Lazy load on tab click
               // 홈 화면 즐겨찾기 포켓몬 로드
               loadHomeFavoritePokemon();
+              // 오늘 획득한 포켓몬 로드
+              loadTodayObtainedPokemon();
 
               // 서식지 시스템 초기화
               initHabitat();
@@ -281,6 +283,11 @@ function initializeFirebaseListener() {
               setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('user-synced', { detail: { userId: currentUserId } }));
                 updateAuthCardUI('authenticated');
+                // 주간 검증 확인 (로그인 직후)
+                checkWeeklyVerificationStatus().then(() => {
+                  // 홈탭 미션 카드 및 주간 달성 바 초기화
+                  if (typeof initHomeTab === 'function') initHomeTab();
+                });
                 hideGlobalLoading(); // 로딩 종료
               }, 500);
             }
@@ -306,10 +313,16 @@ function initializeFirebaseListener() {
 
           // Load Dummy Data
           loadUserPokemonIcons();
+          // 홈 화면 즐겨찾기 포켓몬 로드
+          loadHomeFavoritePokemon();
+          // 오늘 획득한 포켓몬 로드
+          loadTodayObtainedPokemon();
 
           // Initialize habitat system for guest mode after DOM is ready
           setTimeout(() => {
             initHabitat();
+            // 홈탭 미션 카드 및 주간 달성 바 초기화
+            if (typeof initHomeTab === 'function') initHomeTab();
           }, 100);
 
           // Setup UI for Guest
@@ -1171,6 +1184,9 @@ async function loadUserPokemonIcons() {
     const result = await response.json();
     icons = result.data;
 
+    // 성공적으로 로드됨을 표시 (데이터가 비어있어도 로드 자체는 성공)
+    window.isPokedexLoaded = true;
+
     userPokemonList = icons; // 리스트 저장 (네비게이션용 - 전체 목록)
 
     if (!icons || icons.length === 0) {
@@ -1902,6 +1918,72 @@ async function loadHomeFavoritePokemon() {
   }
 }
 
+// 오늘 획득한 포켓몬 로드 (새벽 4시 ~ 다음 새벽 4시)
+async function loadTodayObtainedPokemon() {
+  console.log('loadTodayObtainedPokemon called');
+
+  if (!currentUserId && !window.isGuest()) {
+    console.log('No current user and not guest, skipping today obtained load');
+    return;
+  }
+
+  const section = document.getElementById('todayPokemonSection');
+  const scrollContainer = document.getElementById('todayPokemonScroll');
+  const countBadge = document.getElementById('todayPokemonCount');
+
+  if (!section || !scrollContainer) {
+    console.error('Today pokemon section elements not found');
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    const apiBase = window.isGuest() ? '/api/guest' : '/api/collection';
+    const response = await fetch(`${apiBase}/today`, { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      const todayPokemon = result.data || [];
+      console.log('Today obtained pokemon loaded:', todayPokemon.length);
+
+      if (todayPokemon.length > 0) {
+        section.style.display = 'block';
+        countBadge.textContent = todayPokemon.length;
+
+        // 포켓몬 아이콘 카드 렌더링
+        scrollContainer.innerHTML = todayPokemon.map(pokemon => `
+          <div class="pokemon-card pokemon-icon${pokemon.is_shiny ? ' shiny' : ''}" 
+               role="button" 
+               tabindex="0"
+               aria-label="${pokemon.name} 아이콘"
+               onclick="showIconGroupDetail('${pokemon.base_image_name}', '${pokemon.pokemon_stable_id}', ${pokemon.is_shiny})"
+               onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${pokemon.base_image_name}', '${pokemon.pokemon_stable_id}', ${pokemon.is_shiny})">
+            <div class="pokemon-sprite" data-src="${pokemon.icon_url}"></div>
+          </div>
+        `).join('');
+
+        // 포켓몬 스프라이트 설정
+        scrollContainer.querySelectorAll('.pokemon-sprite').forEach(sprite => {
+          setupPokemonSprite(sprite);
+        });
+
+      } else {
+        // 오늘 획득한 포켓몬이 없으면 섹션 숨김
+        section.style.display = 'none';
+      }
+    } else {
+      console.error('Failed to fetch today obtained pokemon:', response.status);
+      section.style.display = 'none';
+    }
+  } catch (err) {
+    console.error('Failed to load today obtained pokemon:', err);
+    section.style.display = 'none';
+  }
+}
+
+// 디버깅용 전역 노출
+window.loadTodayObtainedPokemon = loadTodayObtainedPokemon;
+
 // 디버깅용 전역 노출
 window.loadHomeFavoritePokemon = loadHomeFavoritePokemon;
 
@@ -1909,6 +1991,7 @@ window.loadHomeFavoritePokemon = loadHomeFavoritePokemon;
 document.addEventListener('DOMContentLoaded', () => {
   if (window.isAuthenticated && window.isAuthenticated()) {
     loadHomeFavoritePokemon();
+    loadTodayObtainedPokemon();
   }
 });
 
@@ -1920,6 +2003,9 @@ function setLoggedInUI(user) {
 
   // 홈 화면에 즐겨찾기 포켓몬 로드
   loadHomeFavoritePokemon();
+
+  // 오늘 획득한 포켓몬 로드
+  loadTodayObtainedPokemon();
 
   // 주간 날짜 범위 계산
   updateWeekRanges();
@@ -2420,7 +2506,20 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // 내 포켓몬 아이콘 표시 (기존 테스트 아이콘 로직은 loadUserPokemonIcons 함수로 이동됨)
-  loadUserPokemonIcons();
+  // loadUserPokemonIcons(); // Lazy load via tab click
+
+  // Pokedex 탭 클릭 시 아이콘 로드 (Lazy Loading) - initTabNavigation에서 처리됨
+  // 중복 리스너 제거됨
+
+
+  // 새로고침 버튼 로직 (강제 리로드)
+  const refreshIconsBtn = document.getElementById('refreshIconsBtn');
+  if (refreshIconsBtn) {
+    refreshIconsBtn.addEventListener('click', () => {
+      window.isPokedexLoaded = false; // 플래그 초기화
+      loadUserPokemonIcons();
+    });
+  }
 });
 
 // ==========================================
@@ -4823,6 +4922,11 @@ if (submitScreenTimeBtn) {
         return;
       }
 
+      // 주간 검증 확인 (추가)
+      if (!checkScreenTimeInputAllowed()) {
+        return; // 검증 필요 시 차단
+      }
+
       const userId = window.getCurrentUserId ? window.getCurrentUserId() : null;
       if (!userId) {
         showToast('로그인이 필요합니다.');
@@ -4970,6 +5074,12 @@ if (submitScreenTimeBtn) {
 
       // 어제 날짜로 다시 설정
       setYesterdayDate();
+
+      // 스크린타임 모달 닫기
+      if (typeof closeScreenTimeModal === 'function') closeScreenTimeModal();
+
+      // 주간 달성 바 업데이트
+      if (typeof updateWeeklyAchievementBar === 'function') updateWeeklyAchievementBar();
 
     } catch (err) {
       console.error('스크린타임 저장 중 예외 발생:', err);
@@ -5130,7 +5240,10 @@ function initTabNavigation() {
 
           // Load data for specific tabs
           if (targetTab === 'pokedex') {
-            if (typeof loadUserPokemonIcons === 'function') loadUserPokemonIcons();
+            // 이미 로드되었으면 재요청 방지
+            if (!window.isPokedexLoaded && typeof loadUserPokemonIcons === 'function') {
+              loadUserPokemonIcons();
+            }
           }
         } else {
           view.classList.remove('active');
@@ -5224,6 +5337,7 @@ class SleepTracker {
     this.timerInterval = null;
     this.wakeUpTimeout = null;
     this.sleepStatus = null;
+    this.sleepStatusLoaded = false; // 로드 상태 플래그
 
     this.elements = {
       startBtn: document.getElementById('startSleepBtn'),
@@ -5279,13 +5393,19 @@ class SleepTracker {
     // Listen for user-synced event to retry sync
     window.addEventListener('user-synced', () => {
       this.syncData();
-      this.loadSleepStatus();
+      // Only load sleep status if sleep tab is active
+      const viewSleep = document.getElementById('view-sleep');
+      if (viewSleep && viewSleep.classList.contains('active')) {
+        this.loadSleepStatus();
+      }
     });
 
     // Load sleep status when sleep tab is activated
     const sleepTabBtn = document.querySelector('[data-tab="sleep"]');
     if (sleepTabBtn) {
       sleepTabBtn.addEventListener('click', () => {
+        // 이미 로드되었으면 재요청 방지
+        if (this.sleepStatusLoaded) return;
         setTimeout(() => this.loadSleepStatus(), 100);
       });
     }
@@ -5608,6 +5728,7 @@ class SleepTracker {
       const responseData = await response.json();
       if (responseData.success) {
         this.sleepStatus = responseData.data.sleepStatus;
+        this.sleepStatusLoaded = true; // 로드 성공 표시
         this.renderSleepRewardUI(responseData);
       }
     } catch (err) {
@@ -7016,3 +7137,612 @@ function showRewardResultModal(rewards, comparisonResult = null, eventName = nul
 // 전역 노출
 window.showRewardResultModal = showRewardResultModal;
 
+
+// ==========================================
+// 주간 평균 검증 시스템 (Weekly Verification System)
+// ==========================================
+
+let weeklyVerificationData = null;
+let isWeeklyVerificationRequired = false;
+
+/**
+ * 앱 시작 시 주간 검증 상태 확인
+ */
+async function checkWeeklyVerificationStatus() {
+  // 게스트 모드에서는 검증 불필요
+  if (window.isGuest() || !window.isAuthenticated()) {
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/weekly-verification/status', { headers });
+
+    if (!response.ok) {
+      console.error('Failed to check weekly verification status');
+      return;
+    }
+
+    const result = await response.json();
+
+    if (result.success && result.data.needsVerification) {
+      // 검증 필요! - 카드만 표시하고 모달은 사용자가 클릭할 때 열림
+      weeklyVerificationData = result.data;
+      isWeeklyVerificationRequired = true;
+      // 미션 카드 상태 업데이트 (모달은 자동으로 열지 않음)
+      if (typeof updateHomeMissionCards === 'function') updateHomeMissionCards();
+    } else {
+      isWeeklyVerificationRequired = false;
+    }
+  } catch (error) {
+    console.error('Weekly verification check error:', error);
+  }
+}
+
+/**
+ * 주간 검증 모달 표시
+ */
+function showWeeklyVerificationModal() {
+  const modal = document.getElementById('weekly-verification-modal');
+  if (!modal) return;
+
+  // 경고 상태 표시
+  const warningStatusEl = document.getElementById('warning-status');
+  const warningCountEl = document.getElementById('warning-count-display');
+  const warningMessageEl = document.getElementById('warning-message');
+
+  if (weeklyVerificationData.warningCount > 0) {
+    if (warningStatusEl) warningStatusEl.style.display = 'flex';
+    if (warningCountEl) warningCountEl.textContent = weeklyVerificationData.warningCount;
+
+    if (warningMessageEl) {
+      if (weeklyVerificationData.warningCount === 1) {
+        warningMessageEl.textContent = '입력값과 기록값의 차이가 10% 이상입니다.';
+      } else if (weeklyVerificationData.warningCount === 2) {
+        warningMessageEl.innerHTML = '<strong style="color: #e53e3e;">한 번 더 오입력 시 포켓몬이 모두 삭제됩니다!</strong>';
+      }
+    }
+  } else {
+    if (warningStatusEl) warningStatusEl.style.display = 'none';
+  }
+
+  // 체크박스 초기화
+  const over10Checkbox = document.getElementById('weeklyIsOver10Hours');
+  if (over10Checkbox) {
+    over10Checkbox.checked = false;
+  }
+
+  // 모달 표시
+  modal.style.display = 'flex';
+  document.body.classList.add('modal-open');
+  onModalOpen();
+
+  // 입력 필드 초기화 및 이벤트 리스너 설정
+  setupWeeklyVerificationInputs();
+}
+
+/**
+ * 주간 검증 모달 닫기
+ */
+function closeWeeklyVerificationModal() {
+  const modal = document.getElementById('weekly-verification-modal');
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    onModalClose();
+  }
+}
+window.closeWeeklyVerificationModal = closeWeeklyVerificationModal;
+
+
+/**
+ * 주간 검증 입력 필드 설정
+ */
+function setupWeeklyVerificationInputs() {
+  const digit1 = document.getElementById('weeklyDigit1');
+  const digit2 = document.getElementById('weeklyDigit2');
+  const digit3 = document.getElementById('weeklyDigit3');
+  const digit4 = document.getElementById('weeklyDigit4');
+  const preview = document.getElementById('weeklyVerificationPreview');
+  const submitBtn = document.getElementById('weekly-verification-submit-btn');
+  const over10Checkbox = document.getElementById('weeklyIsOver10Hours');
+
+  const digits = [digit1, digit2, digit3, digit4];
+
+  // 입력 필드 초기화
+  digits.forEach(input => {
+    if (input) {
+      input.value = '';
+      // Remove old listeners to prevent duplicates
+      const newEl = input.cloneNode(true);
+      input.parentNode.replaceChild(newEl, input);
+    }
+  });
+
+  // Re-select inputs after replacement (cloneNode)
+  const newDigit1 = document.getElementById('weeklyDigit1');
+  const newDigit2 = document.getElementById('weeklyDigit2');
+  const newDigit3 = document.getElementById('weeklyDigit3');
+  const newDigit4 = document.getElementById('weeklyDigit4');
+  const newDigits = [newDigit1, newDigit2, newDigit3, newDigit4];
+
+  newDigits.forEach(input => {
+    if (input) {
+      input.addEventListener('input', handleDigitInput);
+      input.addEventListener('keydown', handleDigitKeydown);
+    }
+  });
+
+  if (over10Checkbox) {
+    // Remove old listener
+    const newCheckbox = over10Checkbox.cloneNode(true);
+    over10Checkbox.parentNode.replaceChild(newCheckbox, over10Checkbox);
+    newCheckbox.addEventListener('change', updatePreviewAndButton);
+  }
+
+  // 제출 버튼 리스너 (기존 리스너 제거 위해 재설정)
+  if (submitBtn) {
+    const newSubmitBtn = submitBtn.cloneNode(true);
+    submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
+    newSubmitBtn.addEventListener('click', handleSubmit);
+  }
+
+  function handleDigitInput(e) {
+    const input = e.target;
+    // 숫자만 허용
+    const val = input.value.replace(/[^0-9]/g, '');
+    input.value = val;
+
+    if (val.length >= 1) {
+      const nextInput = input.nextElementSibling;
+      if (nextInput && nextInput.classList.contains('screen-time-digit')) {
+        nextInput.focus();
+      }
+    }
+
+    updatePreviewAndButton();
+  }
+
+  function handleDigitKeydown(e) {
+    if (e.key === 'Backspace' && e.target.value === '') {
+      const prevInput = e.target.previousElementSibling;
+      if (prevInput && prevInput.classList.contains('screen-time-digit')) {
+        prevInput.focus();
+      }
+    }
+  }
+
+  // 값을 가져오고 파싱하여 미리보기 및 버튼 상태 업데이트
+  function updatePreviewAndButton() {
+    const d1 = document.getElementById('weeklyDigit1').value || '';
+    const d2 = document.getElementById('weeklyDigit2').value || '';
+    const d3 = document.getElementById('weeklyDigit3').value || '';
+    const d4 = document.getElementById('weeklyDigit4').value || '';
+
+    const codeStr = d1 + d2 + d3 + d4;
+
+    if (codeStr.length === 0) {
+      if (preview) preview.textContent = '-';
+      toggleSubmitBtn(false);
+      return;
+    }
+
+    let hours = 0;
+    let minutes = 0;
+    const isOver10 = document.getElementById('weeklyIsOver10Hours')?.checked || false;
+
+    // 기존 스크린타임 로직과 동일하게 파싱
+    if (codeStr.length === 4) {
+      hours = parseInt(codeStr.substring(0, 2));
+      minutes = parseInt(codeStr.substring(2, 4));
+    } else if (codeStr.length === 3) {
+      if (isOver10) {
+        hours = parseInt(codeStr.substring(0, 2));
+        minutes = parseInt(codeStr.substring(2, 3));
+      } else {
+        hours = parseInt(codeStr.substring(0, 1));
+        minutes = parseInt(codeStr.substring(1, 3));
+      }
+    } else if (codeStr.length <= 2) {
+      // 2자리 이하는 분으로만 간주하거나, 아직 입력 중으로 처리
+      // 여기서는 일단 분으로 처리하되, 사용자가 계속 입력할 것임
+      hours = 0;
+      minutes = parseInt(codeStr);
+    }
+
+    let isValid = true;
+    let message = `📱 ${hours}시간 ${minutes}분`;
+    let color = '#2d3748';
+
+    if (minutes >= 60) {
+      message = '⚠️ 분은 59 이하여야 합니다';
+      color = '#EF4444';
+      isValid = false;
+    } else if (hours >= 24) {
+      message = '⚠️ 24시간을 넘을 수 없습니다';
+      color = '#EF4444';
+      isValid = false;
+    }
+
+    if (preview) {
+      preview.textContent = message;
+      preview.style.color = color;
+    }
+
+    // 제출 버튼 활성화: 유효한 값이고, 최소 1글자 이상 입력됨
+    // (기존 스크린타임은 4자리 입력을 강제하지 않음. 130 -> 1시간 30분 가능)
+    toggleSubmitBtn(isValid && codeStr.length > 0);
+  }
+
+  function toggleSubmitBtn(enabled) {
+    const btn = document.getElementById('weekly-verification-submit-btn');
+    if (btn) btn.disabled = !enabled;
+  }
+
+  function handleSubmit() {
+    const d1 = document.getElementById('weeklyDigit1').value || '';
+    const d2 = document.getElementById('weeklyDigit2').value || '';
+    const d3 = document.getElementById('weeklyDigit3').value || '';
+    const d4 = document.getElementById('weeklyDigit4').value || '';
+    const codeStr = d1 + d2 + d3 + d4;
+
+    if (codeStr.length === 0) {
+      showToast('평균 스크린타임을 입력해주세요', true);
+      return;
+    }
+
+    let hours = 0;
+    let minutes = 0;
+    const isOver10 = document.getElementById('weeklyIsOver10Hours')?.checked || false;
+
+    if (codeStr.length === 4) {
+      hours = parseInt(codeStr.substring(0, 2));
+      minutes = parseInt(codeStr.substring(2, 4));
+    } else if (codeStr.length === 3) {
+      if (isOver10) {
+        hours = parseInt(codeStr.substring(0, 2));
+        minutes = parseInt(codeStr.substring(2, 3));
+      } else {
+        hours = parseInt(codeStr.substring(0, 1));
+        minutes = parseInt(codeStr.substring(1, 3));
+      }
+    } else {
+      hours = 0;
+      minutes = parseInt(codeStr);
+    }
+
+    const totalMinutes = hours * 60 + minutes;
+    submitWeeklyVerification(totalMinutes);
+  }
+}
+
+/**
+ * 주간 검증 제출
+ */
+async function submitWeeklyVerification(userInputAverage) {
+  try {
+    showGlobalLoading('검증 중...');
+
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/weekly-verification/submit', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userInputAverage })
+    });
+
+    const result = await response.json();
+    hideGlobalLoading();
+
+    if (!response.ok) {
+      showToast(result.message || '검증 실패', true);
+      return;
+    }
+
+    if (result.success) {
+      if (result.data.verified) {
+        // ✅ 검증 성공
+        showToast('검증 완료! 스크린타임을 입력할 수 있습니다.');
+        isWeeklyVerificationRequired = false;
+        closeWeeklyVerificationModal();
+        // 미션 카드 전환 애니메이션
+        if (typeof animateCardTransition === 'function') {
+          animateCardTransition();
+        } else if (typeof updateHomeMissionCards === 'function') {
+          updateHomeMissionCards();
+        }
+      } else {
+        // ⚠️ 검증 실패 - 경고
+        handleVerificationFailure(result.data);
+      }
+    }
+  } catch (error) {
+    hideGlobalLoading();
+    console.error('Weekly verification submit error:', error);
+    showToast('검증 중 오류가 발생했습니다', true);
+  }
+}
+
+/**
+ * 검증 실패 처리
+ */
+function handleVerificationFailure(data) {
+  const warningStatusEl = document.getElementById('warning-status');
+  const warningCountEl = document.getElementById('warning-count-display');
+  const warningMessageEl = document.getElementById('warning-message');
+
+  if (data.penalty) {
+    // 🚨 3회 오입력 - 포켓몬 삭제
+    showToast(data.message, true);
+
+    // 주간 검증 UI 내 경고 표시
+    if (warningStatusEl) {
+      warningStatusEl.style.display = 'flex';
+      warningCountEl.textContent = '3';
+      warningMessageEl.innerHTML = `<strong style="color: #e53e3e;">포켓몬 ${data.deletedPokemonCount}마리가 삭제되었습니다.</strong>`;
+    }
+
+    // 입력 필드 초기화
+    document.getElementById('weeklyDigit1').value = '';
+    document.getElementById('weeklyDigit2').value = '';
+    document.getElementById('weeklyDigit3').value = '';
+    document.getElementById('weeklyDigit4').value = '';
+    const preview = document.getElementById('weeklyVerificationPreview');
+    if (preview) preview.textContent = '-';
+    document.getElementById('weekly-verification-submit-btn').disabled = true;
+
+    // 포켓몬 목록 새로고침
+    if (typeof loadUserPokemonIcons === 'function') loadUserPokemonIcons();
+    if (typeof loadHomeFavoritePokemon === 'function') loadHomeFavoritePokemon();
+    if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+
+  } else {
+    // 1~2회 경고
+    showToast(data.message, true);
+
+    if (warningStatusEl) {
+      warningStatusEl.style.display = 'flex';
+      warningCountEl.textContent = data.warningCount;
+
+      if (data.warningCount === 1) {
+        warningMessageEl.textContent = '입력값과 기록값의 차이가 10% 이상입니다.';
+      } else if (data.warningCount === 2) {
+        warningMessageEl.innerHTML = '<strong style="color: #e53e3e;">한 번 더 오입력 시 포켓몬이 모두 삭제됩니다!</strong>';
+      }
+    }
+
+    // 입력 필드 초기화
+    document.getElementById('weeklyDigit1').value = '';
+    document.getElementById('weeklyDigit2').value = '';
+    document.getElementById('weeklyDigit3').value = '';
+    document.getElementById('weeklyDigit4').value = '';
+    const preview = document.getElementById('weeklyVerificationPreview');
+    if (preview) preview.textContent = '-';
+    document.getElementById('weekly-verification-submit-btn').disabled = true;
+  }
+}
+
+/**
+ * 스크린타임 입력 전 검증 확인
+ * @returns {boolean} true면 입력 가능, false면 차단
+ */
+function checkScreenTimeInputAllowed() {
+  if (isWeeklyVerificationRequired) {
+    showToast('지난주 평균 검증을 먼저 완료해주세요!', true);
+
+    // 홈 탭으로 전환
+    const homeTabBtn = document.querySelector('[data-tab="home"]');
+    if (homeTabBtn) homeTabBtn.click();
+
+    showWeeklyVerificationModal();
+    return false;
+  }
+  return true;
+}
+
+// 전역 노출
+window.checkScreenTimeInputAllowed = checkScreenTimeInputAllowed;
+window.checkWeeklyVerificationStatus = checkWeeklyVerificationStatus;
+
+// ==================== 홈탭 미션 카드 및 주간 달성 바 ==================== //
+
+/**
+ * 스크린타임 입력 모달 열기
+ */
+function openScreenTimeModal() {
+  // 앞선 미션(주간 검증)이 필요한 경우 차단
+  if (isWeeklyVerificationRequired) {
+    showToast('앞선 미션을 먼저 해결해주세요!');
+    return;
+  }
+
+  const modal = document.getElementById('screen-time-modal');
+  if (modal) {
+    modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
+    onModalOpen();
+    
+    // 입력 필드 초기화
+    const digit1 = document.getElementById('screenTimeDigit1');
+    if (digit1) digit1.focus();
+  }
+}
+window.openScreenTimeModal = openScreenTimeModal;
+
+/**
+ * 스크린타임 입력 모달 닫기
+ */
+function closeScreenTimeModal() {
+  const modal = document.getElementById('screen-time-modal');
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    onModalClose();
+  }
+}
+window.closeScreenTimeModal = closeScreenTimeModal;
+
+/**
+ * 주간 검증 모달 열기 (미션 카드에서 호출)
+ */
+function openWeeklyVerificationFromCard() {
+  showWeeklyVerificationModal();
+}
+window.openWeeklyVerificationFromCard = openWeeklyVerificationFromCard;
+
+/**
+ * 홈탭 미션 카드 상태 업데이트 (스택 방식)
+ */
+function updateHomeMissionCards() {
+  const cardStack = document.getElementById('missionCardStack');
+  const verificationCard = document.getElementById('weeklyVerificationCard');
+  const screenTimeCard = document.getElementById('screenTimeCard');
+  const screenTimeCardSubtitle = document.getElementById('screenTimeCardSubtitle');
+
+  if (!cardStack) return;
+
+  // 주간 검증 필요 여부에 따라 카드 표시
+  if (isWeeklyVerificationRequired && weeklyVerificationData) {
+    // 검증 카드 표시 (앞쪽)
+    if (verificationCard) {
+      verificationCard.style.display = 'flex';
+    }
+    // 스택에 앞쪽 카드가 있음을 표시
+    cardStack.classList.add('has-front');
+    // 스크린타임 카드 메시지 업데이트
+    if (screenTimeCardSubtitle) {
+      screenTimeCardSubtitle.textContent = '먼저 주간 검증을 완료해주세요';
+    }
+  } else {
+    // 검증 카드 숨기기
+    if (verificationCard) {
+      verificationCard.style.display = 'none';
+    }
+    // 스택에서 앞쪽 카드 제거
+    cardStack.classList.remove('has-front');
+    // 스크린타임 카드 활성화
+    if (screenTimeCardSubtitle) {
+      screenTimeCardSubtitle.textContent = '스크린타임을 기록해주세요';
+    }
+  }
+}
+window.updateHomeMissionCards = updateHomeMissionCards;
+
+/**
+ * 검증 완료 후 카드 전환 애니메이션
+ */
+function animateCardTransition() {
+  const cardStack = document.getElementById('missionCardStack');
+  const verificationCard = document.getElementById('weeklyVerificationCard');
+  const screenTimeCard = document.getElementById('screenTimeCard');
+  const screenTimeCardSubtitle = document.getElementById('screenTimeCardSubtitle');
+
+  if (!verificationCard || !screenTimeCard) {
+    updateHomeMissionCards();
+    return;
+  }
+
+  // 1. 검증 카드에 exit 애니메이션 추가
+  verificationCard.classList.add('card-exit');
+  
+  // 2. 스크린타임 카드에 reveal 애니메이션 추가
+  screenTimeCard.classList.add('card-reveal');
+  
+  // 3. 스크린타임 카드 메시지 업데이트
+  if (screenTimeCardSubtitle) {
+    screenTimeCardSubtitle.textContent = '스크린타임을 기록해주세요';
+  }
+
+  // 4. 애니메이션 완료 후 정리
+  setTimeout(() => {
+    verificationCard.classList.remove('card-exit');
+    verificationCard.style.display = 'none';
+    screenTimeCard.classList.remove('card-reveal');
+    if (cardStack) {
+      cardStack.classList.remove('has-front');
+    }
+  }, 800);
+}
+window.animateCardTransition = animateCardTransition;
+
+/**
+ * 주간 달성 바 업데이트 (일요일~토요일)
+ */
+async function updateWeeklyAchievementBar() {
+  // 게스트 모드에서는 더미 데이터 표시 (일~토 순서)
+  if (window.isGuest()) {
+    updateWeeklyAchievementBarUI([false, true, true, false, false, false, false], 3);
+    return;
+  }
+
+  if (!window.isAuthenticated()) {
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/screen-time/weekly-stats', { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data) {
+        const weeklyData = result.data;
+        // weeklyData에서 각 요일별 입력 여부를 추출 (일~토 순서)
+        const completedDays = [];
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        
+        dayNames.forEach(day => {
+          const dayData = weeklyData[day] || weeklyData.days?.[day];
+          completedDays.push(dayData && dayData.hasRecord);
+        });
+
+        // 오늘 요일 인덱스 (일=0, 월=1, ... 토=6)
+        const now = new Date();
+        const todayIndex = now.getDay(); // JS에서는 일=0
+
+        updateWeeklyAchievementBarUI(completedDays, todayIndex);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to update weekly achievement bar:', error);
+  }
+}
+
+/**
+ * 주간 달성 바 UI 업데이트 (일~토 순서, 통합 라벨)
+ */
+function updateWeeklyAchievementBarUI(completedDays, todayIndex) {
+  const dayLabels = ['(일)', '(월)', '(화)', '(수)', '(목)', '(금)', '(토)'];
+  
+  for (let i = 0; i < 7; i++) {
+    const dayCircle = document.getElementById(`weeklyDay${i}`);
+    if (!dayCircle) continue;
+
+    const label = dayLabels[i];
+
+    // 완료 상태 업데이트
+    if (completedDays[i]) {
+      dayCircle.classList.add('completed');
+      dayCircle.textContent = label;
+    } else {
+      dayCircle.classList.remove('completed');
+      dayCircle.textContent = label;
+    }
+
+    // 오늘 표시
+    if (i === todayIndex) {
+      dayCircle.classList.add('today');
+    } else {
+      dayCircle.classList.remove('today');
+    }
+  }
+}
+window.updateWeeklyAchievementBar = updateWeeklyAchievementBar;
+
+/**
+ * 홈탭 초기화 시 호출
+ */
+function initHomeTab() {
+  updateHomeMissionCards();
+  updateWeeklyAchievementBar();
+}
+window.initHomeTab = initHomeTab;

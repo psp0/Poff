@@ -12,7 +12,7 @@ const { logger } = require('../../shared/logger');
  * - GET /favorites - 즐겨찾기 포켓몬 목록
  * - GET /icons - 포켓몬 아이콘 컬렉션
  * - GET /all-pokemon - 모든 보유 포켓몬 (세대별 정렬용)
- * - GET /evolution/{baseImageName} - 진화 트리 조회
+ * - GET /today - 오늘 획득한 포켓몬 (새벽4시~다음새벽4시)
  * - GET /evolution/{baseImageName} - 진화 트리 조회
  */
 
@@ -43,6 +43,8 @@ const handler = async (event, context) => {
     return await getUserPokemonIcons(event, db);
   } else if (method === 'GET' && routePath.endsWith('/all-pokemon')) {
     return await getAllUserPokemon(event, db);
+  } else if (method === 'GET' && routePath.endsWith('/today')) {
+    return await getTodayObtainedPokemon(event, db);
   } else if (method === 'GET' && routePath.includes('/evolution/')) {
     return await getEvolutionTree(event, db, pathParameters.baseImageName);
 
@@ -1080,5 +1082,130 @@ async function getPokemonByHabitat(event, db, habitatSlug, typeSlug) {
   } catch (error) {
     logger.error('Error fetching habitat pokemon', error);
     return createErrorResponse('Failed to fetch habitat pokemon', 500);
+  }
+}
+
+/**
+ * 오늘 획득한 포켓몬 조회 (새벽 4시 ~ 다음 새벽 4시)
+ * 홈 화면에서 오늘 획득한 포켓몬 아이콘을 가로 스크롤로 표시하기 위한 API
+ */
+async function getTodayObtainedPokemon(event, db) {
+  const auth = await authenticate(event);
+  const queryParams = event.queryStringParameters || {};
+  const userId = auth.isService ? queryParams.userId : auth.userId;
+
+  if (!userId) {
+    return createErrorResponse('User ID is required', 400);
+  }
+
+  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '').replace(/\/$/, '') + '/';
+
+  // 오늘의 시작: 오늘 새벽 4시 (KST)
+  // 오늘의 끝: 내일 새벽 4시 (KST)
+  // MySQL에서는 NOW()를 기준으로 계산
+  // KST = UTC + 9, 새벽 4시 KST = 이전 날 19:00 UTC
+  const query = `
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.obtained_date,
+      upc.obtained_reason,
+      p.name,
+      p.image_name,
+      p.form_suffix,
+      p.type1,
+      p.type2,
+      p.asset_source,
+      p.has_icon,
+      p.has_icon_shiny,
+      -- base_image_name 계산을 위한 서브쿼리
+      COALESCE(
+        (
+          WITH RECURSIVE evolution_chain AS (
+            SELECT p2.image_name AS base_image_name, p2.image_name AS current_image_name
+            FROM pokemon p2
+            WHERE p2.image_name = p.image_name
+              AND NOT EXISTS (
+                SELECT 1 FROM pokemon_evolutions pe
+                JOIN pokemon p3 ON pe.to_pokemon = p3.stable_id
+                WHERE p3.image_name = p2.image_name
+              )
+            UNION ALL
+            SELECT ec.base_image_name, pe.to_pokemon
+            FROM evolution_chain ec
+            JOIN pokemon_evolutions pe ON pe.from_pokemon = ec.current_image_name
+          )
+          SELECT base_image_name FROM evolution_chain WHERE current_image_name = p.image_name LIMIT 1
+        ),
+        p.image_name
+      ) AS base_image_name,
+      -- 아이콘 URL 생성
+      CONCAT(?, 
+        CASE 
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 1 THEN
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons%20shiny/'
+              ELSE 'base/img/Icons%20shiny/'
+            END
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 0 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN COALESCE(p_base.asset_source, 'base') = 'external' THEN 'external/img/Icons%20shiny/'
+              ELSE 'base/img/Icons%20shiny/'
+            END
+          WHEN p.has_icon = 0 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN COALESCE(p_base.asset_source, 'base') = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+          ELSE
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+        END,
+        CASE 
+          WHEN (upc.is_shiny = 1 AND p.has_icon_shiny = 1 AND p.form_suffix IS NOT NULL) 
+               OR (upc.is_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL)
+               OR (upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL)
+          THEN CONCAT(p.image_name, p.form_suffix, '.png')
+          ELSE CONCAT(p.image_name, '.png')
+        END
+      ) AS icon_url
+    FROM user_pokemon_collection upc
+    JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    LEFT JOIN pokemon p_base ON p_base.image_name = p.image_name AND (p_base.form_suffix IS NULL OR p_base.form_suffix = '')
+    WHERE upc.user_id = ?
+      AND upc.obtained_date >= (
+        CASE 
+          WHEN HOUR(CONVERT_TZ(NOW(), '+00:00', '+09:00')) >= 4 
+          THEN DATE_ADD(DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00')), INTERVAL 4 HOUR)
+          ELSE DATE_ADD(DATE_SUB(DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00')), INTERVAL 1 DAY), INTERVAL 4 HOUR)
+        END
+      )
+      AND upc.obtained_date < (
+        CASE 
+          WHEN HOUR(CONVERT_TZ(NOW(), '+00:00', '+09:00')) >= 4 
+          THEN DATE_ADD(DATE_ADD(DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00')), INTERVAL 1 DAY), INTERVAL 4 HOUR)
+          ELSE DATE_ADD(DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00')), INTERVAL 4 HOUR)
+        END
+      )
+    ORDER BY upc.obtained_date DESC
+  `;
+
+  try {
+    const result = await db.query(query, [assetsBaseUrl, userId]);
+
+    const pokemon = result.rows || result || [];
+
+    return createSuccessResponse(pokemon);
+  } catch (error) {
+    logger.error('Error fetching today obtained pokemon', error);
+    return createErrorResponse('Failed to fetch today obtained pokemon', 500);
   }
 }
