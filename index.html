@@ -178,7 +178,8 @@
                   </div>
 
                   <!-- 카드 1: 지난주 평균 검증 (앞쪽 카드 - 우선순위 높음) -->
-                  <div class="mission-card verification-card stacked-card front-card" id="weeklyVerificationCard" style="display: none;">
+                  <div class="mission-card verification-card stacked-card front-card" id="weeklyVerificationCard"
+                    style="display: none;">
                     <div class="mission-card-icon">📊</div>
                     <div class="mission-card-content">
                       <div class="mission-card-title">지난주 얼마나 사용했나요?</div>
@@ -256,6 +257,16 @@
             <div class="content-section">
               <h3>내 포켓몬</h3>
               <div class="collection-header-btns">
+                <div class="search-container" id="iconSearchContainer">
+                  <input type="text" id="iconSearchInput" class="icon-search-input" placeholder="이름 검색..."
+                    aria-label="포켓몬 이름 검색">
+                  <button class="search-btn corner-btn" id="iconSearchBtn" title="검색">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </button>
+                </div>
                 <button class="filter-btn corner-btn" id="filterIconsBtn" title="필터">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -900,7 +911,8 @@
     </div>
 
     <!-- 주간 검증 모달 -->
-    <div id="weekly-verification-modal" class="modal" onclick="if(event.target === this) closeWeeklyVerificationModal()">
+    <div id="weekly-verification-modal" class="modal"
+      onclick="if(event.target === this) closeWeeklyVerificationModal()">
       <div class="modal-content screen-time-modal-content">
         <div class="modal-header">
           <h3 class="modal-title">📊 지난주 평균 검증</h3>
@@ -913,7 +925,7 @@
             <span>경고 <strong id="warning-count-display">0</strong>회</span>
             <p id="warning-message" class="warning-message"></p>
           </div>
-          
+
           <!-- 시간 입력 -->
           <div class="screen-time-input-area">
             <div class="screen-time-preview" id="weeklyVerificationPreview">-</div>

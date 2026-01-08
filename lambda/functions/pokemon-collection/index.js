@@ -257,6 +257,7 @@ async function getUserPokemonIcons(event, db) {
         p.has_icon,
         p.has_icon_shiny,
         eg.evolution_level,
+        p.name,
         p.type1,
         p.type2,
         -- 폼 번호 추출: _숫자 형태일 경우만 추출 (_female 등은 제외)
@@ -284,6 +285,7 @@ async function getUserPokemonIcons(event, db) {
         gap.form_number,
         gap.type1,
         gap.type2,
+        gap.name,
         upc.is_shiny,
         upc.is_favorite,
         upc.obtained_date,
@@ -339,6 +341,7 @@ async function getUserPokemonIcons(event, db) {
         uop.obtained_date,
         uop.type1,
         uop.type2,
+        uop.name,
         gc.owned_count,
         gc.total_count,
         gc.shiny_owned_count,
@@ -346,8 +349,8 @@ async function getUserPokemonIcons(event, db) {
         ROW_NUMBER() OVER (
           PARTITION BY uop.base_image_name 
           ORDER BY 
-            uop.obtained_date DESC,
             uop.evolution_level DESC, 
+            uop.obtained_date DESC,
             uop.form_number DESC, 
             CASE WHEN uop.form_suffix IS NULL THEN 1 ELSE 0 END, -- NULLS LAST equivalent
             uop.form_suffix DESC,
@@ -450,7 +453,8 @@ async function getUserPokemonIcons(event, db) {
       ri.is_shiny_complete,
       ri.obtained_date,
       ri.type1,
-      ri.type2
+      ri.type2,
+      ri.name
     FROM representative_icons ri
     ORDER BY 
       CASE WHEN ri.is_favorite THEN 0 ELSE 1 END,

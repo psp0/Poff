@@ -1045,7 +1045,38 @@ async function showPokemonDetail(pokemonStableId, formSuffix, isShiny = false) {
 const refreshIconsBtn = document.getElementById('refreshIconsBtn');
 if (refreshIconsBtn) {
   refreshIconsBtn.addEventListener('click', async () => {
-    await loadUserPokemonIcons();
+    await loadUserPokemonIcons(true);
+  });
+}
+
+// 도감 검색 기능
+const iconSearchContainer = document.getElementById('iconSearchContainer');
+const iconSearchInput = document.getElementById('iconSearchInput');
+const iconSearchBtn = document.getElementById('iconSearchBtn');
+
+if (iconSearchBtn && iconSearchInput) {
+  iconSearchBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isActive = iconSearchContainer.classList.toggle('active');
+    if (isActive) {
+      iconSearchInput.focus();
+    } else {
+      // 닫을 때 검색어 초기화
+      if (currentFilter.searchQuery) {
+        currentFilter.searchQuery = '';
+        iconSearchInput.value = '';
+        updateUserPokemonIconsUI();
+      }
+    }
+  });
+
+  iconSearchInput.addEventListener('input', (e) => {
+    currentFilter.searchQuery = e.target.value;
+    updateUserPokemonIconsUI(); // 클라이언트 측 필터링만 수행
+  });
+
+  iconSearchInput.addEventListener('click', (e) => {
+    e.stopPropagation();
   });
 }
 
@@ -1136,14 +1167,189 @@ if (nextBtn) {
 
 // 사용자 포켓몬 아이콘 컬렉션 불러오기 함수
 // 사용자 포켓몬 아이콘 컬렉션 불러오기 함수
-async function loadUserPokemonIcons() {
+// async function loadUserPokemonIcons() { // Original function start
+//   const grid = document.getElementById('iconCollectionGrid');
+//   if (!grid) return;
+
+//   const contentSection = grid.parentElement;
+//   let statusMsg = contentSection.querySelector('.icon-status-message');
+
+//   // 상태 메시지 요소가 없으면 생성
+//   if (!statusMsg) {
+//     statusMsg = document.createElement('div');
+//     statusMsg.className = 'icon-status-message';
+//     contentSection.insertBefore(statusMsg, grid);
+//   }
+
+//   try {
+//     // 로그인 체크 (인증 상태 기반)
+//     if (!currentUserId && !window.isGuest()) {
+//       // 로딩 중이면 메시지 표시하지 않음 (글로벌 로딩이 덮고 있거나 아직 판단 전)
+//       if (window.authState === 'loading') {
+//         return;
+//       }
+//       statusMsg.textContent = '로그인이 필요합니다.';
+//       statusMsg.style.display = 'block';
+//       grid.style.display = 'none';
+//       return;
+//     }
+
+//     // 세대별 정렬 모드인지 확인
+//     const isGenerationSort = currentFilter.sort === 'generation';
+
+//     let icons = [];
+//     // API 호출 (인증 상태에 따라 결정)
+//     const apiBase = window.isGuest() ? '/api/guest' : '/api/collection';
+//     // 정렬 옵션에 따라 API 엔드포인트 결정
+//     const apiEndpoint = isGenerationSort
+//       ? `${apiBase}/all-pokemon`
+//       : `${apiBase}/icons`;
+
+//     const headers = await getAuthHeaders();
+//     const response = await fetch(apiEndpoint, { headers });
+
+//     if (!response.ok) {
+//       throw new Error(`API Error: ${response.status}`);
+//     }
+
+//     const result = await response.json();
+//     icons = result.data;
+
+//     // 성공적으로 로드됨을 표시 (데이터가 비어있어도 로드 자체는 성공)
+//     window.isPokedexLoaded = true;
+
+//     userPokemonList = icons; // 리스트 저장 (네비게이션용 - 전체 목록)
+
+//     if (!icons || icons.length === 0) {
+//       statusMsg.textContent = '아직 보유한 포켓몬이 없습니다.';
+//       statusMsg.style.display = 'block';
+//       grid.style.display = 'none';
+//       return;
+//     }
+
+//     // 표시할 아이콘 목록 (이제 displayIcons는 icons와 동일)
+//     let displayIcons = icons;
+
+//     // 필터 적용
+//     const filteredIcons = typeof getFilteredPokemonList === 'function'
+//       ? getFilteredPokemonList(displayIcons)
+//       : displayIcons;
+
+//     // 필터 결과가 없는 경우
+//     if (filteredIcons.length === 0) {
+//       statusMsg.innerHTML = `
+//         <div class="no-filter-results">
+//           <div class="no-filter-results-icon">🔍</div>
+//           <div class="no-filter-results-text">필터 조건에 맞는 포켓몬이 없습니다.<br>필터를 변경해보세요.</div>
+//         </div>
+//       `;
+//       statusMsg.style.display = 'block';
+//       grid.style.display = 'none';
+//       return;
+//     }
+
+//     // 데이터가 있으면 상태 메시지 숨기고 그리드 표시
+//     statusMsg.style.display = 'none';
+//     grid.style.display = 'grid';
+
+//     // 포켓몬 카드 생성 함수
+//     const createPokemonCard = (icon, hideProgressBar = false) => {
+//       // 퍼센트 계산
+//       const normalPercent = icon.completion_percentage || 0;
+//       const shinyPercent = icon.total_count > 0 ? (icon.shiny_owned_count / icon.total_count * 100) : 0;
+
+//       // 100% 완료 시 아이콘 추가 (세대별 정렬에서는 숨김)
+//       let completeIcon = '';
+//       if (!hideProgressBar) {
+//         if (normalPercent >= 100 && shinyPercent >= 100) {
+//           // 둘 다 100%: MASTERBALL 표시
+//           completeIcon = `<div class="progress-complete-icon visible">
+//              <img src="${IMAGE_URLS.MASTERBALL}" alt="완료">
+//            </div>`;
+//         } else if (normalPercent >= 100) {
+//           // Green만 100%: POKEBALL 표시
+//           completeIcon = `<div class="progress-complete-icon visible">
+//              <img src="${IMAGE_URLS.POKEBALL}" alt="완료">
+//            </div>`;
+//         } else {
+//           // 둘 다 100% 아님: 빈 상태
+//           completeIcon = `<div class="progress-complete-icon">
+//              <img src="" alt="">
+//            </div>`;
+//         }
+//       }
+
+//       // 즐겨찾기 아이콘 (showFavoriteIcon 설정에 따라 표시)
+//       let favoriteIconHtml = '';
+//       if (icon.is_favorite && currentFilter.showFavoriteIcon !== false) {
+//         favoriteIconHtml = `<div class="favorite-icon-overlay">
+//           <img src="${ASSETS_BASE_URL}/custom/img/ui/favorite.png" alt="Favorite">
+//         </div>`;
+//       }
+
+//       // Progress bar HTML (세대별 정렬에서는 숨김)
+//       const progressBarHtml = hideProgressBar ? '' : `
+//           <div class="collection-progress-bg">
+//             <div class="collection-progress-fill" style="--collection-progress-width: ${normalPercent}%;"></div>
+//           </div>
+//           <div class="shiny-progress-bg">
+//             <div class="shiny-progress-fill" style="--shiny-progress-width: ${shinyPercent}%;"></div>
+//           </div>`;
+
+//       return `
+//         <div class="pokemon-card pokemon-icon${hideProgressBar ? ' no-progress' : ''}" role="button" tabindex="0"
+//              aria-label="${icon.name || icon.base_image_name} 아이콘"
+//              onclick="showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})"
+//              onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})">
+//           ${completeIcon}
+//           ${favoriteIconHtml}
+//           <div class="pokemon-sprite" data-src="${icon.icon_url}"></div>
+//           ${progressBarHtml}
+//         </div>
+//       `;
+//     };
+
+//     // 세대별 정렬 모드: 세대 구분선 포함 렌더링
+//     let gridContent = '';
+//     if (isGenerationSort) {
+//       let currentGeneration = null;
+//       filteredIcons.forEach(icon => {
+//         const generation = icon.generation || 1;
+//         if (generation !== currentGeneration) {
+//           currentGeneration = generation;
+//           gridContent += `<div class="generation-divider"><span>${generation}</span></div>`;
+//         }
+//         gridContent += createPokemonCard(icon, true); // 세대별 정렬에서는 progress bar 숨김
+//       });
+//     } else {
+//       gridContent = filteredIcons.map(icon => createPokemonCard(icon, false)).join('');
+//     }
+
+//     grid.innerHTML = gridContent;
+
+//     // 포켓몬 스프라이트 설정
+//     grid.querySelectorAll('.pokemon-sprite').forEach(sprite => {
+//       setupPokemonSprite(sprite);
+//     });
+
+//   } catch (err) {
+//     console.error("Unexpected error in loadUserPokemonIcons:", err);
+//     statusMsg.textContent = '오류가 발생했습니다.';
+//     statusMsg.style.display = 'block';
+//     grid.style.display = 'none';
+//   }
+// } // Original function end
+
+let lastLoadedIconApiEndpoint = null;
+
+// 사용자 포켓몬 아이콘 컬렉션 불러오기 함수 (데이터 로드 담당)
+async function loadUserPokemonIcons(forceFetch = false) {
   const grid = document.getElementById('iconCollectionGrid');
   if (!grid) return;
 
   const contentSection = grid.parentElement;
   let statusMsg = contentSection.querySelector('.icon-status-message');
 
-  // 상태 메시지 요소가 없으면 생성
   if (!statusMsg) {
     statusMsg = document.createElement('div');
     statusMsg.className = 'icon-status-message';
@@ -1151,162 +1357,154 @@ async function loadUserPokemonIcons() {
   }
 
   try {
-    // 로그인 체크 (인증 상태 기반)
+    // 로그인 체크
     if (!currentUserId && !window.isGuest()) {
-      // 로딩 중이면 메시지 표시하지 않음 (글로벌 로딩이 덮고 있거나 아직 판단 전)
-      if (window.authState === 'loading') {
-        return;
-      }
+      if (window.authState === 'loading') return;
       statusMsg.textContent = '로그인이 필요합니다.';
       statusMsg.style.display = 'block';
       grid.style.display = 'none';
       return;
     }
 
-    // 세대별 정렬 모드인지 확인
+    // API 엔드포인트 결정
     const isGenerationSort = currentFilter.sort === 'generation';
-
-    let icons = [];
-    // API 호출 (인증 상태에 따라 결정)
     const apiBase = window.isGuest() ? '/api/guest' : '/api/collection';
-    // 정렬 옵션에 따라 API 엔드포인트 결정
-    const apiEndpoint = isGenerationSort
-      ? `${apiBase}/all-pokemon`
-      : `${apiBase}/icons`;
+    const apiEndpoint = isGenerationSort ? `${apiBase}/all-pokemon` : `${apiBase}/icons`;
 
-    const headers = await getAuthHeaders();
-    const response = await fetch(apiEndpoint, { headers });
+    // 데이터 패치 여부 결정 (강제 새로고침이거나, 데이터가 없거나, 엔드포인트가 바뀐 경우)
+    if (forceFetch || !window.isPokedexLoaded || apiEndpoint !== lastLoadedIconApiEndpoint) {
+      console.log('Fetching pokedex icons from:', apiEndpoint);
+      const headers = await getAuthHeaders();
+      const response = await fetch(apiEndpoint, { headers });
 
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+      const result = await response.json();
+      userPokemonList = result.data || [];
+      window.isPokedexLoaded = true;
+      lastLoadedIconApiEndpoint = apiEndpoint;
     }
 
-    const result = await response.json();
-    icons = result.data;
-
-    // 성공적으로 로드됨을 표시 (데이터가 비어있어도 로드 자체는 성공)
-    window.isPokedexLoaded = true;
-
-    userPokemonList = icons; // 리스트 저장 (네비게이션용 - 전체 목록)
-
-    if (!icons || icons.length === 0) {
-      statusMsg.textContent = '아직 보유한 포켓몬이 없습니다.';
-      statusMsg.style.display = 'block';
-      grid.style.display = 'none';
-      return;
-    }
-
-    // 표시할 아이콘 목록 (이제 displayIcons는 icons와 동일)
-    let displayIcons = icons;
-
-    // 필터 적용
-    const filteredIcons = typeof getFilteredPokemonList === 'function'
-      ? getFilteredPokemonList(displayIcons)
-      : displayIcons;
-
-    // 필터 결과가 없는 경우
-    if (filteredIcons.length === 0) {
-      statusMsg.innerHTML = `
-        <div class="no-filter-results">
-          <div class="no-filter-results-icon">🔍</div>
-          <div class="no-filter-results-text">필터 조건에 맞는 포켓몬이 없습니다.<br>필터를 변경해보세요.</div>
-        </div>
-      `;
-      statusMsg.style.display = 'block';
-      grid.style.display = 'none';
-      return;
-    }
-
-    // 데이터가 있으면 상태 메시지 숨기고 그리드 표시
-    statusMsg.style.display = 'none';
-    grid.style.display = 'grid';
-
-    // 포켓몬 카드 생성 함수
-    const createPokemonCard = (icon, hideProgressBar = false) => {
-      // 퍼센트 계산
-      const normalPercent = icon.completion_percentage || 0;
-      const shinyPercent = icon.total_count > 0 ? (icon.shiny_owned_count / icon.total_count * 100) : 0;
-
-      // 100% 완료 시 아이콘 추가 (세대별 정렬에서는 숨김)
-      let completeIcon = '';
-      if (!hideProgressBar) {
-        if (normalPercent >= 100 && shinyPercent >= 100) {
-          // 둘 다 100%: MASTERBALL 표시
-          completeIcon = `<div class="progress-complete-icon visible">
-             <img src="${IMAGE_URLS.MASTERBALL}" alt="완료">
-           </div>`;
-        } else if (normalPercent >= 100) {
-          // Green만 100%: POKEBALL 표시
-          completeIcon = `<div class="progress-complete-icon visible">
-             <img src="${IMAGE_URLS.POKEBALL}" alt="완료">
-           </div>`;
-        } else {
-          // 둘 다 100% 아님: 빈 상태
-          completeIcon = `<div class="progress-complete-icon">
-             <img src="" alt="">
-           </div>`;
-        }
-      }
-
-      // 즐겨찾기 아이콘 (showFavoriteIcon 설정에 따라 표시)
-      let favoriteIconHtml = '';
-      if (icon.is_favorite && currentFilter.showFavoriteIcon !== false) {
-        favoriteIconHtml = `<div class="favorite-icon-overlay">
-          <img src="${ASSETS_BASE_URL}/custom/img/ui/favorite.png" alt="Favorite">
-        </div>`;
-      }
-
-      // Progress bar HTML (세대별 정렬에서는 숨김)
-      const progressBarHtml = hideProgressBar ? '' : `
-          <div class="collection-progress-bg">
-            <div class="collection-progress-fill" style="--collection-progress-width: ${normalPercent}%;"></div>
-          </div>
-          <div class="shiny-progress-bg">
-            <div class="shiny-progress-fill" style="--shiny-progress-width: ${shinyPercent}%;"></div>
-          </div>`;
-
-      return `
-        <div class="pokemon-card pokemon-icon${hideProgressBar ? ' no-progress' : ''}" role="button" tabindex="0" 
-             aria-label="${icon.base_image_name} 아이콘" 
-             onclick="showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})" 
-             onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})">
-          ${completeIcon}
-          ${favoriteIconHtml}
-          <div class="pokemon-sprite" data-src="${icon.icon_url}"></div>
-          ${progressBarHtml}
-        </div>
-      `;
-    };
-
-    // 세대별 정렬 모드: 세대 구분선 포함 렌더링
-    let gridContent = '';
-    if (isGenerationSort) {
-      let currentGeneration = null;
-      filteredIcons.forEach(icon => {
-        const generation = icon.generation || 1;
-        if (generation !== currentGeneration) {
-          currentGeneration = generation;
-          gridContent += `<div class="generation-divider"><span>${generation}</span></div>`;
-        }
-        gridContent += createPokemonCard(icon, true); // 세대별 정렬에서는 progress bar 숨김
-      });
-    } else {
-      gridContent = filteredIcons.map(icon => createPokemonCard(icon, false)).join('');
-    }
-
-    grid.innerHTML = gridContent;
-
-    // 포켓몬 스프라이트 설정
-    grid.querySelectorAll('.pokemon-sprite').forEach(sprite => {
-      setupPokemonSprite(sprite);
-    });
+    // UI 업데이트 호출
+    updateUserPokemonIconsUI();
 
   } catch (err) {
-    console.error("Unexpected error in loadUserPokemonIcons:", err);
+    console.error("Error in loadUserPokemonIcons:", err);
     statusMsg.textContent = '오류가 발생했습니다.';
     statusMsg.style.display = 'block';
     grid.style.display = 'none';
   }
+}
+
+// 사용자 포켓몬 아이콘 UI 업데이트 함수 (렌더링 담당)
+function updateUserPokemonIconsUI() {
+  const grid = document.getElementById('iconCollectionGrid');
+  if (!grid) return;
+
+  const contentSection = grid.parentElement;
+  let statusMsg = contentSection.querySelector('.icon-status-message');
+  if (!statusMsg) {
+    statusMsg = document.createElement('div');
+    statusMsg.className = 'icon-status-message';
+    contentSection.insertBefore(statusMsg, grid);
+  }
+
+  const icons = userPokemonList || [];
+  const isGenerationSort = currentFilter.sort === 'generation';
+
+  if (!icons || icons.length === 0) {
+    statusMsg.textContent = '아직 보유한 포켓몬이 없습니다.';
+    statusMsg.style.display = 'block';
+    grid.style.display = 'none';
+    return;
+  }
+
+  // 필터 적용 (검색 필터 포함)
+  const filteredIcons = typeof getFilteredPokemonList === 'function'
+    ? getFilteredPokemonList(icons)
+    : icons;
+
+  // 필터 결과가 없는 경우
+  if (filteredIcons.length === 0) {
+    statusMsg.innerHTML = `
+      <div class="no-filter-results">
+        <div class="no-filter-results-icon">🔍</div>
+        <div class="no-filter-results-text">필터 조건에 맞는 포켓몬이 없습니다.<br>필터를 변경해보세요.</div>
+      </div>
+    `;
+    statusMsg.style.display = 'block';
+    grid.style.display = 'none';
+    return;
+  }
+
+  // 데이터가 있으면 상태 메시지 숨기고 그리드 표시
+  statusMsg.style.display = 'none';
+  grid.style.display = 'grid';
+
+  // 포켓몬 카드 생성 함수
+  const createPokemonCard = (icon, hideProgressBar = false) => {
+    const normalPercent = icon.completion_percentage || 0;
+    const shinyPercent = icon.total_count > 0 ? (icon.shiny_owned_count / icon.total_count * 100) : 0;
+
+    let completeIcon = '';
+    if (!hideProgressBar) {
+      if (normalPercent >= 100 && shinyPercent >= 100) {
+        completeIcon = `<div class="progress-complete-icon visible"><img src="${IMAGE_URLS.MASTERBALL}" alt="완료"></div>`;
+      } else if (normalPercent >= 100) {
+        completeIcon = `<div class="progress-complete-icon visible"><img src="${IMAGE_URLS.POKEBALL}" alt="완료"></div>`;
+      } else {
+        completeIcon = `<div class="progress-complete-icon"><img src="" alt=""></div>`;
+      }
+    }
+
+    let favoriteIconHtml = '';
+    if (icon.is_favorite && currentFilter.showFavoriteIcon !== false) {
+      favoriteIconHtml = `<div class="favorite-icon-overlay"><img src="${ASSETS_BASE_URL}/custom/img/ui/favorite.png" alt="Favorite"></div>`;
+    }
+
+    const progressBarHtml = hideProgressBar ? '' : `
+      <div class="collection-progress-bg">
+        <div class="collection-progress-fill" style="--collection-progress-width: ${normalPercent}%;"></div>
+      </div>
+      <div class="shiny-progress-bg">
+        <div class="shiny-progress-fill" style="--shiny-progress-width: ${shinyPercent}%;"></div>
+      </div>`;
+
+    return `
+      <div class="pokemon-card pokemon-icon${hideProgressBar ? ' no-progress' : ''}" role="button" tabindex="0"
+           aria-label="${icon.name || icon.base_image_name} 아이콘"
+           onclick="showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})"
+           onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})">
+        ${completeIcon}
+        ${favoriteIconHtml}
+        <div class="pokemon-sprite" data-src="${icon.icon_url}"></div>
+        ${progressBarHtml}
+      </div>
+    `;
+  };
+
+  // 렌더링
+  let gridContent = '';
+  if (isGenerationSort) {
+    let currentGeneration = null;
+    filteredIcons.forEach(icon => {
+      const generation = icon.generation || 1;
+      if (generation !== currentGeneration) {
+        currentGeneration = generation;
+        gridContent += `<div class="generation-divider"><span>${generation}</span></div>`;
+      }
+      gridContent += createPokemonCard(icon, true);
+    });
+  } else {
+    gridContent = filteredIcons.map(icon => createPokemonCard(icon, false)).join('');
+  }
+
+  grid.innerHTML = gridContent;
+
+  // 스프라이트 지연 로드 설정
+  grid.querySelectorAll('.pokemon-sprite').forEach(sprite => {
+    setupPokemonSprite(sprite);
+  });
 }
 
 // 진화 트리 스켈레톤 렌더링
@@ -3992,7 +4190,8 @@ let currentFilter = {
   completion: 'all', // 'all', 'complete', 'incomplete'
   types: [], // 복수 타입 선택 가능 ([] = 전체)
   generations: [], // 복수 세대 선택 가능 ([] = 전체)
-  sort: 'default' // 'default', 'progress-high', 'progress-low', 'generation'
+  sort: 'default', // 'default', 'progress-high', 'progress-low', 'generation'
+  searchQuery: '' // 검색어
 };
 
 // 필터 설정 불러오기
@@ -4242,7 +4441,9 @@ function applyFilter() {
 
   // 정렬
   const sortChip = document.querySelector('.filter-chip[data-filter="sort"].active');
-  currentFilter.sort = sortChip?.dataset.value || 'default';
+  const newSort = sortChip?.dataset.value || 'default';
+  const sortChanged = currentFilter.sort !== newSort;
+  currentFilter.sort = newSort;
 
   // 저장
   saveFilterSettings();
@@ -4250,8 +4451,12 @@ function applyFilter() {
   // 필터 배지 업데이트
   updateFilterBadge();
 
-  // 아이콘 목록 새로고침 (필터 적용)
-  loadUserPokemonIcons();
+  // 아이콘 목록 새로고침 (정렬이 바뀌었으면 fetch 필요할 수 있음)
+  if (sortChanged && (newSort === 'generation' || lastLoadedIconApiEndpoint?.includes('all-pokemon'))) {
+    loadUserPokemonIcons();
+  } else {
+    updateUserPokemonIconsUI();
+  }
 
   showToast('필터가 적용되었습니다.');
 }
@@ -4259,17 +4464,25 @@ function applyFilter() {
 // 필터 초기화
 function resetFilter() {
   currentFilter = {
+    ...currentFilter,
     favoritesOnly: false,
     showFavoriteIcon: true,
     completion: 'all',
     types: [],
     generations: [],
-    sort: 'default'
+    sort: 'default',
+    searchQuery: ''
   };
 
   saveFilterSettings();
   syncFilterUI();
   updateFilterBadge();
+
+  // 검색창 UI 초기화
+  if (iconSearchInput) iconSearchInput.value = '';
+  if (iconSearchContainer) iconSearchContainer.classList.remove('active');
+
+  loadUserPokemonIcons();
 
   showToast('필터가 초기화되었습니다.');
 }
@@ -4303,6 +4516,15 @@ function getFilteredPokemonList(icons) {
   if (!icons || icons.length === 0) return [];
 
   let filtered = [...icons];
+  const query = (currentFilter.searchQuery || '').toLowerCase().trim();
+
+  // 0. 검색 필터 (aria-label 기준 검색 요청에 따라 이름/이미지명 검색)
+  if (query) {
+    filtered = filtered.filter(icon => {
+      const name = (icon.name || icon.base_image_name || '').toLowerCase();
+      return name.includes(query);
+    });
+  }
 
   // 1. 즐겨찾기 필터
   if (currentFilter.favoritesOnly) {
@@ -7560,7 +7782,7 @@ function openScreenTimeModal() {
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
     onModalOpen();
-    
+
     // 입력 필드 초기화
     const digit1 = document.getElementById('screenTimeDigit1');
     if (digit1) digit1.focus();
@@ -7643,10 +7865,10 @@ function animateCardTransition() {
 
   // 1. 검증 카드에 exit 애니메이션 추가
   verificationCard.classList.add('card-exit');
-  
+
   // 2. 스크린타임 카드에 reveal 애니메이션 추가
   screenTimeCard.classList.add('card-reveal');
-  
+
   // 3. 스크린타임 카드 메시지 업데이트
   if (screenTimeCardSubtitle) {
     screenTimeCardSubtitle.textContent = '스크린타임을 기록해주세요';
@@ -7689,7 +7911,7 @@ async function updateWeeklyAchievementBar() {
         // weeklyData에서 각 요일별 입력 여부를 추출 (일~토 순서)
         const completedDays = [];
         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        
+
         dayNames.forEach(day => {
           const dayData = weeklyData[day] || weeklyData.days?.[day];
           completedDays.push(dayData && dayData.hasRecord);
@@ -7712,7 +7934,7 @@ async function updateWeeklyAchievementBar() {
  */
 function updateWeeklyAchievementBarUI(completedDays, todayIndex) {
   const dayLabels = ['(일)', '(월)', '(화)', '(수)', '(목)', '(금)', '(토)'];
-  
+
   for (let i = 0; i < 7; i++) {
     const dayCircle = document.getElementById(`weeklyDay${i}`);
     if (!dayCircle) continue;

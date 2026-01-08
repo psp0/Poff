@@ -4098,6 +4098,76 @@ body.modal-open {
   display: flex;
   gap: 8px;
   z-index: 10;
+  align-items: center;
+}
+
+/* 검색 컨테이너 */
+.search-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.icon-search-input {
+  width: 0;
+  opacity: 0;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  height: 38px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 14px;
+  outline: none;
+  background: white;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  z-index: 1;
+}
+
+.search-container.active .icon-search-input {
+  width: 160px;
+  opacity: 1;
+  padding: 0 45px 0 15px;
+  pointer-events: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.search-btn {
+  background: white;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 2;
+  box-shadow: var(--shadow-sm);
+}
+
+.search-btn svg {
+  transition: transform 0.3s ease;
+}
+
+.search-btn:hover {
+  background-color: #f8fafc;
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.search-container.active .search-btn {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
 }
 
 .collection-header-btns .corner-btn {
