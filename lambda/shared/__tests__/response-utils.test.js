@@ -1,10 +1,6 @@
 const {
   createSuccessResponse,
   createErrorResponse,
-  createCorsResponse,
-  createPaginatedResponse,
-  withErrorHandling,
-  corsHeaders
 } = require('../response-utils');
 
 describe('Response Utils', () => {
@@ -14,7 +10,7 @@ describe('Response Utils', () => {
       const response = createSuccessResponse(data);
 
       expect(response.statusCode).toBe(200);
-      expect(response.headers).toEqual(corsHeaders);
+
       const body = JSON.parse(response.body);
       expect(body.success).toBe(true);
       expect(body.data).toEqual(data);
@@ -55,14 +51,7 @@ describe('Response Utils', () => {
     });
   });
 
-  describe('createCorsResponse', () => {
-    it('should return a 200 OK with CORS headers', () => {
-      const response = createCorsResponse();
-      expect(response.statusCode).toBe(200);
-      expect(response.headers).toEqual(corsHeaders);
-      expect(response.body).toBe('');
-    });
-  });
+
 
   describe('createPaginatedResponse', () => {
     it('should create a correctly structured paginated response', () => {
@@ -98,41 +87,29 @@ describe('Response Utils', () => {
     it('should execute the handler and return its result', async () => {
       const mockHandler = jest.fn().mockResolvedValue({ statusCode: 200, body: 'ok' });
       const wrappedHandler = withErrorHandling(mockHandler);
-      
+
       const event = { httpMethod: 'GET' };
       const context = {};
-      
+
       const result = await wrappedHandler(event, context);
-      
+
       expect(mockHandler).toHaveBeenCalledWith(event, context);
       expect(result).toEqual({ statusCode: 200, body: 'ok' });
     });
 
-    it('should handle OPTIONS request (CORS preflight) immediately', async () => {
-      const mockHandler = jest.fn();
-      const wrappedHandler = withErrorHandling(mockHandler);
-      
-      const event = { httpMethod: 'OPTIONS' };
-      const context = {};
-      
-      const result = await wrappedHandler(event, context);
-      
-      expect(mockHandler).not.toHaveBeenCalled();
-      expect(result.headers).toEqual(corsHeaders);
-      expect(result.statusCode).toBe(200);
-    });
+
 
     it('should catch errors and return formatted error response', async () => {
       const error = new Error('Database failed');
       error.code = 'ECONNREFUSED';
       const mockHandler = jest.fn().mockRejectedValue(error);
       const wrappedHandler = withErrorHandling(mockHandler);
-      
+
       const event = { httpMethod: 'GET' };
       const context = {};
-      
+
       const result = await wrappedHandler(event, context);
-      
+
       expect(result.statusCode).toBe(503);
       const body = JSON.parse(result.body);
       expect(body.error).toBe('Database connection failed');

@@ -52,6 +52,12 @@ const handler = async (event, context) => {
   } else if (method === 'GET' && routePath.includes('/pokemon/')) {
     const stableId = routePath.split('/pokemon/')[1];
     return await getPokemonData(event, db, stableId);
+  } else if (method === 'GET' && routePath.includes('/habitats/') && routePath.endsWith('/pokemon')) {
+    // /habitats/:habitatSlug/:typeSlug/pokemon
+    const parts = routePath.split('/');
+    const habitatSlug = parts[parts.length - 3];
+    const typeSlug = parts[parts.length - 2];
+    return await getPokemonByHabitat(event, db, habitatSlug, typeSlug);
   } else {
     return createErrorResponse('Not Found', 404);
   }
@@ -177,7 +183,7 @@ async function getFavoritePokemon(event, db) {
     FROM user_pokemon_collection upc
     INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
     WHERE upc.user_id = ? AND upc.is_favorite = true
-    ORDER BY upc.obtained_date DESC
+    ORDER BY upc.favorited_at DESC
   `;
 
   const result = await db.query(query, [userId]);
@@ -249,6 +255,8 @@ async function getUserPokemonIcons(event, db) {
         p.has_icon,
         p.has_icon_shiny,
         eg.evolution_level,
+        p.type1,
+        p.type2,
         -- 폼 번호 추출: _숫자 형태일 경우만 추출 (_female 등은 제외)
         CASE 
           WHEN p.form_suffix REGEXP '^_[0-9]+$'
@@ -272,6 +280,8 @@ async function getUserPokemonIcons(event, db) {
         gap.has_icon_shiny,
         gap.evolution_level,
         gap.form_number,
+        gap.type1,
+        gap.type2,
         upc.is_shiny,
         upc.is_favorite,
         upc.obtained_date,
@@ -325,6 +335,8 @@ async function getUserPokemonIcons(event, db) {
         uop.is_shiny,
         uop.favorited_at,
         uop.obtained_date,
+        uop.type1,
+        uop.type2,
         gc.owned_count,
         gc.total_count,
         gc.shiny_owned_count,
@@ -434,7 +446,9 @@ async function getUserPokemonIcons(event, db) {
       ri.owned_count = ri.total_count AS is_complete,
       ri.shiny_owned_count,
       ri.is_shiny_complete,
-      ri.obtained_date
+      ri.obtained_date,
+      ri.type1,
+      ri.type2
     FROM representative_icons ri
     ORDER BY 
       CASE WHEN ri.is_favorite THEN 0 ELSE 1 END,
@@ -828,8 +842,17 @@ async function getPokemonData(event, db, stableId) {
         FROM pokemon_flag_relations pfr
         JOIN pokemon_flags pf ON pfr.flag_name = pf.name
         WHERE pfr.pokemon_stable_id = p.stable_id
-      ) as flags
+      ) as flags,
+      hb.image_filename as background_filename,
+      hb.habitat_slug as background_habitat
     FROM pokemon p
+    LEFT JOIN habitat_backgrounds hb ON p.habitat_en = hb.habitat_slug 
+      AND hb.type_slug = (
+        CASE 
+          WHEN LOWER(p.type1_en) = 'normal' AND p.type2_en IS NOT NULL THEN LOWER(p.type2_en)
+          ELSE LOWER(p.type1_en)
+        END
+      )
     WHERE p.stable_id = ?
   `;
 
@@ -845,37 +868,23 @@ async function getPokemonData(event, db, stableId) {
   const suffix = pokemon.form_suffix || '';
   const fileName = `${imageName}${suffix}.png`;
 
-  // Determine background based on habitat and type
-  const habitat = pokemon.habitat_en ? pokemon.habitat_en.toLowerCase().replace(/\s+/g, '_') : 'unknown';
-  const type1 = pokemon.type1_en ? pokemon.type1_en.toLowerCase() : 'normal';
-  const type2 = pokemon.type2_en ? pokemon.type2_en.toLowerCase() : null;
-
   // Base URL for custom backgrounds
   const customBgBaseUrl = `${assetsBaseUrl}custom/img/background`;
 
-  // Determine primary type for background
-  // If one of the types is 'normal' and there is another type, prioritize the other type
-  let primaryType = type1;
-  let secondaryType = type2;
-
-  if (type1 === 'normal' && type2) {
-    primaryType = type2;
-    secondaryType = type1;
+  // Determine background URL from DB result
+  let backgroundUrl = null;
+  if (pokemon.background_filename && pokemon.background_habitat) {
+    backgroundUrl = `${customBgBaseUrl}/${pokemon.background_habitat}/${pokemon.background_filename}`;
+  } else {
+    // Fallback if no DB match (though seed should cover it)
+    // Try to construct based on habitat and type1 as a last resort
+    const habitat = pokemon.habitat_en ? pokemon.habitat_en : 'unknown';
+    const type1 = pokemon.type1_en ? pokemon.type1_en.toLowerCase() : 'normal';
+    backgroundUrl = `${customBgBaseUrl}/${habitat}/${type1}.png`;
   }
 
-  // 1. Habitat + Primary Type
-  const backgroundUrl = `${customBgBaseUrl}/${habitat}/${primaryType}.png`;
-
-  // Fallbacks
+  // Fallbacks are less relevant now as we have exact mapping, but we can keep empty array or minimal fallback
   const fallbackBackgrounds = [];
-
-  // 2. Habitat + Secondary Type (if exists)
-  if (secondaryType) {
-    fallbackBackgrounds.push(`${customBgBaseUrl}/${habitat}/${secondaryType}.png`);
-  }
-
-  // 3. Habitat + Normal (Habitat-specific fallback)
-  fallbackBackgrounds.push(`${customBgBaseUrl}/${habitat}/normal.png`);
 
   // Determine image folders based on shiny status and asset availability
   // If shiny but no shiny asset exists, fall back to normal asset
@@ -974,3 +983,102 @@ async function getStarterPokemon(event, db) {
 }
 
 module.exports = { handler: withErrorHandling(handler) };
+/**
+ * 서식지 및 타입별 포켓몬 조회 (서식지 내 이동 시 사용)
+ */
+async function getPokemonByHabitat(event, db, habitatSlug, typeSlug) {
+  const auth = await authenticate(event);
+  const queryParams = event.queryStringParameters || {};
+  const userId = auth.isService ? queryParams.userId : auth.userId;
+
+  if (!userId) {
+    return createErrorResponse('User ID is required', 400);
+  }
+
+  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '').replace(/\/$/, '') + '/';
+
+  // habitatSlug와 typeSlug를 이용해 포켓몬 조회
+  // habitat_en 컬럼과 type1_en/type2_en 컬럼 사용
+  // typeSlug가 'normal'인 경우, 해당 서식지의 기본 포켓몬들을 의미할 수 있음
+  // 하지만 여기서는 habitat_backgrounds 테이블의 type_slug와 매칭되는 포켓몬을 찾음
+
+  const query = `
+    SELECT 
+      p.stable_id,
+      p.image_name,
+      p.name,
+      p.type1,
+      p.type2,
+      p.generation,
+      p.asset_source,
+      p.has_icon,
+      p.has_icon_shiny,
+      p.form_suffix,
+      upc.is_shiny,
+      upc.is_favorite,
+      upc.collection_id IS NOT NULL as is_owned,
+      -- 아이콘 URL 생성
+      CONCAT(?, 
+        CASE 
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 1 THEN
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons%20shiny/'
+              ELSE 'base/img/Icons%20shiny/'
+            END
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 0 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN COALESCE(p_base.asset_source, 'base') = 'external' THEN 'external/img/Icons%20shiny/'
+              ELSE 'base/img/Icons%20shiny/'
+            END
+          WHEN p.has_icon = 0 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN COALESCE(p_base.asset_source, 'base') = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+          ELSE
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+        END,
+        CASE 
+          WHEN (upc.is_shiny = 1 AND p.has_icon_shiny = 1 AND p.form_suffix IS NOT NULL) 
+               OR (upc.is_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL)
+               OR (upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL)
+          THEN CONCAT(p.image_name, p.form_suffix, '.png')
+          ELSE CONCAT(p.image_name, '.png')
+        END
+      ) AS icon_url
+    FROM pokemon p
+    LEFT JOIN user_pokemon_collection upc ON p.stable_id = upc.pokemon_stable_id AND upc.user_id = ?
+    LEFT JOIN pokemon p_base ON p_base.image_name = p.image_name AND (p_base.form_suffix IS NULL OR p_base.form_suffix = '')
+    WHERE p.habitat_en = ? 
+      AND (LOWER(p.type1_en) = ? OR LOWER(p.type2_en) = ?)
+    ORDER BY p.generation, p.pokemon_id
+  `;
+
+  try {
+    const result = await db.query(query, [assetsBaseUrl, userId, habitatSlug, typeSlug, typeSlug]);
+
+    // 통계 계산
+    const totalCount = result.rows.length;
+    const ownedCount = result.rows.filter(r => r.is_owned).length;
+
+    return createSuccessResponse({
+      pokemon: result.rows,
+      stats: {
+        total_count: totalCount,
+        owned_count: ownedCount,
+        completion_percentage: totalCount > 0 ? Math.round((ownedCount / totalCount) * 100) : 0
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching habitat pokemon', error);
+    return createErrorResponse('Failed to fetch habitat pokemon', 500);
+  }
+}

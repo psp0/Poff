@@ -4,12 +4,7 @@
 
 const { logger } = require('./logger');
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': process.env.CORS_ALLOWED_ORIGIN || '*', // Production should set this env var
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Content-Type': 'application/json'
-};
+
 
 /**
  * 성공 응답 생성
@@ -20,7 +15,7 @@ const corsHeaders = {
 function createSuccessResponse(data, statusCode = 200) {
   return {
     statusCode,
-    headers: corsHeaders,
+
     body: JSON.stringify({
       success: true,
       data,
@@ -39,7 +34,7 @@ function createSuccessResponse(data, statusCode = 200) {
 function createErrorResponse(message, statusCode = 500, details = null) {
   return {
     statusCode,
-    headers: corsHeaders,
+
     body: JSON.stringify({
       success: false,
       error: message,
@@ -49,17 +44,7 @@ function createErrorResponse(message, statusCode = 500, details = null) {
   };
 }
 
-/**
- * CORS preflight 응답 생성
- * @returns {Object} Lambda 응답 객체
- */
-function createCorsResponse() {
-  return {
-    statusCode: 200,
-    headers: corsHeaders,
-    body: ''
-  };
-}
+
 
 /**
  * 페이지네이션 응답 생성
@@ -96,10 +81,7 @@ function withErrorHandling(handler) {
     context.callbackWaitsForEmptyEventLoop = false;
 
     try {
-      // CORS preflight 요청 처리
-      if (event.httpMethod === 'OPTIONS') {
-        return createCorsResponse();
-      }
+
 
       return await handler(event, context);
     } catch (error) {
@@ -128,8 +110,6 @@ function withErrorHandling(handler) {
 module.exports = {
   createSuccessResponse,
   createErrorResponse,
-  createCorsResponse,
   createPaginatedResponse,
-  withErrorHandling,
-  corsHeaders
+  withErrorHandling
 };

@@ -57,17 +57,7 @@ describe('User Management Lambda', () => {
       expect(result.statusCode).toBe(404);
     });
 
-    it('should handle OPTIONS (CORS preflight)', async () => {
-      const event = {
-        httpMethod: 'OPTIONS',
-        path: '/auth/sync',
-        requestContext: { http: { method: 'OPTIONS' } }
-      };
 
-      const result = await userManagement.handler(event, {});
-      expect(result.statusCode).toBe(200);
-      expect(result.headers['Access-Control-Allow-Origin']).toBeDefined();
-    });
   });
 
   describe('POST /auth/sync', () => {

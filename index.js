@@ -175,6 +175,39 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuthPikachuSprite();
 });
 
+// Auth Card UI Update Helper
+function updateAuthCardUI(state) {
+  const logoutBtn = document.getElementById("logoutBtn"); // The card div itself
+  const title = document.getElementById("auth-card-title");
+  const desc = document.getElementById("auth-card-desc");
+  const icon = document.getElementById("auth-card-icon");
+
+  if (!logoutBtn || !title || !desc) return;
+
+  if (state === 'authenticated') {
+    title.textContent = "로그아웃";
+    desc.textContent = "계정에서 로그아웃";
+    // Optional: Change icon to logout icon
+    if (icon) {
+      icon.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>`;
+    }
+  } else {
+    // Guest or Unauthenticated -> "Login"
+    title.textContent = "로그인";
+    desc.textContent = "로그인하여 시작하기";
+    if (icon) {
+      icon.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+        </svg>`;
+    }
+  }
+}
+
 // Firebase Auth 상태 감지 및 백엔드 동기화
 function initializeFirebaseListener() {
   if (window.firebaseAuth) {
@@ -238,10 +271,16 @@ function initializeFirebaseListener() {
               contentDiv.style.display = "flex";
               // 로그인 후 초기 데이터 로드
               await loadUserPokemonIcons();
+              // 홈 화면 즐겨찾기 포켓몬 로드
+              loadHomeFavoritePokemon();
+
+              // 서식지 시스템 초기화
+              initHabitat();
 
               // Notify other modules with a slight delay to ensure listeners are ready
               setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('user-synced', { detail: { userId: currentUserId } }));
+                updateAuthCardUI('authenticated');
                 hideGlobalLoading(); // 로딩 종료
               }, 500);
             }
@@ -268,6 +307,10 @@ function initializeFirebaseListener() {
           // Load Dummy Data
           loadUserPokemonIcons();
 
+          // Initialize habitat system for guest mode after DOM is ready
+          setTimeout(() => {
+            initHabitat();
+          }, 100);
 
           // Setup UI for Guest
           const screenTimePreview = document.getElementById('screenTimePreview');
@@ -278,9 +321,7 @@ function initializeFirebaseListener() {
 
           const logoutBtn = document.getElementById("logoutBtn");
           if (logoutBtn) {
-            logoutBtn.textContent = "로그인하여 시작하기";
-            logoutBtn.style.backgroundColor = "#CD5C5C";
-            logoutBtn.style.color = "white";
+            updateAuthCardUI('guest');
           }
 
           showToast('체험 모드로 시작합니다.');
@@ -302,7 +343,10 @@ function initializeFirebaseListener() {
 
     if (window.authInitAttempts > 100) {
       console.error("Firebase Auth initialization timed out.");
-      if (authMessage) authMessage.textContent = "Firebase 초기화 실패. 페이지를 새로고침 해주세요.";
+      if (authMessage) authMessage.textContent = "Firebase 초기화 실패. 체험 모드는 이용 가능합니다.";
+      window.authState = 'unauthenticated'; // Allow guest mode to proceed
+      hideGlobalLoading();
+      if (authDiv) authDiv.style.display = "flex";
       return;
     }
 
@@ -487,15 +531,15 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
       habitatTag.className = 'hashtag habitat';
 
       const habitatMap = {
-        'Grassland': '초원',
-        'Forest': '숲',
-        'Waters-edge': '물가',
-        'Sea': '바다',
-        'Cave': '동굴',
-        'Mountain': '산',
-        'Rough-terrain': '거친지형',
-        'Urban': '도시',
-        'Rare': '희귀'
+        'grassland': '초원',
+        'forest': '숲',
+        'watersedge': '물가',
+        'sea': '바다',
+        'cave': '동굴',
+        'mountain': '산',
+        'roughterrain': '거친지형',
+        'urban': '도시',
+        'rare': '희귀'
       };
 
       const habitatName = habitatMap[pokemonData.pokemon.habitat] || pokemonData.pokemon.habitat;
@@ -632,6 +676,9 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
 
           // 데이터 상태 업데이트 (메모리 상)
           pokemonData.is_favorite = isFav;
+
+          // 홈 화면 업데이트 (즐겨찾기 변경 사항 반영)
+          loadHomeFavoritePokemon();
 
         } else {
           throw new Error(result.error || '즐겨찾기 변경 실패');
@@ -881,6 +928,7 @@ if (guestLoginBtn) {
 
       // 실제 API를 통해 게스트 유저 데이터 로드
       await loadUserPokemonIcons();
+      await loadHomeFavoritePokemon();
 
 
 
@@ -894,9 +942,7 @@ if (guestLoginBtn) {
       // 로그아웃 버튼을 로그인 버튼으로 변경
       const logoutBtn = document.getElementById("logoutBtn");
       if (logoutBtn) {
-        logoutBtn.textContent = "로그인하여 시작하기";
-        logoutBtn.style.backgroundColor = "#CD5C5C";
-        logoutBtn.style.color = "white";
+        updateAuthCardUI('guest');
       }
 
       // 게스트 모드 UI 설정 (저장 버튼들 비활성화)
@@ -1332,7 +1378,7 @@ async function showIconGroupDetail(baseImageName, specificId = null, isShiny = f
     // 모달 열기
     const evolutionModal = document.getElementById('evolution-modal');
     if (evolutionModal) {
-      evolutionModal.style.display = 'block';
+      evolutionModal.style.display = 'flex';
       document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
       onModalOpen();
       // 모달 열릴 때 플리퍼 정면 초기화
@@ -1689,14 +1735,191 @@ function renderEvolutionDiagram(data) {
 
 }
 
+// 홈 화면용 포켓몬 표시 함수
+async function displayHomePokemon(pokemonStableId, isShiny = false) {
+  console.log('displayHomePokemon called:', pokemonStableId, isShiny);
+  const container = document.getElementById('home-pokemon-container');
+  const flipper = document.getElementById('home-pokemon-flipper');
+
+  if (!container || !flipper) {
+    console.error('Home pokemon container or flipper not found');
+    return;
+  }
+
+  // 1. 즉시 숨김 (잔상 방지)
+  flipper.style.opacity = '0';
+
+  // 플리퍼 정면 초기화
+  flipper.style.transform = 'translate(-50%, -50%) rotateY(0deg)';
+
+  const pokemonData = await fetchPokemonData(pokemonStableId, isShiny);
+
+  if (!pokemonData) {
+    console.warn('No pokemon data found for home display');
+    container.style.display = 'none';
+    return;
+  }
+
+  console.log('Home pokemon data loaded:', pokemonData.pokemon.name);
+
+  // 컨테이너 표시
+  container.style.display = 'flex';
+
+  // 이름 업데이트
+  const nameEl = document.getElementById('home-pokemon-name');
+  if (nameEl) nameEl.textContent = pokemonData.pokemon.name;
+
+  // 배경 이미지 설정
+  const background = document.getElementById('home-background');
+  if (background && pokemonData.background_image) {
+    const validBackgroundUrl = await loadBackgroundWithFallback(
+      pokemonData.background_image,
+      pokemonData.fallback_backgrounds
+    );
+    if (validBackgroundUrl) {
+      background.style.setProperty('--background-image', `url("${validBackgroundUrl}")`);
+    }
+  }
+
+  // 스프라이트 설정
+  const frontSpeed = pokemonData.pokemon.front_animation_speed !== undefined ? pokemonData.pokemon.front_animation_speed : 2;
+  const backSpeed = pokemonData.pokemon.back_animation_speed !== undefined ? pokemonData.pokemon.back_animation_speed : 2;
+
+  console.log('Setting up home sprites...');
+  await Promise.all([
+    setupSprite('home-sprite-front', pokemonData.front_image, frontSpeed),
+    setupSprite('home-sprite-back', pokemonData.back_image, backSpeed)
+  ]);
+  console.log('Home sprites setup complete');
+
+  // 이미지 로드 완료 후 표시
+  requestAnimationFrame(() => {
+    flipper.style.opacity = '1';
+  });
+
+  // 회전 버튼 이벤트 (중복 방지를 위해 cloneNode 사용)
+  const rotateBtn = document.getElementById('home-rotate-btn');
+  if (rotateBtn) {
+    const newRotateBtn = rotateBtn.cloneNode(true);
+    rotateBtn.parentNode.replaceChild(newRotateBtn, rotateBtn);
+
+    let homeRotation = 0;
+    newRotateBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      homeRotation += 180;
+      flipper.style.transition = 'transform 0.6s ease';
+      flipper.style.transform = `translate(-50%, -50%) rotateY(${homeRotation}deg)`;
+    });
+  }
+}
+
+// 홈 화면 즐겨찾기 목록 및 인덱스
+let homeFavorites = [];
+let currentHomeIndex = 0;
+
+// 홈 화면 포켓몬 네비게이션
+async function navigateHomePokemon(direction) {
+  if (!homeFavorites || homeFavorites.length <= 1) return;
+
+  currentHomeIndex += direction;
+
+  // 순환 처리
+  if (currentHomeIndex < 0) currentHomeIndex = homeFavorites.length - 1;
+  if (currentHomeIndex >= homeFavorites.length) currentHomeIndex = 0;
+
+  const nextPokemon = homeFavorites[currentHomeIndex];
+  await displayHomePokemon(nextPokemon.pokemon_stable_id, nextPokemon.is_shiny);
+}
+
+// 홈 화면에 최근 즐겨찾기 포켓몬 로드
+async function loadHomeFavoritePokemon() {
+  console.log('loadHomeFavoritePokemon called');
+  // 게스트 모드일 때도 로드해야 함
+  if (!currentUserId && !window.isGuest()) {
+    console.log('No current user and not guest, skipping home favorite load');
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    // API 엔드포인트 변경 (게스트 모드 지원)
+    const apiBase = window.isGuest() ? '/api/guest' : '/api/collection';
+    const response = await fetch(`${apiBase}/favorites`, { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      homeFavorites = result.data || [];
+      console.log('Favorites loaded for home:', homeFavorites.length);
+
+      const container = document.getElementById('home-pokemon-container');
+      const prevBtn = document.getElementById('home-prev-btn');
+      const nextBtn = document.getElementById('home-next-btn');
+
+      if (homeFavorites.length > 0) {
+        // 인덱스 초기화 (항상 가장 최근 것부터, 혹은 유지하고 싶다면 로직 추가 가능)
+        currentHomeIndex = 0;
+        const topFav = homeFavorites[0];
+        console.log('Top favorite:', topFav);
+
+        await displayHomePokemon(topFav.pokemon_stable_id, topFav.is_shiny);
+
+        // 네비게이션 버튼 표시 여부 (2개 이상일 때만 표시)
+        if (homeFavorites.length > 1) {
+          if (prevBtn) {
+            prevBtn.style.display = 'flex';
+            // 리스너 중복 방지를 위해 새로 복제
+            const newPrevBtn = prevBtn.cloneNode(true);
+            prevBtn.parentNode.replaceChild(newPrevBtn, prevBtn);
+            newPrevBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              navigateHomePokemon(-1);
+            });
+          }
+          if (nextBtn) {
+            nextBtn.style.display = 'flex';
+            const newNextBtn = nextBtn.cloneNode(true);
+            nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
+            newNextBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              navigateHomePokemon(1);
+            });
+          }
+        } else {
+          if (prevBtn) prevBtn.style.display = 'none';
+          if (nextBtn) nextBtn.style.display = 'none';
+        }
+
+      } else {
+        // 즐겨찾기가 없으면 숨김
+        console.log('No favorites found, hiding home container');
+        if (container) container.style.display = 'none';
+      }
+    } else {
+      console.error('Failed to fetch favorites:', response.status);
+    }
+  } catch (err) {
+    console.error('Failed to load home favorite pokemon:', err);
+  }
+}
+
+// 디버깅용 전역 노출
+window.loadHomeFavoritePokemon = loadHomeFavoritePokemon;
+
+// 페이지 로드 시에도 시도 (이미 로그인 되어 있는 경우 대비)
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.isAuthenticated && window.isAuthenticated()) {
+    loadHomeFavoritePokemon();
+  }
+});
+
 // 초기화: 페이지 로드 시 세션 확인 및 auth 상태 변경 처리
 function setLoggedInUI(user) {
   authMessage.textContent = user?.email ? `${user.email}로 로그인됨` : "로그인 상태";
   authDiv.style.display = "none";
   contentDiv.style.display = "flex";
 
-  // 로그인 상태일 때 자시안 표시
-  showSpecificPokemon("ZACIAN", "", "자시안");
+  // 홈 화면에 즐겨찾기 포켓몬 로드
+  loadHomeFavoritePokemon();
 
   // 주간 날짜 범위 계산
   updateWeekRanges();
@@ -2254,7 +2477,7 @@ window.addEventListener('click', (e) => {
 });
 
 async function openEggModal() {
-  eggModal.style.display = 'block';
+  eggModal.style.display = 'flex';
   document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
   onModalOpen();
   await loadUserEggs();
@@ -2870,7 +3093,7 @@ window.showIconGroupDetail = showIconGroupDetail;
 function openInfoModal() {
   const modal = document.getElementById('info-modal');
   if (modal) {
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
     document.body.classList.add('modal-open');
     onModalOpen();
     // 기본 탭으로 초기화
@@ -3020,7 +3243,7 @@ function showConfirmModal(title, message, onOpen = null) {
       resolve(false);
     });
 
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
     onModalOpen();
 
     // 모달이 열린 후 onOpen 콜백 실행
@@ -3841,7 +4064,7 @@ function openFilterModal() {
   // 현재 필터 상태를 UI에 반영
   syncFilterUI();
 
-  filterModal.style.display = 'block';
+  filterModal.style.display = 'flex';
   document.body.classList.add('modal-open');
   onModalOpen();
 }
@@ -4674,62 +4897,72 @@ if (submitScreenTimeBtn) {
       console.log('스크린타임 저장 성공:', data);
 
       // 결과 표시
+      // 결과 표시 요소 가져오기
       const resultDiv = document.getElementById('screenTimeResult');
-      resultDiv.className = 'result-message result-success';
-      resultDiv.style.display = 'block';
 
-      // 보상 정보 렌더링
-      let rewardHtml = '';
+      let modalShown = false;
+
+      // 보상 획득 모달 표시 시도
       if (data.isNewEntry && data.rewards) {
-        const rewards = data.rewards;
-        const rewardItems = [];
-
-        if (rewards.mysticCharmReceived > 0) {
-          rewardItems.push(`신비의 부적 x${rewards.mysticCharmReceived}`);
-        }
-        if (rewards.rareCandyReceived > 0) {
-          rewardItems.push(`이상한 사탕 x${rewards.rareCandyReceived}`);
-        }
-        if (rewards.ovalCharmReceived > 0) {
-          rewardItems.push(`둥근 부적 x${rewards.ovalCharmReceived}`);
-        }
-        if (rewards.shinyCharmReceived > 0) {
-          rewardItems.push(`빛나는 부적 x${rewards.shinyCharmReceived}`);
-        }
-        if (rewards.brillianceCharmReceived > 0) {
-          rewardItems.push(`찬란한 부적 x${rewards.brillianceCharmReceived}`);
-        }
-        if (rewards.basePokemonList && rewards.basePokemonList.length > 0) {
-          rewardItems.push(`기초 포켓몬 ${rewards.basePokemonList.length}마리`);
-        }
-        if (rewards.legendaryPokemon) {
-          rewardItems.push(`전설 포켓몬 획득!`);
-        }
-        if (rewards.mythicalPokemon) {
-          rewardItems.push(`환상 포켓몬 획득!`);
-        }
-        if (rewards.specialDayPokemon) {
-          rewardItems.push(`특별 보상 포켓몬!`);
-        }
-
-        if (rewardItems.length > 0) {
-          rewardHtml = `<br><strong>🎁 보상:</strong> ${rewardItems.join(', ')}`;
+        const hasRewards = (data.rewards.pokemons && data.rewards.pokemons.length > 0) ||
+          (data.rewards.items && data.rewards.items.length > 0);
+        if (hasRewards) {
+          const comparisonResult = data.weeklyComparison?.comparisonResult || null;
+          showRewardResultModal(data.rewards, comparisonResult, data.eventName);
+          modalShown = true;
+          // 모달이 뜨면 텍스트 결과는 숨김 (또는 필요시 표시하지 않음)
+          resultDiv.style.display = 'none';
         }
       }
 
-      // 전주 비교 정보
-      let comparisonHtml = '';
-      if (data.weeklyComparison && data.weeklyComparison.comparisonResult) {
-        comparisonHtml = `<br><small>📊 ${data.weeklyComparison.comparisonResult}</small>`;
-      }
+      // 모달이 표시되지 않았을 때만 텍스트 결과 표시
+      if (!modalShown) {
+        resultDiv.className = 'result-message result-success';
+        resultDiv.style.display = 'block';
 
-      resultDiv.innerHTML = `
-          <strong>✅ 저장 완료!</strong><br>
-          날짜: ${dateInput}<br>
-          📱 ${data.usage?.hours || 0}시간 ${data.usage?.minutes || 0}분
-          ${comparisonHtml}
-          ${rewardHtml}
-        `;
+        // 보상 정보 렌더링 (텍스트 요약) - 모달이 안 떴는데 보상이 있는 경우(거의 없겠지만) 또는 기존 로직 호환
+        let rewardHtml = '';
+        if (data.isNewEntry && data.rewards) {
+          // ... (기존 텍스트 생성 로직 유지, 혹시 모를 상황 대비)
+          const rewards = data.rewards;
+          const rewardItems = [];
+          // ... (아래 코드는 그대로 두거나, 필요하면 복사해서 넣어야 함. 
+          // 여기서는 기존 로직을 감싸는 형태로 변경하므로 아래 텍스트 생성 로직이 이 블록 안에 있어야 함)
+
+          if (rewards.mysticCharmReceived > 0) rewardItems.push(`신비의 부적 x${rewards.mysticCharmReceived}`);
+          if (rewards.rareCandyReceived > 0) rewardItems.push(`이상한 사탕 x${rewards.rareCandyReceived}`);
+          if (rewards.ovalCharmReceived > 0) rewardItems.push(`둥근 부적 x${rewards.ovalCharmReceived}`);
+          if (rewards.shinyCharmReceived > 0) rewardItems.push(`빛나는 부적 x${rewards.shinyCharmReceived}`);
+          if (rewards.brillianceCharmReceived > 0) rewardItems.push(`찬란한 부적 x${rewards.brillianceCharmReceived}`);
+          if (rewards.basePokemonList && rewards.basePokemonList.length > 0) rewardItems.push(`기초 포켓몬 ${rewards.basePokemonList.length}마리`);
+          if (rewards.legendaryPokemon) rewardItems.push(`전설 포켓몬 획득!`);
+          if (rewards.mythicalPokemon) rewardItems.push(`환상 포켓몬 획득!`);
+          if (rewards.specialDayPokemon) rewardItems.push(`특별 보상 포켓몬!`);
+
+          if (rewardItems.length > 0) {
+            rewardHtml = `<br><strong>🎁 보상:</strong> ${rewardItems.join(', ')}`;
+          }
+        }
+
+        // 전주 비교 정보
+        let comparisonHtml = '';
+        if (data.weeklyComparison && data.weeklyComparison.comparisonResult) {
+          comparisonHtml = `<br><small>📊 ${data.weeklyComparison.comparisonResult}</small>`;
+        }
+
+        resultDiv.innerHTML = `
+            <strong>✅ 저장 완료!</strong><br>
+            날짜: ${dateInput}<br>
+            📱 ${data.usage?.hours || 0}시간 ${data.usage?.minutes || 0}분
+            ${comparisonHtml}
+            ${rewardHtml}
+          `;
+
+        // 5초 후 결과 메시지 숨기기
+        setTimeout(() => {
+          resultDiv.style.display = 'none';
+        }, 3000);
+      }
 
       // 입력 필드 초기화
       clearScreenTimeCodeInputs();
@@ -4737,12 +4970,6 @@ if (submitScreenTimeBtn) {
 
       // 어제 날짜로 다시 설정
       setYesterdayDate();
-
-      // 5초 후 결과 메시지 숨기기 (보상 있으면 더 오래 표시)
-      const hideDelay = rewardHtml ? 5000 : 3000;
-      setTimeout(() => {
-        resultDiv.style.display = 'none';
-      }, hideDelay);
 
     } catch (err) {
       console.error('스크린타임 저장 중 예외 발생:', err);
@@ -5363,14 +5590,16 @@ class SleepTracker {
   // ==========================================
 
   async loadSleepStatus() {
-    if (!window.isAuthenticated()) {
+    const isGuest = window.isGuest();
+    if (!window.isAuthenticated() && !isGuest) {
       this.renderGuestState();
       return;
     }
 
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/sleep/status', { headers });
+      const apiEndpoint = isGuest ? '/api/guest/sleep-status' : '/api/sleep/status';
+      const response = await fetch(apiEndpoint, { headers });
 
       if (!response.ok) {
         throw new Error('Failed to load sleep status');
@@ -5646,4 +5875,1144 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 });
+
+
+// ==========================================
+// 서식지 시스템 (Habitat System)
+// ==========================================
+
+let currentHabitatData = {
+  current_habitat: 'random',
+  current_sub_habitat: null,
+  can_change_habitat: true
+};
+
+// 서식지 초기화
+async function initHabitat() {
+  console.log('initHabitat called');
+  const habitatIconBtn = document.getElementById('habitatIconBtn');
+  const habitatCloseBtn = document.getElementById('habitat-close');
+  const habitatListBackBtn = document.getElementById('habitatListBackBtn');
+
+  console.log('habitatIconBtn:', habitatIconBtn);
+
+  if (habitatIconBtn) {
+    habitatIconBtn.addEventListener('click', openHabitatModal);
+    console.log('habitatIconBtn click listener added');
+  } else {
+    console.error('habitatIconBtn not found!');
+  }
+
+  if (habitatCloseBtn) {
+    habitatCloseBtn.addEventListener('click', closeHabitatModal);
+  }
+
+  if (habitatListBackBtn) {
+    habitatListBackBtn.addEventListener('click', showHabitatMainView);
+  }
+
+  // 탭 변경 시 서식지 아이콘 표시/숨김 처리 (홈 탭에서만 표시)
+  const tabButtons = document.querySelectorAll('.tab-item');
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.getAttribute('data-tab');
+      if (habitatIconBtn) {
+        habitatIconBtn.style.display = tabId === 'home' ? 'flex' : 'none';
+      }
+    });
+  });
+
+  // 초기 데이터 로드
+  await fetchUserHabitat();
+}
+
+// 사용자 서식지 정보 조회
+async function fetchUserHabitat() {
+  // 게스트 모드인 경우 기본 데이터 사용
+  if (window.isGuestMode) {
+    currentHabitatData = {
+      current_habitat: 'random',
+      current_sub_habitat: null,
+      can_change_habitat: true
+    };
+    updateHabitatUI();
+    return;
+  }
+
+  if (!currentUserId) return;
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/user/habitat`, { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        currentHabitatData = result.data;
+        updateHabitatUI();
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch user habitat:', error);
+  }
+}
+
+// 서식지 UI 업데이트 (아이콘 등)
+function updateHabitatUI() {
+  const iconImg = document.getElementById('currentHabitatIcon');
+  const label = document.getElementById('currentHabitatLabel');
+  const placeholder = document.querySelector('.habitat-icon-placeholder');
+
+  if (!iconImg || !label) return;
+
+  const habitatNameMap = {
+    'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
+    'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
+    'random': '랜덤'
+  };
+
+  const habitatName = habitatNameMap[currentHabitatData.current_habitat] || '랜덤';
+  label.textContent = habitatName;
+
+  // 아이콘 이미지 설정
+  if (currentHabitatData.current_habitat !== 'random') {
+    // 실제 서식지의 경우 아이콘 이미지 표시
+    const iconFilename = `${currentHabitatData.current_habitat}.png`;
+    iconImg.src = `${ASSETS_BASE_URL}/custom/img/ui/${iconFilename}`;
+    iconImg.style.display = 'block';
+    placeholder.style.display = 'none';
+  } else {
+    // 랜덤의 경우 물음표 placeholder 표시
+    placeholder.style.display = 'block';
+    iconImg.style.display = 'none';
+    placeholder.textContent = '?';
+  }
+}
+
+// 서식지 모달 열기
+async function openHabitatModal() {
+  console.log('openHabitatModal called, isGuestMode:', window.isGuestMode);
+  const modal = document.getElementById('habitat-modal');
+  console.log('habitat-modal:', modal);
+  if (!modal) {
+    console.error('habitat-modal not found!');
+    return;
+  }
+
+  modal.style.display = 'flex';
+  onModalOpen();
+
+  // 데이터 최신화
+  await fetchUserHabitat();
+  showHabitatMainView();
+
+  // 전체 서식지 목록 로드 (백그라운드)
+  loadHabitatsList();
+}
+
+// 서식지 모달 닫기
+function closeHabitatModal() {
+  const modal = document.getElementById('habitat-modal');
+  if (modal) {
+    modal.style.display = 'none';
+    onModalClose();
+  }
+}
+
+// 모달 메인 뷰 표시 (현재 상태)
+function showHabitatMainView() {
+  document.getElementById('habitatListSection').style.display = 'none';
+  document.querySelector('.current-habitat-section').style.display = 'block';
+  document.getElementById('habitatDetailSection').style.display = 'block';
+
+  renderCurrentHabitatInfo();
+}
+
+// 서식지 목록 뷰 표시 (이동 모드)
+function showHabitatListView() {
+  document.querySelector('.current-habitat-section').style.display = 'none';
+  document.getElementById('habitatDetailSection').style.display = 'none';
+  document.getElementById('habitatListSection').style.display = 'block';
+
+  // 헤더 및 뒤로가기 버튼 초기화
+  document.querySelector('.habitat-list-header h4').textContent = '이동할 서식지 선택';
+  const backBtn = document.getElementById('habitatListBackBtn');
+  backBtn.onclick = showHabitatMainView;
+
+  // 전체 목록 렌더링
+  if (cachedHabitats) {
+    renderHabitatsGrid(cachedHabitats);
+  }
+}
+
+// 현재 서식지 정보 렌더링
+function renderCurrentHabitatInfo() {
+  const container = document.getElementById('modalCurrentHabitatDisplay');
+  if (!container) return;
+
+  const habitatNameMap = {
+    'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
+    'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
+    'random': '랜덤'
+  };
+
+  const name = habitatNameMap[currentHabitatData.current_habitat] || '랜덤 탐험';
+  const sub = currentHabitatData.current_sub_habitat ? '특정 구역 탐색 중' : '자유 탐험 중';
+
+  let html = `
+    <div class="current-habitat-details">
+      <div class="current-habitat-name">${name}</div>
+      <div class="current-habitat-desc">${sub}</div>
+    </div>
+  `;
+
+  // 이동 버튼
+  if (currentHabitatData.can_change_habitat) {
+    html += `<button class="change-habitat-btn" onclick="showHabitatListView()">서식지 이동</button>`;
+  } else {
+    html += `<button class="change-habitat-btn" disabled title="내일 다시 이동할 수 있습니다">이동 완료</button>`;
+  }
+
+  container.innerHTML = html;
+
+  // 상세 정보 탭 로드
+  loadHabitatPokemonList(currentHabitatData.current_habitat);
+}
+
+// 전체 서식지 목록 로드 및 렌더링
+let cachedHabitats = null;
+async function loadHabitatsList() {
+  if (cachedHabitats) {
+    renderHabitatsGrid(cachedHabitats);
+    return;
+  }
+
+  // 게스트 모드에서는 API 호출 스킵하고 빈 배열 사용 (또는 기본 데이터 사용)
+  if (window.isGuestMode) {
+    cachedHabitats = [];
+    renderHabitatsGrid(cachedHabitats);
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/habitats`, { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        cachedHabitats = result.data;
+        renderHabitatsGrid(cachedHabitats);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load habitats:', error);
+  }
+}
+
+function renderHabitatsGrid(habitats) {
+  const grid = document.getElementById('habitatGrid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+
+  // 랜덤 옵션 추가
+  const randomCard = document.createElement('div');
+  randomCard.className = 'habitat-card';
+  randomCard.innerHTML = `
+    <div style="height: 100px; background: linear-gradient(45deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%); display: flex; align-items: center; justify-content: center; font-size: 30px;">?</div>
+    <div class="habitat-card-info">
+      <div class="habitat-card-name">랜덤</div>
+      <div class="habitat-card-type">모든 포켓몬 등장</div>
+    </div>
+  `;
+  randomCard.onclick = () => confirmHabitatChange('random', null, '랜덤');
+  grid.appendChild(randomCard);
+
+  habitats.forEach(habitat => {
+    // 각 서식지의 첫 번째 배경 이미지를 대표 이미지로 사용
+    const bgImage = habitat.backgrounds[0]?.image || '';
+    const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${habitat.slug}/${bgImage}` : '';
+
+    const card = document.createElement('div');
+    card.className = 'habitat-card';
+    card.innerHTML = `
+      <img src="${bgUrl}" class="habitat-card-img" onerror="this.style.display='none'">
+      <div class="habitat-card-info">
+        <div class="habitat-card-name">${habitat.name}</div>
+        <div class="habitat-card-type">${habitat.backgrounds.length}개 구역</div>
+      </div>
+    `;
+
+    card.onclick = () => showSubHabitatSelection(habitat);
+    grid.appendChild(card);
+  });
+}
+
+// 세부 서식지 선택 UI
+function showSubHabitatSelection(habitat) {
+  const grid = document.getElementById('habitatGrid');
+  grid.innerHTML = '';
+
+  // 뒤로가기 버튼: 서식지 목록으로 돌아가기
+  const backBtn = document.getElementById('habitatListBackBtn');
+  backBtn.onclick = () => {
+    renderHabitatsGrid(cachedHabitats);
+    document.querySelector('.habitat-list-header h4').textContent = '이동할 서식지 선택';
+    backBtn.onclick = showHabitatMainView; // 메인 뷰로 돌아가는 기능으로 복구
+  };
+
+  // 헤더 변경
+  document.querySelector('.habitat-list-header h4').textContent = `${habitat.name} - 구역 선택`;
+
+  habitat.backgrounds.forEach(bg => {
+    const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${habitat.slug}/${bg.image}`;
+
+    const card = document.createElement('div');
+    card.className = 'habitat-card';
+    card.innerHTML = `
+      <img src="${bgUrl}" class="habitat-card-img">
+      <div class="habitat-card-info">
+        <div class="habitat-card-name">${bg.display_name}</div>
+        <div class="habitat-card-type">${bg.type} 타입 출몰</div>
+      </div>
+    `;
+
+    // 클릭 시 이동 확인
+    // subHabitat 형식: "habitat_type" (예: "grassland_bug")
+    const subHabitat = `${habitat.slug}_${bg.type}`;
+    card.onclick = () => confirmHabitatChange(habitat.slug, subHabitat, bg.display_name);
+    grid.appendChild(card);
+  });
+}
+
+// 서식지 변경 확인 및 요청
+function confirmHabitatChange(habitatSlug, subHabitat, displayName) {
+  // 게스트 모드에서는 기능 제한
+  if (window.isGuestMode) {
+    showToast('로그인하면 서식지를 변경할 수 있습니다!');
+    return;
+  }
+
+  // 대분류 변경인지 확인
+  const isMajorChange = habitatSlug !== currentHabitatData.current_habitat;
+
+  let message = `'${displayName}'(으)로 이동하시겠습니까?`;
+  if (isMajorChange && habitatSlug !== 'random') {
+    message += `\n\n주의: 다른 대분류 서식지로의 이동은 하루 1회만 가능합니다.`;
+  }
+
+  if (confirm(message)) {
+    requestHabitatChange(habitatSlug, subHabitat);
+  }
+}
+
+async function requestHabitatChange(habitat, subHabitat) {
+  try {
+    showGlobalLoading('서식지 이동 중...');
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/user/habitat`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ habitat, subHabitat })
+    });
+
+    const result = await response.json();
+    hideGlobalLoading();
+
+    if (response.ok && result.success) {
+      showToast(result.data.message || '서식지가 변경되었습니다.');
+      currentHabitatData.current_habitat = result.data.current_habitat;
+      currentHabitatData.current_sub_habitat = result.data.current_sub_habitat;
+
+      // UI 업데이트
+      updateHabitatUI();
+      showHabitatMainView(); // 메인 뷰로 복귀
+
+    } else {
+      showToast(result.message || '서식지 이동에 실패했습니다.', true); // error toast
+    }
+  } catch (error) {
+    hideGlobalLoading();
+    console.error('Habitat change error:', error);
+    showToast('서식지 이동 중 오류가 발생했습니다.', true);
+  }
+}
+
+// 서식지 포켓몬 목록 로드 (표시용)
+async function loadHabitatPokemonList(habitatSlug) {
+  const listContainer = document.getElementById('habitatPokemonList');
+  if (!listContainer) return;
+
+  if (habitatSlug === 'random') {
+    listContainer.innerHTML = '<p class="info-text" style="text-align:center; padding:20px;">모든 포켓몬이 등장할 수 있습니다!</p>';
+    return;
+  }
+
+  listContainer.innerHTML = '<div class="loading-spinner"></div>';
+
+  listContainer.innerHTML = `
+    <div style="text-align: center; padding: 20px; color: var(--text-secondary);">
+      <p>이 서식지에서 발견 가능한 포켓몬 목록은<br>아직 준비 중입니다.</p>
+    </div>
+  `;
+}
+
+// 전역 노출
+window.openHabitatModal = openHabitatModal;
+window.closeHabitatModal = closeHabitatModal;
+window.showHabitatListView = showHabitatListView;
+window.showHabitatMainView = showHabitatMainView;
+
+// // ==========================================
+// // 서식지 시스템 (Habitat System)
+// // ==========================================
+
+// let habitatData = {
+//   current: 'random',
+//   sub: null,
+//   lastChange: null,
+//   canChange: true,
+//   allHabitats: []
+// };
+
+// // 서식지 아이콘 매핑
+// const HABITAT_ICONS = {
+//   'cave': 'cave.png',
+//   'forest': 'forest.png', // 숲 아이콘이 목록에 없었음, 확인 필요. 유저 목록엔 없지만 forest는 보통 있음. 유저 목록: cave, roughterrain, sea, mountain, urban, grassland, watersedge, rare, random. 숲(forest)이 빠져있나? 유저 요청: "랜덤, 동굴,숲,초원,산,험지,바다,도시,물가". 숲이 있다. 아이콘 파일 확인 필요.
+//   'grassland': 'grassland.png',
+//   'mountain': 'mountain.png',
+//   'roughterrain': 'roughterrain.png',
+//   'sea': 'sea.png',
+//   'urban': 'urban.png',
+//   'watersedge': 'watersedge.png',
+//   'rare': 'rare.png',
+//   'random': 'random.png'
+// };
+
+// // 숲 아이콘이 없는 경우 grassland로 대체하거나 기본값 설정
+// // 유저가 제공한 목록: cave, roughterrain, sea, mountain, urban, grassland, watersedge, rare, random.
+// // 숲(forest)에 대한 아이콘 파일이 명시되지 않았음. 일단 forest.png로 가정하고 에러 시 처리.
+
+// async function initHabitat() {
+//   console.log('Initializing Habitat System...');
+
+//   // 1. 현재 서식지 정보 가져오기
+//   await fetchUserHabitat();
+
+//   // 2. 아이콘 클릭 이벤트
+//   const habitatBtn = document.getElementById('habitatIconBtn');
+//   if (habitatBtn) {
+//     habitatBtn.addEventListener('click', openHabitatModal);
+//   }
+
+//   // 3. 모달 닫기 이벤트
+//   const closeBtn = document.getElementById('habitat-close');
+//   if (closeBtn) {
+//     closeBtn.addEventListener('click', () => {
+//       document.getElementById('habitat-modal').style.display = 'none';
+//       onModalClose();
+//     });
+//   }
+
+//   // 4. 서식지 목록 뒤로가기
+//   const backBtn = document.getElementById('habitatListBackBtn');
+//   if (backBtn) {
+//     backBtn.addEventListener('click', () => {
+//       document.getElementById('habitatListSection').style.display = 'none';
+//       document.querySelector('.current-habitat-section').style.display = 'block';
+//       document.getElementById('habitatDetailSection').style.display = 'block';
+//     });
+//   }
+
+//   // 5. 탭 전환 이벤트
+//   const tabs = document.querySelectorAll('.detail-tab');
+//   tabs.forEach(tab => {
+//     tab.addEventListener('click', (e) => {
+//       tabs.forEach(t => t.classList.remove('active'));
+//       e.target.classList.add('active');
+
+//       const targetId = e.target.dataset.target;
+//       if (targetId === 'habitat-pokemon') {
+//         document.getElementById('habitatPokemonList').style.display = 'grid';
+//         document.getElementById('habitatInfo').style.display = 'none';
+//       } else {
+//         document.getElementById('habitatPokemonList').style.display = 'none';
+//         document.getElementById('habitatInfo').style.display = 'block';
+//       }
+//     });
+//   });
+// }
+
+// async function fetchUserHabitat() {
+//   if (!window.isAuthenticated()) return;
+
+//   try {
+//     const headers = await getAuthHeaders();
+//     const response = await fetch('/api/user/habitat', { headers });
+//     if (response.ok) {
+//       const result = await response.json();
+//       if (result.success) {
+//         habitatData.current = result.data.current_habitat;
+//         habitatData.sub = result.data.current_sub_habitat;
+//         habitatData.lastChange = result.data.last_habitat_change_at;
+//         habitatData.canChange = result.data.can_change_habitat;
+
+//         updateHabitatIcon();
+//       }
+//     }
+//   } catch (error) {
+//     console.error('Failed to fetch user habitat:', error);
+//   }
+// }
+
+// function updateHabitatIcon() {
+//   const iconImg = document.getElementById('currentHabitatIcon');
+//   const label = document.getElementById('currentHabitatLabel');
+//   const placeholder = document.querySelector('.habitat-icon-placeholder');
+
+//   if (iconImg && label) {
+//     const filename = HABITAT_ICONS[habitatData.current] || 'random.png';
+//     // forest 예외 처리: 파일이 없으면 grassland 사용? 일단 forest.png 시도
+//     let iconUrl = `${ASSETS_BASE_URL}/custom/img/ui/${filename}`;
+
+//     // 숲 아이콘이 목록에 없었으므로 grassland로 임시 매핑 (파일 확인 전까지)
+//     if (habitatData.current === 'forest' && !Object.values(HABITAT_ICONS).includes('forest.png')) {
+//        // 유저가 forest.png를 언급하지 않았음. grassland.png를 쓰거나 기본 이미지 사용
+//        // 일단 forest.png로 요청해보고 onerror에서 처리
+//     }
+
+//     imgLoad(iconUrl).then(() => {
+//         iconImg.src = iconUrl;
+//         iconImg.style.display = 'block';
+//         if (placeholder) placeholder.style.display = 'none';
+//     }).catch(() => {
+//         // Fallback
+//         iconImg.src = `${ASSETS_BASE_URL}/custom/img/ui/random.png`;
+//     });
+
+//     const habitatNames = {
+//       'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
+//       'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
+//       'random': '랜덤', 'rare': '희귀'
+//     };
+//     label.textContent = habitatNames[habitatData.current] || habitatData.current;
+//   }
+// }
+
+// function imgLoad(url) {
+//   return new Promise((resolve, reject) => {
+//     const img = new Image();
+//     img.onload = resolve;
+//     img.onerror = reject;
+//     img.src = url;
+//   });
+// }
+
+// async function openHabitatModal() {
+//   const modal = document.getElementById('habitat-modal');
+//   modal.style.display = 'flex';
+//   onModalOpen();
+
+//   // 최신 정보 갱신
+//   await fetchUserHabitat();
+
+//   renderCurrentHabitatSection();
+
+//   // 전체 서식지 정보 가져오기 (처음 한 번만)
+//   if (habitatData.allHabitats.length === 0) {
+//     try {
+//       const headers = await getAuthHeaders();
+//       const response = await fetch('/api/habitats', { headers });
+//       if (response.ok) {
+//         const result = await response.json();
+//         if (result.success) {
+//           habitatData.allHabitats = result.data;
+//         }
+//       }
+//     } catch (e) {
+//       console.error('Failed to fetch habitats:', e);
+//     }
+//   }
+
+//   // 하단 정보 섹션 렌더링 (현재 서식지 기준)
+//   renderHabitatDetail(habitatData.current);
+// }
+
+// function renderCurrentHabitatSection() {
+//   const container = document.getElementById('modalCurrentHabitatDisplay');
+//   container.innerHTML = '';
+
+//   const habitatNames = {
+//       'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
+//       'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
+//       'random': '랜덤', 'rare': '희귀'
+//   };
+
+//   // 1. 서식지 간 이동 버튼
+//   const moveHabitatBtn = document.createElement('div');
+//   moveHabitatBtn.className = 'habitat-nav-btn';
+//   moveHabitatBtn.innerHTML = `
+//     <span>서식지간 이동</span>
+//     <span class="arrow">→</span>
+//   `;
+//   moveHabitatBtn.onclick = () => showHabitatSelectionList();
+
+//   // 이동 불가 상태 표시 (하루 1회 제한)
+//   if (!habitatData.canChange && habitatData.current !== 'random') {
+//       const limitMsg = document.createElement('div');
+//       limitMsg.className = 'limit-message';
+//       limitMsg.textContent = '내일 새벽 4시까지 이동할 수 없습니다.';
+//       container.appendChild(limitMsg);
+//       moveHabitatBtn.classList.add('disabled');
+//       // 클릭은 가능하게 해서 메시지를 띄울지, 아예 막을지? 
+//       // 유저 요청: "변경없이 유지도 가능... 이동할수 없게 되어야한다"
+//       // 하지만 "랜덤, 동굴... 이동할수 있고"
+//       // 이미 이동했으면 클릭 조차 할 수 없게?
+//       moveHabitatBtn.onclick = () => showToast('오늘은 이미 서식지를 이동했습니다.');
+//   }
+
+//   container.appendChild(moveHabitatBtn);
+
+//   // 2. 서식지 내 이동 버튼
+//   const moveSubHabitatBtn = document.createElement('div');
+//   moveSubHabitatBtn.className = 'habitat-nav-btn';
+//   moveSubHabitatBtn.innerHTML = `
+//     <span>서식지 내 이동 (${habitatNames[habitatData.current] || habitatData.current})</span>
+//     <span class="arrow">→</span>
+//   `;
+//   moveSubHabitatBtn.onclick = () => showSubHabitatSelectionList(habitatData.current);
+//   container.appendChild(moveSubHabitatBtn);
+// }
+
+// function showHabitatSelectionList() {
+//   const listSection = document.getElementById('habitatListSection');
+//   const grid = document.getElementById('habitatGrid');
+
+//   document.querySelector('.current-habitat-section').style.display = 'none';
+//   document.getElementById('habitatDetailSection').style.display = 'none';
+//   listSection.style.display = 'block';
+
+//   grid.innerHTML = '';
+
+//   // 희귀(rare) 제외하고 렌더링
+//   const habitatsToShow = habitatData.allHabitats.filter(h => h.slug !== 'rare');
+
+//   habitatsToShow.forEach(habitat => {
+//     const card = document.createElement('div');
+//     card.className = 'habitat-card';
+
+//     // 배경 이미지: 해당 서식지의 'normal' 타입 이미지 또는 첫 번째 이미지
+//     const bgImage = habitat.backgrounds.find(b => b.type === 'normal') || habitat.backgrounds[0];
+//     const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${habitat.slug}/${bgImage.image}` : '';
+
+//     card.style.backgroundImage = `url('${bgUrl}')`;
+//     card.innerHTML = `
+//       <div class="habitat-card-overlay">
+//         <span class="habitat-name">${habitat.name}</span>
+//       </div>
+//     `;
+
+//     // 클릭 이벤트
+//     card.onclick = () => confirmMoveHabitat(habitat);
+
+//     grid.appendChild(card);
+//   });
+// }
+
+// async function confirmMoveHabitat(habitat) {
+//   if (!habitatData.canChange && habitatData.current !== 'random') {
+//     showToast('오늘은 이미 서식지를 이동했습니다.');
+//     return;
+//   }
+
+//   const confirmed = await showConfirmModal(
+//     '서식지 이동',
+//     `대분류 <strong>${habitat.name}</strong> 서식지로 이동하시겠습니까?<br>
+//     <small style="color:#e74c3c">이동 후에는 내일 새벽 4시까지 다시 이동할 수 없습니다.</small>`
+//   );
+
+//   if (confirmed) {
+//     try {
+//       showGlobalLoading('서식지 이동 중...');
+//       const headers = await getAuthHeaders();
+//       const response = await fetch('/api/user/habitat', {
+//         method: 'POST',
+//         headers: headers,
+//         body: JSON.stringify({
+//           habitat: habitat.slug,
+//           subHabitat: null // 대분류 이동 시 서브는 초기화(또는 랜덤)
+//         })
+//       });
+
+//       if (response.ok) {
+//         const result = await response.json();
+//         if (result.success) {
+//           showToast(`'${habitat.name}' 서식지로 이동하였습니다.`);
+//           // 데이터 갱신
+//           await fetchUserHabitat();
+//           // UI 복귀
+//           document.getElementById('habitatListSection').style.display = 'none';
+//           document.querySelector('.current-habitat-section').style.display = 'block';
+//           document.getElementById('habitatDetailSection').style.display = 'block';
+//           renderCurrentHabitatSection();
+//           renderHabitatDetail(habitatData.current);
+//         } else {
+//             showToast(result.error || '이동 실패');
+//         }
+//       }
+//     } catch (e) {
+//       console.error(e);
+//       showToast('오류가 발생했습니다.');
+//     } finally {
+//       hideGlobalLoading();
+//     }
+//   }
+// }
+
+// function showSubHabitatSelectionList(habitatSlug) {
+//   const listSection = document.getElementById('habitatListSection');
+//   const grid = document.getElementById('habitatGrid');
+
+//   document.querySelector('.current-habitat-section').style.display = 'none';
+//   document.getElementById('habitatDetailSection').style.display = 'none';
+//   listSection.style.display = 'block';
+
+//   // 헤더 텍스트 변경
+//   listSection.querySelector('h4').textContent = '세부 서식지 선택 (무제한)';
+
+//   grid.innerHTML = '';
+
+//   const habitatInfo = habitatData.allHabitats.find(h => h.slug === habitatSlug);
+//   if (!habitatInfo) return;
+
+//   habitatInfo.backgrounds.forEach(bg => {
+//     const card = document.createElement('div');
+//     card.className = 'habitat-card sub-habitat';
+
+//     const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${habitatSlug}/${bg.image}`;
+
+//     card.style.backgroundImage = `url('${bgUrl}')`;
+//     card.innerHTML = `
+//       <div class="habitat-card-overlay">
+//         <span class="habitat-name">${bg.display_name}</span>
+//       </div>
+//     `;
+
+//     card.onclick = () => moveSubHabitat(habitatSlug, bg.type);
+
+//     grid.appendChild(card);
+//   });
+// }
+
+// async function moveSubHabitat(habitatSlug, typeSlug) {
+//   try {
+//     showGlobalLoading('이동 중...');
+//     const headers = await getAuthHeaders();
+//     const response = await fetch('/api/user/habitat', {
+//       method: 'POST',
+//       headers: headers,
+//       body: JSON.stringify({
+//         habitat: habitatSlug,
+//         subHabitat: typeSlug
+//       })
+//     });
+
+//     if (response.ok) {
+//         const result = await response.json();
+//         if (result.success) {
+//             showToast('이동했습니다.');
+//             await fetchUserHabitat();
+
+//             // UI 복귀
+//             document.getElementById('habitatListSection').style.display = 'none';
+//             document.querySelector('.current-habitat-section').style.display = 'block';
+//             document.getElementById('habitatDetailSection').style.display = 'block';
+
+//             // 헤더 텍스트 원복
+//             document.querySelector('#habitatListSection h4').textContent = '이동할 서식지 선택';
+
+//             renderCurrentHabitatSection();
+//             renderHabitatDetail(habitatData.current);
+//         }
+//     }
+//   } catch (e) {
+//       console.error(e);
+//       showToast('오류가 발생했습니다.');
+//   } finally {
+//       hideGlobalLoading();
+//   }
+// }
+
+// async function renderHabitatDetail(habitatSlug) {
+//   const pokemonListContainer = document.getElementById('habitatPokemonList');
+//   const infoContainer = document.getElementById('habitatInfo');
+
+//   pokemonListContainer.innerHTML = '<div class="loading-spinner"></div>';
+
+//   // 현재 서식지의 서브 서식지(타입)가 선택되어 있다면 그것을 우선 보여줌?
+//   // 아니면 전체? 유저 요청: "클릭하면 세부 서식지가나오는게 아니라... 모달 하단에는 서식지들의 정보를 확인할수 있게 마찬가지로 카드형태의 큰 서식지 나오고 클릭시 세부서식지들이 나온다."
+//   // 아하, 하단에는 "서식지들의 정보"를 확인할 수 있는 카드들이 나와야 함.
+//   // 즉, 하단은 "도감" 같은 역할.
+
+//   // 수정: 하단에는 현재 서식지의 포켓몬이 아니라, "서식지들의 정보"를 탐색하는 UI여야 함.
+//   // "모달 하단에는 서식지들의 정보를 확인할수 있게 마찬가지로 카드형태의 큰 서식지 나오고 클릭시 세부서식지들이 나온다."
+//   // "세부서식지도 마찬가지로 이미지가 보이는 카드형태이고 한번더 클릭시에 해당 세부서식지에 해당하는 포켓몬이몇마리이고 누구인지 확인할수 있는 창이 나오게 된다."
+
+//   // 따라서 하단 뷰를 재구성해야 함.
+//   // 1. 대분류 서식지 카드 목록 (가로 스크롤?)
+//   // 2. 클릭 -> 세부 서식지 카드 목록
+//   // 3. 클릭 -> 포켓몬 목록 모달(또는 뷰)
+
+//   // 현재 구조: #habitatDetailSection 안에 탭이 있음.
+//   // 탭을 없애고 카드 리스트로 변경하는 게 나을 듯.
+
+//   const detailSection = document.getElementById('habitatDetailSection');
+//   detailSection.innerHTML = `
+//     <h4>서식지 정보 탐색</h4>
+//     <div class="habitat-info-grid" id="habitatInfoGrid"></div>
+//   `;
+
+//   const grid = document.getElementById('habitatInfoGrid');
+
+//   // 대분류 렌더링
+//   habitatData.allHabitats.forEach(h => {
+//       if (h.slug === 'rare') return; // 희귀 제외? 포함? 정보 확인이니까 포함해도 될듯 하지만 일단 제외
+
+//       const card = document.createElement('div');
+//       card.className = 'habitat-info-card';
+//       const bgImage = h.backgrounds.find(b => b.type === 'normal') || h.backgrounds[0];
+//       const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${h.slug}/${bgImage.image}` : '';
+
+//       card.style.backgroundImage = `url('${bgUrl}')`;
+//       card.innerHTML = `<span class="name">${h.name}</span>`;
+
+//       card.onclick = () => showHabitatInfoSubList(h);
+//       grid.appendChild(card);
+//   });
+// }
+
+// function showHabitatInfoSubList(habitat) {
+//     const detailSection = document.getElementById('habitatDetailSection');
+//     detailSection.innerHTML = `
+//         <div class="habitat-list-header">
+//             <h4>${habitat.name} - 세부 서식지</h4>
+//             <button class="back-btn" onclick="renderHabitatDetail('${habitatData.current}')">뒤로</button>
+//         </div>
+//         <div class="habitat-info-grid" id="habitatInfoGrid"></div>
+//     `;
+
+//     const grid = document.getElementById('habitatInfoGrid');
+
+//     habitat.backgrounds.forEach(bg => {
+//         const card = document.createElement('div');
+//         card.className = 'habitat-info-card';
+//         const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${habitat.slug}/${bg.image}`;
+
+//         card.style.backgroundImage = `url('${bgUrl}')`;
+//         card.innerHTML = `<span class="name">${bg.display_name}</span>`;
+
+//         card.onclick = () => showHabitatPokemonInfo(habitat.slug, bg.type, bg.display_name);
+//         grid.appendChild(card);
+//     });
+// }
+
+// async function showHabitatPokemonInfo(habitatSlug, typeSlug, typeName) {
+//     // 포켓몬 목록을 보여주는 별도 모달 또는 오버레이 필요
+//     // 현재 모달 위에 덮어쓰거나, 내용을 교체
+
+//     const detailSection = document.getElementById('habitatDetailSection');
+//     detailSection.innerHTML = `
+//         <div class="habitat-list-header">
+//             <h4>${typeName} - 등장 포켓몬</h4>
+//             <button class="back-btn" onclick="showHabitatInfoSubList(habitatData.allHabitats.find(h => h.slug === '${habitatSlug}'))">뒤로</button>
+//         </div>
+//         <div class="habitat-pokemon-stats" id="habitatPokemonStats">로딩 중...</div>
+//         <div class="habitat-pokemon-grid" id="habitatPokemonGrid"></div>
+//     `;
+
+//     try {
+//         const headers = await getAuthHeaders();
+//         const response = await fetch(`/api/collection/habitats/${habitatSlug}/${typeSlug}/pokemon`, { headers });
+
+//         if (response.ok) {
+//             const result = await response.json();
+//             if (result.success) {
+//                 const { pokemon, stats } = result.data;
+
+//                 document.getElementById('habitatPokemonStats').innerHTML = `
+//                     발견된 포켓몬: <strong>${stats.total_count}</strong>마리 <br>
+//                     (수집: ${stats.owned_count} / ${stats.total_count})
+//                 `;
+
+//                 const grid = document.getElementById('habitatPokemonGrid');
+//                 if (pokemon.length === 0) {
+//                     grid.innerHTML = '<p class="empty-message">이 서식지에는 포켓몬이 없습니다.</p>';
+//                 } else {
+//                     pokemon.forEach(p => {
+//                         const pCard = document.createElement('div');
+//                         pCard.className = `pokemon-mini-card ${p.is_owned ? 'owned' : 'unknown'}`;
+
+//                         // 미수집 포켓몬은 실루엣 처리하거나 ? 표시
+//                         // 유저 요청: "누구인지 확인할수 있는 창" -> 미수집이어도 보여주는게 맞을듯? 
+//                         // 하지만 보통 도감은 미수집이면 실루엣.
+//                         // 일단 이미지는 보여주되 흑백 처리 등을 CSS로.
+
+//                         pCard.innerHTML = `
+//                             <img src="${p.icon_url}" alt="${p.name}">
+//                             <span class="name">${p.name}</span>
+//                         `;
+//                         grid.appendChild(pCard);
+//                     });
+//                 }
+//             }
+//         }
+//     } catch (e) {
+//         console.error(e);
+//         document.getElementById('habitatPokemonStats').textContent = '정보를 불러오지 못했습니다.';
+//     }
+// }
+
+
+/* ==========================================
+   보상 획득 결과 모달 로직
+   ========================================== */
+function showRewardResultModal(rewards, comparisonResult = null, eventName = null) {
+  const modal = document.getElementById('reward-result-modal');
+  const modalBody = modal.querySelector('.reward-modal-body');
+  const confirmBtn = document.getElementById('reward-confirm-btn');
+
+  if (!modal || !modalBody) return;
+
+  // 모달 바디 초기화
+  modalBody.innerHTML = '';
+
+  // obtained_reason 기반으로 등급 스타일 결정하는 헬퍼 함수
+  const getGradeClass = (reason) => {
+    if (!reason) return 'grade-s';
+    const r = reason.toLowerCase();
+    if (r.includes('환상')) return 'grade-ex';
+    if (r.includes('전설')) return 'grade-sss';
+    if (r.includes('울트라') || r.includes('패러독스')) return 'grade-ss';
+    return 'grade-s';
+  };
+
+  // 포켓몬을 기본 보상과 이벤트 보상으로 분류
+  const basePokemon = [];  // 스크린타임 기록 보상
+  const eventPokemon = []; // 공휴일, 절기, 포켓몬 데이, 토요일 등
+
+  if (rewards.pokemons && rewards.pokemons.length > 0) {
+    rewards.pokemons.forEach(p => {
+      const reason = p.obtained_reason || '';
+      // 이벤트 보상 키워드 체크
+      if (reason.includes('공휴일') || reason.includes('절기') || reason.includes('포켓몬 데이') || reason.includes('토요일')) {
+        eventPokemon.push(p);
+      } else {
+        basePokemon.push(p);
+      }
+    });
+
+    // 등급 우선순위 정렬 (EX -> SSS -> SS -> S)
+    const gradePriority = {
+      'grade-ex': 4,
+      'grade-sss': 3,
+      'grade-ss': 2,
+      'grade-s': 1
+    };
+
+    const sortPokemonByGrade = (a, b) => {
+      const gradeA = getGradeClass(a.obtained_reason);
+      const gradeB = getGradeClass(b.obtained_reason);
+      return (gradePriority[gradeB] || 1) - (gradePriority[gradeA] || 1);
+    };
+
+    basePokemon.sort(sortPokemonByGrade);
+    eventPokemon.sort(sortPokemonByGrade);
+  }
+
+  let hasContent = false;
+
+  // 통합 카드 섹션 생성
+  const mainSection = document.createElement('div');
+  mainSection.className = 'reward-category-section';
+  // ===== 1. 이벤트 보상 섹션 =====
+  if (eventPokemon.length > 0) {
+    hasContent = true;
+
+    // 이벤트 헤더
+    let eventHeaderHtml = `
+      <div class="reward-category-header event">
+        <span class="reward-category-icon">🎉</span>
+        <span class="reward-category-title">이벤트 보상</span>
+      </div>
+    `;
+    if (eventName) {
+      eventHeaderHtml += `<div class="reward-event-name">오늘은 "${eventName}"입니다!</div>`;
+    }
+
+    const headerWrapper = document.createElement('div');
+    headerWrapper.innerHTML = eventHeaderHtml;
+    while (headerWrapper.firstChild) mainSection.appendChild(headerWrapper.firstChild);
+
+    // 이벤트 포켓몬 그리드
+    const grid = document.createElement('div');
+    grid.className = 'reward-grid-display';
+
+    eventPokemon.forEach(p => {
+      const gradeClass = getGradeClass(p.obtained_reason);
+      const card = document.createElement('div');
+      card.className = `reward-card ${gradeClass}`;
+      const assetFolder = (p.asset_source === 'external' || p.asset_source === 'custom') ? 'custom' : 'base';
+      const imgSrc = `${ASSETS_BASE_URL}/${assetFolder}/img/Icons/${p.image_name || p.stable_id}.png`;
+
+      let badgeHtml = '';
+      const reason = (p.obtained_reason || '').toLowerCase();
+      if (reason.includes('환상')) badgeHtml = '<div class="reward-grade-badge mythical">환상</div>';
+      else if (reason.includes('전설')) badgeHtml = '<div class="reward-grade-badge legendary">전설</div>';
+      else if (reason.includes('울트라') || reason.includes('패러독스')) badgeHtml = '<div class="reward-grade-badge ultrabeast">울/패</div>';
+      else {
+        let eventLabel = '이벤트';
+        if (reason.includes('공휴일')) eventLabel = '공휴일';
+        else if (reason.includes('절기')) eventLabel = '24절기';
+        else if (reason.includes('포켓몬 데이')) eventLabel = '포켓몬 데이';
+        else if (reason.includes('토요일')) eventLabel = '토요일';
+        badgeHtml = `<div class="reward-event-badge">${eventLabel}</div>`;
+      }
+
+      card.innerHTML = `
+        ${badgeHtml}
+        <div class="reward-img-container">
+          <img src="${imgSrc}" class="reward-img reward-pokemon-img" onerror="this.src='${ASSETS_BASE_URL}/base/img/Eggs/000.png'">
+        </div>
+        <div class="reward-name">${p.name}</div>
+      `;
+      grid.appendChild(card);
+    });
+
+    mainSection.appendChild(grid);
+  }
+  // ===== 1. 스크린타임 보상 섹션 (기본 + 아이템) =====
+  if (basePokemon.length > 0 || (rewards.items && rewards.items.length > 0)) {
+    hasContent = true;
+
+    // 헤더
+    let headerHtml = `
+      <div class="reward-category-header">
+        <span class="reward-category-icon">📱</span>
+        <span class="reward-category-title">스크린타임 보상</span>
+      </div>
+    `;
+
+    // 비교 결과 텍스트
+    if (comparisonResult) {
+      headerHtml += `<div class="reward-comparison-text">${comparisonResult}</div>`;
+    }
+
+    const headerWrapper = document.createElement('div');
+    headerWrapper.innerHTML = headerHtml;
+    while (headerWrapper.firstChild) mainSection.appendChild(headerWrapper.firstChild);
+
+    // 1-1. 새로운 포켓몬 (스크린타임)
+    if (basePokemon.length > 0) {
+      const pokemonSubSection = document.createElement('div');
+      pokemonSubSection.className = 'reward-subsection';
+      pokemonSubSection.innerHTML = `<div class="reward-subsection-title">새로운 포켓몬</div>`;
+
+      const grid = document.createElement('div');
+      grid.className = 'reward-grid-display';
+
+      basePokemon.forEach(p => {
+        const gradeClass = getGradeClass(p.obtained_reason);
+        const card = document.createElement('div');
+        card.className = `reward-card ${gradeClass}`;
+        const assetFolder = (p.asset_source === 'external' || p.asset_source === 'custom') ? 'custom' : 'base';
+        const imgSrc = `${ASSETS_BASE_URL}/${assetFolder}/img/Icons/${p.image_name || p.stable_id}.png`;
+
+        let badgeHtml = '';
+        const reason = (p.obtained_reason || '').toLowerCase();
+        if (reason.includes('환상')) badgeHtml = '<div class="reward-grade-badge mythical">환상</div>';
+        else if (reason.includes('전설')) badgeHtml = '<div class="reward-grade-badge legendary">전설</div>';
+        else if (reason.includes('울트라')) badgeHtml = '<div class="reward-grade-badge ultrabeast">울트라</div>';
+        else if (reason.includes('패러독스')) badgeHtml = '<div class="reward-grade-badge paradox">패러독스</div>';
+
+        card.innerHTML = `
+          ${badgeHtml}
+          <div class="reward-img-container">
+            <img src="${imgSrc}" class="reward-img reward-pokemon-img" onerror="this.src='${ASSETS_BASE_URL}/base/img/Eggs/000.png'">
+          </div>
+          <div class="reward-name">${p.name}</div>
+        `;
+        grid.appendChild(card);
+      });
+
+      pokemonSubSection.appendChild(grid);
+      mainSection.appendChild(pokemonSubSection);
+    }
+
+    // 1-2. 아이템
+    if (rewards.items && rewards.items.length > 0) {
+      const itemSubSection = document.createElement('div');
+      itemSubSection.className = 'reward-subsection';
+      itemSubSection.innerHTML = `<div class="reward-subsection-title">아이템</div>`;
+
+      const grid = document.createElement('div');
+      grid.className = 'reward-grid-display';
+
+      const itemImageMap = {
+        'Mystic Charm': 'MYSTICCHARM',
+        'Rare Candy': 'RARECANDY',
+        'Oval Charm': 'OVALCHARM',
+        'Shiny Charm': 'SHINYCHARM',
+        'Brilliance Charm': 'BRILLIANCECHARM'
+      };
+
+      rewards.items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'reward-card';
+        const imgName = itemImageMap[item.name] || 'RARECANDY';
+        const imgSrc = `${ASSETS_BASE_URL}/custom/img/items/${imgName}.webp`;
+        card.innerHTML = `
+          <div class="reward-count-badge">${item.count}</div>
+          <div class="reward-img-container">
+            <img src="${imgSrc}" class="reward-img" onerror="this.style.display='none'">
+          </div>
+          <div class="reward-name">${item.nameKr || item.name}</div>
+        `;
+        grid.appendChild(card);
+      });
+
+      itemSubSection.appendChild(grid);
+      mainSection.appendChild(itemSubSection);
+    }
+  }
+
+
+
+  // 보상이 없는 경우
+  if (!hasContent) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.className = 'reward-empty-message';
+    emptyMsg.innerHTML = '이번엔 보상이 없네요.<br>다음 기회에 도전해보세요!';
+    modalBody.appendChild(emptyMsg);
+  } else {
+    modalBody.appendChild(mainSection);
+  }
+
+  // 모달 표시
+  modal.style.display = 'flex';
+  if (typeof onModalOpen === 'function') onModalOpen();
+
+  // 확인 버튼 이벤트
+  confirmBtn.onclick = () => {
+    modal.style.display = 'none';
+    if (typeof onModalClose === 'function') onModalClose();
+
+    // 아이템/포켓몬 목록 갱신 트리거
+    if (typeof loadUserPokemonIcons === 'function') loadUserPokemonIcons();
+    if (typeof loadHomeFavoritePokemon === 'function') loadHomeFavoritePokemon();
+  };
+}
+
+// 전역 노출
+window.showRewardResultModal = showRewardResultModal;
 

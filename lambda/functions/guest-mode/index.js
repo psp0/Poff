@@ -37,11 +37,13 @@ async function getGuestPokemonIcons() {
       p.generation,
       p.has_icon,
       p.has_icon_shiny,
-      p.asset_source
+      p.asset_source,
+      p.type1,
+      p.type2
     FROM user_pokemon_collection upc
     JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
     WHERE upc.user_id = ?
-    GROUP BY p.image_name, p.stable_id, p.generation, p.has_icon, p.has_icon_shiny, p.asset_source
+    GROUP BY p.image_name, p.stable_id, p.generation, p.has_icon, p.has_icon_shiny, p.asset_source, p.type1, p.type2
     ORDER BY p.generation, p.image_name
   `;
 
@@ -60,6 +62,8 @@ async function getGuestPokemonIcons() {
       display_stable_id: row.display_stable_id,
       is_shiny: isShiny,
       generation: row.generation,
+      type1: row.type1,
+      type2: row.type2,
       icon_url: buildAssetUrl(assetSource, iconFolder, `${row.base_image_name}.png`)
     };
   });
@@ -71,9 +75,16 @@ async function getGuestPokemonIcons() {
 async function getGuestPokemonDetail(stableId, isShiny) {
   // 먼저 게스트 유저가 해당 포켓몬을 보유하고 있는지 확인
   const collectionQuery = `
-    SELECT upc.*, p.*
+    SELECT upc.*, p.*, hb.image_filename as background_filename, hb.habitat_slug as background_habitat
     FROM user_pokemon_collection upc
     JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    LEFT JOIN habitat_backgrounds hb ON p.habitat_en = hb.habitat_slug 
+      AND hb.type_slug = (
+        CASE 
+          WHEN LOWER(p.type1_en) = 'normal' AND p.type2_en IS NOT NULL THEN LOWER(p.type2_en)
+          ELSE LOWER(p.type1_en)
+        END
+      )
     WHERE upc.user_id = ? AND p.stable_id = ?
     LIMIT 1
   `;
@@ -83,7 +94,19 @@ async function getGuestPokemonDetail(stableId, isShiny) {
 
   if (rows.length === 0) {
     // 보유하지 않은 포켓몬이면 기본 정보만 반환
-    const pokemonQuery = `SELECT * FROM pokemon WHERE stable_id = ? LIMIT 1`;
+    const pokemonQuery = `
+      SELECT p.*, hb.image_filename as background_filename, hb.habitat_slug as background_habitat
+      FROM pokemon p
+      LEFT JOIN habitat_backgrounds hb ON p.habitat_en = hb.habitat_slug 
+        AND hb.type_slug = (
+          CASE 
+            WHEN LOWER(p.type1_en) = 'normal' AND p.type2_en IS NOT NULL THEN LOWER(p.type2_en)
+            ELSE LOWER(p.type1_en)
+          END
+        )
+      WHERE p.stable_id = ? 
+      LIMIT 1
+    `;
     const pokemonResult = await db.query(pokemonQuery, [stableId]);
     const pokemonRows = pokemonResult.rows;
 
@@ -114,29 +137,18 @@ function buildPokemonResponse(p, isFavorite, isShiny, hasShiny) {
   const backExt = 'png';
 
   // 배경 이미지 로직 (로그인 모드와 동일)
-  const habitat = p.habitat_en ? p.habitat_en.toLowerCase().replace(/\s+/g, '_') : 'unknown';
-  const type1 = p.type1_en ? p.type1_en.toLowerCase() : 'normal';
-  const type2 = p.type2_en ? p.type2_en.toLowerCase() : null;
-
-  // Determine primary type for background
-  // If one of the types is 'normal' and there is another type, prioritize the other type
-  let primaryType = type1;
-  let secondaryType = type2;
-
-  if (type1 === 'normal' && type2) {
-    primaryType = type2;
-    secondaryType = type1;
+  let backgroundUrl = null;
+  if (p.background_filename && p.background_habitat) {
+    backgroundUrl = buildAssetUrl('custom', `img/background/${p.background_habitat}`, p.background_filename);
+  } else {
+    // Fallback
+    const habitat = p.habitat_en ? p.habitat_en.toLowerCase().replace(/\s+/g, '_') : 'unknown';
+    const type1 = p.type1_en ? p.type1_en.toLowerCase() : 'normal';
+    backgroundUrl = p.habitat_en ? buildAssetUrl('custom', `img/background/${habitat}`, `${type1}.png`) : null;
   }
-
-  // Background URL: custom/img/background/{habitat}/{type}.png
-  const backgroundUrl = p.habitat_en ? buildAssetUrl('custom', `img/background/${habitat}`, `${primaryType}.png`) : null;
 
   // Fallback backgrounds
   const fallbackBackgrounds = [];
-  if (secondaryType) {
-    fallbackBackgrounds.push(buildAssetUrl('custom', `img/background/${habitat}`, `${secondaryType}.png`));
-  }
-  fallbackBackgrounds.push(buildAssetUrl('custom', `img/background/${habitat}`, 'normal.png'));
 
   return {
     pokemon: {
@@ -550,6 +562,24 @@ exports.handler = async (event, context) => {
       return success(items);
     }
 
+    // /api/guest/favorites - 즐겨찾기 목록
+    if (path === '/api/guest/favorites' && httpMethod === 'GET') {
+      const favorites = await getGuestFavorites();
+      return success(favorites);
+    }
+
+    // /api/guest/favorite - (오타 대응용) 즐겨찾기 목록
+    if (path === '/api/guest/favorite' && httpMethod === 'GET') {
+      const favorites = await getGuestFavorites();
+      return success(favorites);
+    }
+
+    // /api/guest/sleep-status - 수면 상태 (게스트 모드)
+    if (path === '/api/guest/sleep-status' && httpMethod === 'GET') {
+      const sleepStatus = await getGuestSleepStatus();
+      return success(sleepStatus);
+    }
+
     return notFound('Not found');
 
   } catch (err) {
@@ -557,3 +587,103 @@ exports.handler = async (event, context) => {
     return internalServerError('Internal server error: ' + err.message);
   }
 };
+
+/**
+ * 게스트 유저의 즐겨찾기 목록 조회
+ */
+async function getGuestFavorites() {
+  const query = `
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.is_favorite,
+      upc.obtained_date,
+      upc.obtained_reason,
+      p.name as pokemon_name,
+      p.type1 as pokemon_type1,
+      p.type2 as pokemon_type2,
+      p.category as pokemon_category
+    FROM user_pokemon_collection upc
+    INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    WHERE upc.user_id = ? AND upc.is_favorite = true
+    ORDER BY upc.favorited_at DESC
+  `;
+
+  const result = await db.query(query, [GUEST_USER_ID]);
+  const rows = result.rows;
+
+  // 만약 즐겨찾기가 하나도 없다면 피카츄를 기본으로 반환 (요구사항)
+  if (rows.length === 0) {
+    // 피카츄 조회
+    const pikachuQuery = `
+      SELECT 
+        upc.collection_id,
+        upc.pokemon_stable_id,
+        upc.is_shiny,
+        1 as is_favorite,
+        upc.obtained_date,
+        upc.obtained_reason,
+        p.name as pokemon_name,
+        p.type1 as pokemon_type1,
+        p.type2 as pokemon_type2,
+        p.category as pokemon_category
+      FROM user_pokemon_collection upc
+      INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+      WHERE upc.user_id = ? AND p.image_name = 'PIKACHU'
+      LIMIT 1
+    `;
+
+    const pikachuResult = await db.query(pikachuQuery, [GUEST_USER_ID]);
+    if (pikachuResult.rows.length > 0) {
+      return pikachuResult.rows;
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * 게스트 유저의 수면 상태 조회 (Mock 데이터 및 실제 컬렉션 일부)
+ */
+async function getGuestSleepStatus() {
+  const now = Date.now();
+  const koreaOffset = 9 * 60 * 60 * 1000;
+  const koreaTime = new Date(now + koreaOffset);
+
+  // 게스트 유저가 보유한 포켓몬 중 일부를 오늘 획득한 것처럼 표시
+  const pokemonQuery = `
+    SELECT 
+      p.stable_id, p.name, p.image_name, p.form_suffix, p.base_stat_total, p.asset_source, p.has_icon, p.has_icon_shiny
+    FROM user_pokemon_collection upc
+    JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    WHERE upc.user_id = ?
+    LIMIT 5
+  `;
+  const pokemonResult = await db.query(pokemonQuery, [GUEST_USER_ID]);
+  const todayPokemon = pokemonResult.rows.map(p => {
+    const hasShinyIcon = p.has_icon_shiny === 1;
+    const iconFolder = hasShinyIcon ? 'img/Icons shiny' : 'img/Icons';
+    const assetSource = p.asset_source || 'base';
+    return {
+      ...p,
+      icon_shiny_url: buildAssetUrl(assetSource, iconFolder, `${p.image_name}${p.form_suffix || ''}.png`)
+    };
+  });
+
+  return {
+    todayPokemon,
+    sleepStatus: {
+      canSleepToday: true,
+      alreadyRewarded: false,
+      currentRewardPercentage: 0,
+      expectedPercentage: 100,
+      isWakeUpDayOff: false,
+      lastSleepTime: null,
+      rewardTable: {
+        "22": 100, "23": 80, "00": 70, "01": 60, "02": 40, "03": 30, "04": 20
+      }
+    },
+    todayDate: koreaTime.toISOString().split('T')[0]
+  };
+}

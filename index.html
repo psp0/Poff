@@ -82,12 +82,12 @@
         </div>
       </div>
       <h1 class="auth-app-name">Poff</h1>
-      <p class="auth-tagline">폰을 끄면 보이는 포켓몬 세상</p>
+      <p class="auth-tagline">폰을 끄면 보이는 도트 감성의 포켓몬 세상</p>
       <!-- 포켓몬과 함께하는 디지털 디톡스 -->
       <div class="auth-buttons">
         <button id="googleLoginBtn" class="google-btn">
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo">
-          Google로 시작하기
+          Google로 3초만에 시작
         </button>
         <button id="guestLoginBtn" class="guest-btn">
           로그인 없이 둘러보기
@@ -116,8 +116,49 @@
           </div>
 
           <div class="pokedex-screen">
+
+
             <!-- 어제 스크린타임 입력 섹션 -->
             <div class="content-section screen-time-section">
+              <!-- 서식지 아이콘 (우상단) -->
+              <div class="habitat-icon-container" id="habitatIconBtn" onclick="openHabitatModal()">
+                <div class="habitat-icon-wrapper">
+                  <img src="" alt="서식지" id="currentHabitatIcon" class="habitat-icon-img"
+                    onerror="this.style.display='none'">
+                  <span class="habitat-icon-placeholder">?</span>
+                </div>
+                <span class="habitat-label" id="currentHabitatLabel">랜덤</span>
+              </div>
+
+              <!-- 홈 화면 포켓몬 디스플레이 -->
+              <div id="home-pokemon-container" class="home-pokemon-display"></div>
+              <div class="display-container home-display-container">
+                <div class="background" id="home-background">
+                  <div class="pokemon-flipper" id="home-pokemon-flipper">
+                    <div class="pokemon-wrap front-face">
+                      <div id="home-sprite-front" class="sprite"></div>
+                    </div>
+                    <div class="pokemon-wrap back-face">
+                      <div id="home-sprite-back" class="sprite"></div>
+                    </div>
+                  </div>
+                  <!-- 홈 화면 회전 버튼 (간소화) -->
+                  <div class="ui-element bottom-right" id="home-rotate-btn">
+                    <div class="rotate-icon">⇄</div>
+                  </div>
+                  <!-- 좌중앙: 이전 포켓몬 -->
+                  <div class="ui-element center-left" id="home-prev-btn" style="display: none;">
+                    <span class="nav-arrow">&lt;</span>
+                  </div>
+                  <!-- 우중앙: 다음 포켓몬 -->
+                  <div class="ui-element center-right" id="home-next-btn" style="display: none;">
+                    <span class="nav-arrow">&gt;</span>
+                  </div>
+                </div>
+                <div class="home-pokemon-info">
+                  <div id="home-pokemon-name" class="pokemon-name-display"></div>
+                </div>
+              </div>
               <h3>어제 스크린타임 입력</h3>
               <div class="screen-time-form">
                 <!-- 어제 날짜 표시 (변경 불가) -->
@@ -155,7 +196,7 @@
           </div>
         </div>
 
-    <!-- Tab 2: Pokedex (My Pokemon) -->
+        <!-- Tab 2: Pokedex (My Pokemon) -->
         <div id="view-pokedex" class="tab-view">
           <!-- Pokedex Header -->
           <div class="pokedex-header">
@@ -218,10 +259,10 @@
                   <p class="reward-summary-text">
                     <span id="sleepTimePrefix">지금 자면</span> 오늘 잡은 포켓몬<br>
                     <span id="currentPercentage" class="highlight-percentage">0%</span>가 <span
-                      class="highlight-shiny">이로치</span>
+                      class="highlight-shiny">이로치로 바뀌어요!</span>
                   </p>
                   <div class="rule-box">
-                    <p class="time-rule">↘️ 밤 10시부터 확률이 감소해요</p>
+                    <p class="time-rule">↘️ 밤 10시부터 확률이 줄어들어요</p>
                     <p id="holidayRuleText" class="holiday-rule" style="display:none;">🎉 내일은 쉬는 날! 기준이 완화되었어요</p>
                   </div>
                 </div>
@@ -249,7 +290,7 @@
           </div>
         </div>
 
-    
+
         <!-- Tab 4: Menu -->
         <div id="view-menu" class="tab-view">
           <!-- Pokedex Header -->
@@ -365,6 +406,22 @@
                   </svg>
                 </div>
               </div>
+
+              <!-- 로그인/로그아웃 카드 (기능 통합) -->
+              <div class="menu-card" id="logoutBtn">
+                <div class="menu-card-icon" id="auth-card-icon">
+                  <!-- 로그인 아이콘 (기본) -->
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                  </svg>
+                </div>
+                <div class="menu-card-content">
+                  <h4 id="auth-card-title">로그인</h4>
+                  <p id="auth-card-desc">로그인하여 시작하기</p>
+                </div>
+                <!-- 화살표 제거 하고 클릭 유도만 -->
+              </div>
             </div>
           </div>
         </div>
@@ -394,7 +451,7 @@
           </div>
           <span>홈</span>
         </button>
-         <button class="tab-item" data-tab="pokedex">
+        <button class="tab-item" data-tab="pokedex">
           <div class="tab-icon">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
               stroke="currentColor">
@@ -413,7 +470,7 @@
             </svg>
           </div>
           <span>수면</span>
-        </button>       
+        </button>
         <button class="tab-item" data-tab="menu">
           <div class="tab-icon">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
@@ -449,7 +506,7 @@
               </div>
             </div>
           </section>
-          <button class="logout-btn" id="logoutBtn" style="margin-top: 10px;">로그아웃</button>
+          <!-- logoutBtn removal -->
           <!-- 섹션 2: 앱 정보 -->
           <section>
             <div class="disclaimer-box">
@@ -708,6 +765,57 @@
     </div>
 
     <!-- 알 시스템 모달 -->
+
+
+    <!-- 서식지 모달 -->
+    <div id="habitat-modal" class="modal" onclick="if(event.target === this) closeHabitatModal()">
+      <div class="modal-content habitat-modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">서식지 탐험</h3>
+          <button class="close-btn" id="habitat-close" onclick="closeHabitatModal()">&times;</button>
+        </div>
+
+        <div class="habitat-modal-body">
+          <!-- 상단: 현재 서식지 정보 및 이동 -->
+          <div class="current-habitat-section">
+            <div class="habitat-info-header">
+              <span class="section-label">현재 위치</span>
+              <span class="reset-info">매일 새벽 4시 이동 횟수 초기화</span>
+            </div>
+            <div class="current-habitat-display" id="modalCurrentHabitatDisplay">
+              <!-- JS로 렌더링 -->
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+
+          <!-- 서식지 목록 (이동 모드일 때 표시) -->
+          <div id="habitatListSection" class="habitat-list-section" style="display: none;">
+            <div class="habitat-list-header">
+              <h4>이동할 서식지 선택</h4>
+              <button class="back-btn" id="habitatListBackBtn">취소</button>
+            </div>
+            <div class="habitat-grid" id="habitatGrid">
+              <!-- JS로 렌더링 -->
+            </div>
+          </div>
+
+          <!-- 하단: 서식지 상세 정보 (포켓몬 목록 등) -->
+          <div id="habitatDetailSection" class="habitat-detail-section">
+            <div class="detail-tabs">
+              <button class="detail-tab active" data-target="habitat-pokemon">등장 포켓몬</button>
+              <button class="detail-tab" data-target="habitat-info">정보</button>
+            </div>
+            <div class="detail-content" id="habitatPokemonList">
+              <!-- JS로 렌더링 -->
+              <p class="empty-message">이 서식지에서 발견된 포켓몬이 없습니다.</p>
+            </div>
+            <div class="detail-content" id="habitatInfo" style="display: none;">
+              <p class="info-text">이 서식지에서는 특정 타입의 포켓몬이 자주 출몰합니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
 
     <!-- 확인 모달 (Native confirm 대체) -->
@@ -1002,15 +1110,14 @@
 
           <div class="starter-tip-box">
             <p>
-              <strong>💡이 앱의 목표💡</strong>
+              <strong>💡 건강한 트레이너의 습관 💡</strong>
             </p>
             <p>
-              1. 스크린타임 감소
+              1. 스크린타임 줄이기
             </p>
             <p>
-              2. 밤 10시 이후 수면
+              2. 밤 10시 이후엔 잠들기
             </p>
-
           </div>
 
           <button id="starter-modal-close-btn" class="starter-modal-btn">
@@ -1166,7 +1273,7 @@
               </div>
             </div>
 
-            
+
           </div>
 
           <!-- 상세 보상 탭 -->
@@ -1187,9 +1294,9 @@
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item pokemon">전설/울트라비스트 1, 패러독스/환상 1, Base 포켓몬 3</div>                
+                      <div class="reward-item pokemon">환상 2, 전설 1, Base 포켓몬 3</div>
                       <div class="reward-item item">신비의 부적 5, 이상한 사탕 6, 둥근부적 2</div>
-                    
+
                     </div>
                   </div>
                 </div>
@@ -1203,7 +1310,7 @@
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item pokemon">전설/울트라비스트 1, Base 포켓몬 3</div>
+                      <div class="reward-item pokemon">환상 1, 전설 1, Base 포켓몬 3</div>
                       <div class="reward-item item">신비의 부적 5, 이상한 사탕 6, 둥근부적 2</div>
                     </div>
                   </div>
@@ -1212,13 +1319,13 @@
                 <div class="accordion-item" data-tier="high2">
                   <div class="accordion-header">
                     <div class="accordion-title">
-                      <span class="tier-condition">-20% ~ -30%</span>
+                      <span class="tier-condition">-20% ~ -30% 또는 4시간대</span>
                     </div>
                     <span class="accordion-arrow">▼</span>
                   </div>
                   <div class="accordion-content">
                     <div class="reward-grid">
-                      <div class="reward-item pokemon">Base 포켓몬 3</div>
+                      <div class="reward-item pokemon">전설 1, Base 포켓몬 3</div>
                       <div class="reward-item item">신비의 부적 4, 이상한 사탕 5, 둥근부적 1</div>
                     </div>
                   </div>
@@ -1334,6 +1441,109 @@
             </div>
           </div>
 
+          <!-- 수면 상세 탭 -->
+          <div class="info-tab-content" id="tab-sleep">
+            <div class="sleep-guide-container">
+              <p class="sleep-guide-desc">
+                <strong>밤 10시(22:00) 이전에 자면
+                  <br> 오늘 잡은 포켓몬 모두 이로치로</strong> 바뀌어요! 물론,
+                <br> <strong>빛나는 부적</strong>을 통해서도 이로치 가능합니다.
+              </p>
+
+              <div class="sleep-chart-wrapper">
+                <div class="chart-legend">
+                  <div class="legend-item"><span class="dot weekday"></span>평일</div>
+                  <div class="legend-item"><span class="dot weekend"></span>주말/공휴일</div>
+                </div>
+
+                <div class="sleep-chart-container">
+                  <!-- Y-Axis Grid Lines -->
+                  <div class="grid-lines">
+                    <div class="grid-line" style="bottom: 0%"><span class="y-label">0%</span></div>
+                    <div class="grid-line" style="bottom: 50%"><span class="y-label">50%</span></div>
+                    <div class="grid-line" style="bottom: 100%"><span class="y-label">100%</span></div>
+                  </div>
+
+                  <!-- Bars -->
+                  <div class="chart-bars-area">
+                    <!-- 22:00 -->
+                    <div class="chart-time-group">
+                      <div class="bars-container">
+                        <div class="bar weekday" style="height: 100%" data-val="100"></div>
+                        <div class="bar weekend" style="height: 100%" data-val="100"></div>
+                      </div>
+                      <div class="time-label">~22시</div>
+                    </div>
+
+                    <!-- 23:00 -->
+                    <div class="chart-time-group">
+                      <div class="bars-container">
+                        <div class="bar weekday" style="height: 80%" data-val="80"></div>
+                        <div class="bar weekend" style="height: 90%" data-val="90"></div>
+                      </div>
+                      <div class="time-label">23시</div>
+                    </div>
+
+                    <!-- 00:00 -->
+                    <div class="chart-time-group">
+                      <div class="bars-container">
+                        <div class="bar weekday" style="height: 70%" data-val="70"></div>
+                        <div class="bar weekend" style="height: 80%" data-val="80"></div>
+                      </div>
+                      <div class="time-label">00시</div>
+                    </div>
+
+                    <!-- 01:00 -->
+                    <div class="chart-time-group">
+                      <div class="bars-container">
+                        <div class="bar weekday" style="height: 60%" data-val="60"></div>
+                        <div class="bar weekend" style="height: 70%" data-val="70"></div>
+                      </div>
+                      <div class="time-label">01시</div>
+                    </div>
+
+                    <!-- 02:00 -->
+                    <div class="chart-time-group">
+                      <div class="bars-container">
+                        <div class="bar weekday" style="height: 40%" data-val="40"></div>
+                        <div class="bar weekend" style="height: 60%" data-val="60"></div>
+                      </div>
+                      <div class="time-label">02시</div>
+                    </div>
+
+                    <!-- 03:00 -->
+                    <div class="chart-time-group">
+                      <div class="bars-container">
+                        <div class="bar weekday" style="height: 30%" data-val="30"></div>
+                        <div class="bar weekend" style="height: 40%" data-val="40"></div>
+                      </div>
+                      <div class="time-label">03시</div>
+                    </div>
+
+                    <!-- 04:00+ -->
+                    <div class="chart-time-group">
+                      <div class="bars-container">
+                        <div class="bar weekday" style="height: 20%" data-val="20"></div>
+                        <div class="bar weekend" style="height: 30%" data-val="30"></div>
+                      </div>
+                      <div class="time-label">04시~</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="events-note" style="margin-top: 20px;">
+                <span class="note-icon">💡</span>
+                <span>수면 시간은 <strong>최소 4시간</strong> 이상이어야 기록됩니다.</span>
+              </div>
+              <div class="events-note" style="margin-top: 20px;">
+                <span class="note-icon">💡</span>
+                <span><strong>빛나는 부적</strong>은 트레이드숍에서 얻을 수 있습니다.
+                </span>
+              </div>
+            </div>
+          </div>
+
           <!-- 특별 이벤트 탭 -->
           <div class="info-tab-content" id="tab-events">
             <div class="events-list">
@@ -1341,7 +1551,7 @@
                 <div class="event-icon">🌟</div>
                 <div class="event-info">
                   <div class="event-name">토요일 보너스</div>
-                  <div class="event-desc">빛나는부적 1개 추가 지급</div>
+                  <div class="event-desc">빛나는부적 1개 지급</div>
                 </div>
                 <div class="event-badge">매주</div>
               </div>
@@ -1350,10 +1560,20 @@
                 <div class="event-icon">🎊</div>
                 <div class="event-info">
                   <div class="event-name">한국 공휴일 보너스</div>
-                  <div class="event-desc">환상 또는 패러독스 포켓몬 1마리 추가</div>
+                  <div class="event-desc">전설 포켓몬 1마리 추가 지급</div>
                 </div>
                 <div class="event-badge">공휴일</div>
               </div>
+
+              <div class="event-card solar-term">
+                <div class="event-icon">🌞</div>
+                <div class="event-info">
+                  <div class="event-name">24절기 보상</div>
+                  <div class="event-desc">울트라비스트/패러독스 1마리 추가 지급</div>
+                </div>
+                <div class="event-badge">24절기</div>
+              </div>
+
 
               <div class="event-card pokemon-day">
                 <div class="event-icon">🎂</div>
@@ -1394,6 +1614,23 @@
           <div class="shop-items-grid" id="shop-items-grid">
             <!-- JS로 동적 생성됨 -->
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 보상 획득 결과 모달 -->
+    <div id="reward-result-modal" class="modal reward-modal">
+      <div class="modal-content reward-modal-content">
+        <div class="modal-header no-border">
+          <h3 class="modal-title reward-title">🎉 보상 획득!</h3>
+        </div>
+
+        <div class="reward-modal-body">
+          <!-- JS에서 동적으로 생성됨 -->
+        </div>
+
+        <div class="modal-footer no-border center">
+          <button id="reward-confirm-btn" class="reward-confirm-btn">확인</button>
         </div>
       </div>
     </div>

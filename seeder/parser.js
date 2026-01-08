@@ -197,7 +197,7 @@ class PokemonParser {
                     habitatKo = this.koreanHabitats["Rough Terrain"] || data.habitat;
                 }
             }
-            
+
             // Default to 'rare' if no habitat
             if (!habitatKo || !data.habitat) {
                 habitatKo = '희귀';
@@ -214,7 +214,7 @@ class PokemonParser {
                 pokedex: this.koreanPokedex[data.pokedex] || data.pokedex,
                 generation: data.generation,
                 habitat: habitatKo,
-                habitat_en: data.habitat?.toLowerCase() || 'rare',
+                habitat_en: this.normalizeHabitatSlug(data.habitat),
                 height: data.height,
                 weight: data.weight,
                 base_hp: data.base_hp,
@@ -303,7 +303,7 @@ class PokemonParser {
                             formHabitat = this.koreanHabitats["Rough Terrain"] || merged.habitat;
                         }
                     }
-                    
+
                     // Default to 'rare' if no habitat
                     if (!formHabitat || !merged.habitat) {
                         formHabitat = 'rare';
@@ -319,7 +319,7 @@ class PokemonParser {
                         pokedex: this.koreanPokedex[merged.pokedex] || merged.pokedex,
                         generation: merged.generation,
                         habitat: formHabitat,
-                        habitat_en: merged.habitat?.toLowerCase() || 'rare',
+                        habitat_en: this.normalizeHabitatSlug(merged.habitat),
                         height: merged.height,
                         weight: merged.weight,
                         base_hp: merged.base_hp,
@@ -428,6 +428,18 @@ class PokemonParser {
             .replace(/[\u0300-\u036f]/g, '')
             .replace(/[-\s':.]/g, '')
             .toUpperCase();
+    }
+
+    /**
+     * Normalize habitat to match folder naming convention
+     * Converts to lowercase and removes hyphens, apostrophes, and spaces
+     * Examples: 'WatersEdge' -> 'watersedge', 'RoughTerrain' -> 'roughterrain'
+     */
+    normalizeHabitatSlug(habitat) {
+        if (!habitat) return 'rare';
+        return habitat
+            .toLowerCase()
+            .replace(/[-\s']/g, '');
     }
 
     /**

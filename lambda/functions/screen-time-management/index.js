@@ -272,6 +272,7 @@ async function saveScreenTimeRecord(event, db) {
           changePercentage: rewardResult.changePercentage,
           comparisonResult: rewardResult.comparisonResult
         },
+        eventName: rewardResult.eventName || null,
         rewards: rewardResult.rewards,
         message: isNewEntry ? 'Screen time recorded with rewards' : 'Screen time updated (no rewards for duplicate)'
       });

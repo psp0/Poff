@@ -356,10 +356,9 @@ button:active {
   padding: 20px;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  margin-bottom: 10px;
   border: 1px solid var(--border-color);
   position: relative;
-  height: calc(100vh - 180px);
+  height: calc(100vh - 155px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1064,8 +1063,11 @@ body.modal-open {
   z-index: 2000;
   backdrop-filter: blur(5px);
   animation: fade-in 0.2s ease-out;
-  overflow-y: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
+  /* flexbox로 중앙 정렬 - 배경 고정 유지 */
+  justify-content: center;
+  align-items: center;
 }
 
 @keyframes fade-in {
@@ -1079,10 +1081,7 @@ body.modal-open {
 }
 
 .modal-content {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
   background: white;
   padding: 24px;
   border-radius: var(--radius-lg);
@@ -1099,12 +1098,12 @@ body.modal-open {
 @keyframes modal-fade-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -48%) scale(0.96);
+    transform: scale(0.96);
   }
 
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
   }
 }
 
@@ -1538,6 +1537,17 @@ body.modal-open {
   overflow: visible;
 }
 
+.pokemon-sprite {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  image-rendering: pixelated;
+  transition: opacity 0.2s ease;
+}
+
 .pokemon-icon img {
   width: 60px;
   height: 30px;
@@ -1649,7 +1659,7 @@ body.modal-open {
   left: 0;
   width: 100%;
   height: 100%;
-  background: var(--background-image, none) no-repeat center/cover, linear-gradient(180deg, #8fb6a8 0%, #6aa28f 100%);
+  background: var(--background-image, none) no-repeat center/cover, linear-gradient(180deg, #ffffff 0%, #f3f4f6 100%);
   clip-path: ellipse(50% 50% at 50% 50%);
   mask-image: radial-gradient(ellipse 50% 50% at 50% 50%,
       rgba(0, 0, 0, 1) 0%,
@@ -1719,6 +1729,7 @@ body.modal-open {
 .background .sprite {
   image-rendering: pixelated;
   margin: 0;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.15));
 }
 
 .sprite {
@@ -2020,8 +2031,8 @@ body.modal-open {
 }
 
 #iconCollectionGrid {
-  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
-  gap: 2px;
+  grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+  gap: 0px;
 }
 
 
@@ -3125,7 +3136,8 @@ body.modal-open {
 
 /* Header Layout */
 .accordion-header {
-  padding: 10px 14px 10px 52px; /* Reduced padding and space for Rank Badge */
+  padding: 10px 14px 10px 52px;
+  /* Reduced padding and space for Rank Badge */
   min-height: 52px;
   display: flex;
   align-items: center;
@@ -3133,12 +3145,14 @@ body.modal-open {
   position: relative;
   background: white;
   cursor: pointer !important;
-  z-index: 2; /* Ensure clickability */
+  z-index: 2;
+  /* Ensure clickability */
   user-select: none;
 }
 
 .accordion-header * {
-  pointer-events: none; /* Let clicks pass through to the header container */
+  pointer-events: none;
+  /* Let clicks pass through to the header container */
 }
 
 /* Rank Badge (The Big Letter) */
@@ -3208,8 +3222,14 @@ body.modal-open {
 /* --- TIER SPECIFIC STYLES --- */
 
 /* S Tier (Best) */
-.accordion-item[data-tier="best"] { border-color: #e9d5ff; }
-.accordion-item[data-tier="best"]::before { background: linear-gradient(to bottom, #a855f7, #6366f1); }
+.accordion-item[data-tier="best"] {
+  border-color: #e9d5ff;
+}
+
+.accordion-item[data-tier="best"]::before {
+  background: linear-gradient(to bottom, #a855f7, #6366f1);
+}
+
 .accordion-item[data-tier="best"] .accordion-header::after {
   content: 'S';
   background: linear-gradient(135deg, #a855f7, #7c3aed);
@@ -3220,36 +3240,70 @@ body.modal-open {
   content: 'A+';
   background: linear-gradient(135deg, #14b8a6, #0d9488);
 }
-.accordion-item[data-tier="high1"]::before { background: #14b8a6; }
+
+.accordion-item[data-tier="high1"]::before {
+  background: #14b8a6;
+}
 
 /* A Tier (High2) */
 .accordion-item[data-tier="high2"] .accordion-header::after {
   content: 'A';
   background: linear-gradient(135deg, #2dd4bf, #14b8a6);
 }
-.accordion-item[data-tier="high2"]::before { background: #2dd4bf; }
+
+.accordion-item[data-tier="high2"]::before {
+  background: #2dd4bf;
+}
 
 /* B+ Tier (Mid1) */
 .accordion-item[data-tier="mid1"] .accordion-header::after {
   content: 'B+';
   background: linear-gradient(135deg, #60a5fa, #3b82f6);
 }
-.accordion-item[data-tier="mid1"]::before { background: #3b82f6; }
+
+.accordion-item[data-tier="mid1"]::before {
+  background: #3b82f6;
+}
 
 /* B Tier (Mid2) */
 .accordion-item[data-tier="mid2"] .accordion-header::after {
   content: 'B';
   background: linear-gradient(135deg, #93c5fd, #60a5fa);
 }
-.accordion-item[data-tier="mid2"]::before { background: #60a5fa; }
+
+.accordion-item[data-tier="mid2"]::before {
+  background: #60a5fa;
+}
 
 /* Levels for Warning */
-.accordion-item[data-tier="inc1"] .accordion-header::after { content: '1'; background: #94a3b8; }
-.accordion-item[data-tier="inc2"] .accordion-header::after { content: '2'; background: #f59e0b; }
-.accordion-item[data-tier="inc3"] .accordion-header::after { content: '3'; background: #f97316; }
-.accordion-item[data-tier="inc4"] .accordion-header::after { content: '4'; background: #ef4444; }
-.accordion-item[data-tier="inc5"] .accordion-header::after { content: 'F'; background: #dc2626; }
-.accordion-item[data-tier="inc5"]::before { background: #dc2626; }
+.accordion-item[data-tier="inc1"] .accordion-header::after {
+  content: '1';
+  background: #94a3b8;
+}
+
+.accordion-item[data-tier="inc2"] .accordion-header::after {
+  content: '2';
+  background: #f59e0b;
+}
+
+.accordion-item[data-tier="inc3"] .accordion-header::after {
+  content: '3';
+  background: #f97316;
+}
+
+.accordion-item[data-tier="inc4"] .accordion-header::after {
+  content: '4';
+  background: #ef4444;
+}
+
+.accordion-item[data-tier="inc5"] .accordion-header::after {
+  content: 'F';
+  background: #dc2626;
+}
+
+.accordion-item[data-tier="inc5"]::before {
+  background: #dc2626;
+}
 
 /* Content Area */
 .accordion-content {
@@ -3264,8 +3318,15 @@ body.modal-open {
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Reward Grid Refinement */
@@ -3274,7 +3335,8 @@ body.modal-open {
   grid-template-columns: 1fr;
   gap: 6px;
   margin-top: 4px;
-  padding-left: 38px; /* Align with header text start */
+  padding-left: 38px;
+  /* Align with header text start */
 }
 
 .reward-item {
@@ -3344,6 +3406,11 @@ body.modal-open {
 .event-card.pokemon-day {
   background: linear-gradient(135deg, #e0e7ff70, #c7d2fe50);
   border-color: #6366f1;
+}
+
+.event-card.solar-term {
+  background: linear-gradient(135deg, #ffedd570, #fed7aa50);
+  border-color: #f97316;
 }
 
 .event-icon {
@@ -3441,6 +3508,7 @@ body.modal-open {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding: 10px;
 }
 
 #terms-modal .modal-header {
@@ -3468,7 +3536,7 @@ body.modal-open {
 /* 약관 소개 텍스트 */
 .terms-intro {
   color: #6b7280;
-  margin-bottom: 20px;
+  margin-top: 0px;
   line-height: 1.6;
   font-size: 14px;
 }
@@ -3634,7 +3702,7 @@ body.modal-open {
 
 /* 시작하기 버튼 */
 #terms-submit-btn {
-  flex: 1;
+  flex: 3;
   padding: 16px;
   border-radius: 12px;
   font-weight: 700;
@@ -3670,10 +3738,10 @@ body.modal-open {
 /* 동의 거부 버튼 */
 .terms-refuse-btn {
   flex: 1;
-  padding: 16px;
+  padding: 9px;
   border-radius: 12px;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 10px;
   border: 2px solid #e5e7eb;
   background: white;
   color: #6b7280;
@@ -3684,9 +3752,8 @@ body.modal-open {
 }
 
 .terms-refuse-btn::before {
-  content: '←';
   margin-right: 6px;
-  font-size: 18px;
+  font-size: 14px;
   transition: transform 0.3s ease;
   display: inline-block;
 }
@@ -5664,7 +5731,7 @@ body:has(.auth-section:not([style*="display: none"])) {
 
 .sleep-section {
   padding: 20px;
-  height: calc(100vh - 180px) !important;
+  height: calc(100vh - 155px);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -6136,6 +6203,10 @@ body:has(.auth-section:not([style*="display: none"])) {
   flex-direction: column;
   gap: 16px;
   padding: 0;
+  height: calc(100vh - 155px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 20px;
 }
 
 .menu-card {
@@ -6220,6 +6291,7 @@ body:has(.auth-section:not([style*="display: none"])) {
   transform: translateX(2px);
   transition: all 0.2s ease;
 }
+
 /* Sleep Reward Table in Info Modal */
 .sleep-guide-container {
   padding: 10px;
@@ -6236,7 +6308,7 @@ body:has(.auth-section:not([style*="display: none"])) {
   overflow-x: auto;
   border-radius: 12px;
   border: 1px solid var(--border-color);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   margin-bottom: 10px;
 }
 
@@ -6275,12 +6347,12 @@ body:has(.auth-section:not([style*="display: none"])) {
     background-color: #2d2d2d;
     color: #e5e5e5;
   }
-  
+
   .sleep-reward-table td {
     border-bottom: 1px solid #333;
     color: #d1d1d1;
   }
-  
+
   .sleep-table-wrapper {
     border-color: #444;
   }
@@ -6292,7 +6364,7 @@ body:has(.auth-section:not([style*="display: none"])) {
   background: #fff;
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border: 1px solid var(--border-color);
 }
 
@@ -6318,11 +6390,13 @@ body:has(.auth-section:not([style*="display: none"])) {
 }
 
 .legend-item .dot.weekday {
-  background-color: #9ca3af; /* Gray for weekday */
+  background-color: #9ca3af;
+  /* Gray for weekday */
 }
 
 .legend-item .dot.weekend {
-  background-color: var(--primary-color); /* Theme color for weekend */
+  background-color: var(--primary-color);
+  /* Theme color for weekend */
 }
 
 .sleep-chart-container {
@@ -6368,7 +6442,8 @@ body:has(.auth-section:not([style*="display: none"])) {
   height: 100%;
   position: relative;
   z-index: 1;
-  padding-left: 10px; /* Space for Y-axis labels if added */
+  padding-left: 10px;
+  /* Space for Y-axis labels if added */
 }
 
 .chart-time-group {
@@ -6385,7 +6460,8 @@ body:has(.auth-section:not([style*="display: none"])) {
   align-items: flex-end;
   gap: 4px;
   height: 100%;
-  padding-bottom: 4px; /* Space from bottom border */
+  padding-bottom: 4px;
+  /* Space from bottom border */
 }
 
 .bar {
@@ -6401,7 +6477,7 @@ body:has(.auth-section:not([style*="display: none"])) {
   top: -20px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.8);
+  background: rgba(0, 0, 0, 0.8);
   color: white;
   padding: 2px 4px;
   border-radius: 4px;
@@ -6431,19 +6507,19 @@ body:has(.auth-section:not([style*="display: none"])) {
     background: #2d2d2d;
     border-color: #444;
   }
-  
+
   .grid-line {
     border-color: #444;
   }
-  
+
   .sleep-chart-container {
     border-bottom-color: #444;
   }
-  
+
   .time-label {
     color: #9ca3af;
   }
-  
+
   .bar.weekday {
     background-color: #4b5563;
   }
@@ -6454,14 +6530,14 @@ body:has(.auth-section:not([style*="display: none"])) {
   .bar {
     width: 8px;
   }
-  
+
   .time-label {
     font-size: 10px;
     transform: rotate(-30deg);
     transform-origin: top center;
     margin-top: 12px;
   }
-  
+
   .bars-container {
     gap: 2px;
   }
@@ -6479,5 +6555,984 @@ body:has(.auth-section:not([style*="display: none"])) {
 }
 
 .sleep-chart-container {
-  margin-left: 25px; /* Add space for Y-axis labels */
+  margin-left: 25px;
+  /* Add space for Y-axis labels */
+}
+
+/* Home Tab Pokemon Display */
+.home-pokemon-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+  animation: fade-in 0.5s ease-out;
+}
+
+.home-display-container {
+  width: 100%;
+  max-width: 320px !important;
+  aspect-ratio: 320 / 180;
+  margin: 0 auto;
+}
+
+.home-pokemon-info {
+  margin-top: 10px;
+  text-align: center;
+}
+
+.home-pokemon-info .pokemon-name-display {
+  font-size: 20px;
+}
+
+#home-pokemon-flipper {
+  scale: 1.2;
+}
+
+/* 서식지 아이콘 (홈 탭 우상단) */
+.habitat-icon-container {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  z-index: 100;
+  transition: transform 0.2s ease;
+}
+
+.habitat-icon-container:active {
+  transform: scale(0.95);
+}
+
+.habitat-icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.habitat-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.habitat-icon-placeholder {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--text-secondary);
+}
+
+.habitat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.8);
+  padding: 2px 6px;
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+}
+
+/* 서식지 모달 스타일 */
+.habitat-modal-content {
+  max-width: 480px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.habitat-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.current-habitat-section {
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+}
+
+.habitat-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.current-habitat-display {
+  background: white;
+  border-radius: 12px;
+  padding: 15px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.current-habitat-display:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+}
+
+.current-habitat-img {
+  width: 60px;
+  height: 60px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.current-habitat-details {
+  flex: 1;
+  text-align: left;
+}
+
+.current-habitat-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.current-habitat-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.change-habitat-btn {
+  padding: 8px 16px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.change-habitat-btn:disabled {
+  background: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+/* 서식지 그리드 */
+.habitat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+}
+
+.habitat-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  position: relative;
+}
+
+.habitat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.habitat-card.selected {
+  border-color: var(--primary-color);
+}
+
+.habitat-card-img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+}
+
+.habitat-card-info {
+  padding: 12px;
+}
+
+.habitat-card-name {
+  font-weight: bold;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.habitat-card-type {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 서식지 상세 탭 */
+.detail-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 15px;
+}
+
+.detail-tab {
+  flex: 1;
+  padding: 12px;
+  background: none;
+  border: none;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.detail-tab.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
+.pokemon-list-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.mini-pokemon-card {
+  background: white;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+}
+
+.mini-pokemon-img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.mini-pokemon-name {
+  font-size: 10px;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================
+   서식지 시스템 (Habitat System)
+   ========================================== */
+
+/* 1. 홈 화면 서식지 아이콘 */
+.habitat-icon-container {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  z-index: 100;
+  transition: transform 0.2s ease;
+}
+
+.habitat-icon-container:active {
+  transform: scale(0.95);
+}
+
+.habitat-icon-wrapper {
+  width: 60px;
+  height: 40px;
+  /* 타원형 */
+  background: white;
+  border-radius: 20px;
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.habitat-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.habitat-icon-placeholder {
+  font-size: 20px;
+  color: #ccc;
+  font-weight: bold;
+}
+
+.habitat-label {
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+/* 2. 서식지 모달 */
+.habitat-modal-content {
+  max-width: 500px;
+  width: 90%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.habitat-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* 3. 현재 서식지 섹션 */
+.current-habitat-section {
+  margin-bottom: 24px;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.habitat-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #4a5568;
+}
+
+.reset-info {
+  font-size: 11px;
+  color: #718096;
+}
+
+.habitat-nav-btn {
+  background: white;
+  border: 1px solid #e2e8f0;
+  padding: 16px;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.habitat-nav-btn:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(2px);
+}
+
+.habitat-nav-btn.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f1f5f9;
+}
+
+.habitat-nav-btn .arrow {
+  color: var(--primary-color);
+  font-weight: bold;
+}
+
+.limit-message {
+  font-size: 12px;
+  color: #e53e3e;
+  margin-bottom: 8px;
+  text-align: center;
+  background: #fff5f5;
+  padding: 8px;
+  border-radius: 6px;
+}
+
+/* 4. 서식지 목록 (카드 그리드) */
+.habitat-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.habitat-list-header h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.back-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #edf2f7;
+  color: #4a5568;
+  border-radius: 6px;
+  width: auto;
+}
+
+.habitat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+}
+
+.habitat-card {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.habitat-card:hover {
+  transform: scale(1.03);
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
+}
+
+.habitat-card-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 6px;
+  text-align: center;
+}
+
+.habitat-card .habitat-name {
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 5. 하단 상세 정보 섹션 */
+.habitat-detail-section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 20px;
+  margin-top: 10px;
+}
+
+.habitat-info-grid {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  /* 스크롤바 숨김 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.habitat-info-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.habitat-info-card {
+  flex: 0 0 120px;
+  height: 80px;
+  border-radius: 10px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.habitat-info-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  transition: background 0.2s;
+}
+
+.habitat-info-card:hover::before {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.habitat-info-card .name {
+  position: relative;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  z-index: 1;
+  text-align: center;
+  padding: 4px;
+}
+
+/* 포켓몬 목록 그리드 */
+.habitat-pokemon-stats {
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #4a5568;
+  background: #f7fafc;
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.habitat-pokemon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.pokemon-mini-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.pokemon-mini-card.unknown {
+  opacity: 0.7;
+  filter: grayscale(100%);
+}
+
+.pokemon-mini-card img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  margin-bottom: 4px;
+}
+
+.pokemon-mini-card .name {
+  font-size: 10px;
+  color: #4a5568;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.empty-message {
+  text-align: center;
+  color: #a0aec0;
+  padding: 20px;
+  font-size: 14px;
+}
+
+/* ==========================================
+   보상 획득 모달 스타일
+   ========================================== */
+.reward-modal-content {
+  background: white;
+  border-radius: 20px;
+  max-width: 400px;
+  width: 90%;
+  position: relative;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  animation: modalBounceInCenter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-height: 90vh;
+  display: flex !important;
+  flex-direction: column;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+@keyframes modalBounceInCenter {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.reward-modal-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(90deg, #FF9A9E, #FECFEF, #FFD1FF, #fad0c4);
+}
+
+.reward-modal-body {
+  padding: 10px 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-width: 100%;
+  flex: 1;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-header.no-border {
+  border-bottom: none;
+  padding: 24px 20px 0 20px;
+  flex-shrink: 0;
+}
+
+.modal-footer.no-border {
+  border-top: none;
+  padding: 10px 20px 24px 20px;
+  padding-bottom: 24px;
+  flex-shrink: 0;
+  background: white;
+  position: relative;
+  z-index: 5;
+}
+
+.modal-footer.center {
+  justify-content: center;
+}
+
+.reward-title {
+  font-size: 24px;
+  color: #CD5C5C;
+  margin-bottom: 8px;
+  text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.1);
+}
+
+.reward-section {
+  margin-bottom: 16px;
+}
+
+.reward-section-title {
+  font-size: 15px;
+  color: #4a5568;
+  margin-bottom: 12px;
+  font-weight: 600;
+  position: relative;
+  display: inline-block;
+}
+
+.reward-grid-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* 보상 카드 공통 */
+.reward-card {
+  background: #f7fafc;
+  border-radius: 12px;
+  padding: 6px;
+  width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  transition: transform 0.2s;
+  position: relative;
+}
+
+.reward-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 등급별 백그라운드 효과 */
+.reward-card.grade-s {
+  background: linear-gradient(135deg, #fff 0%, #fff7e6 100%);
+  border-color: #f6ad55;
+}
+
+.reward-card.grade-ss {
+  background: linear-gradient(135deg, #fff 0%, #e6fffa 100%);
+  border-color: #4fd1c5;
+}
+
+.reward-card.grade-sss {
+  background: linear-gradient(135deg, #fff 0%, #ebf8ff 100%);
+  border-color: #63b3ed;
+}
+
+.reward-card.grade-ex {
+  background: linear-gradient(135deg, #fff 0%, #faf5ff 100%);
+  border-color: #9f7aea;
+  box-shadow: 0 0 10px rgba(159, 122, 234, 0.2);
+}
+
+/* 반짝임 효과 */
+.reward-card.shiny::after {
+  content: '✨';
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 16px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.2));
+  animation: float 2s infinite ease-in-out;
+}
+
+.reward-img-container {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+  position: relative;
+  /* 자식 absolute 배치를 위해 */
+  overflow: hidden;
+  /* 스프라이트 이미지가 넘치지 않도록 */
+}
+
+.reward-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* 포켓몬 아이콘은 2프레임 스프라이트이므로 첫 프레임만 보여주도록 처리 */
+.reward-pokemon-img {
+  position: absolute;
+  /* flex 정렬 무시하고 왼쪽 고정 */
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: auto;
+  min-width: 200%;
+  /* 2프레임 너비 확보 */
+  max-width: none;
+  object-fit: cover;
+  object-position: left center;
+  /* 왼쪽 프레임 표시 */
+  image-rendering: pixelated;
+}
+
+.reward-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2d3748;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.reward-count-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #CD5C5C;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.reward-confirm-btn {
+  background: #CD5C5C;
+  color: white;
+  border: none;
+  padding: 12px 40px;
+  border-radius: 25px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(205, 92, 92, 0.3);
+  transition: all 0.2s;
+}
+
+.reward-confirm-btn:hover {
+  background: #c0392b;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 10px rgba(205, 92, 92, 0.4);
+}
+
+.reward-confirm-btn:active {
+  transform: translateY(1px);
+}
+
+.reward-empty-message {
+  padding: 24px;
+  color: #718096;
+  font-size: 14px;
+  background: #f7fafc;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+/* 애니메이션 - modalBounceIn은 이미 5189라인에 정의되어 있음 */
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* ===== 보상 카테고리 섹션 스타일 ===== */
+.reward-category-section {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.reward-category-section.event-section {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #f59e0b;
+}
+
+.reward-category-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.reward-category-section>.reward-category-header:not(:first-child) {
+  padding-top: 20px;
+}
+
+
+
+.reward-category-header.event {
+  border-bottom-color: #f59e0b;
+}
+
+.reward-category-icon {
+  font-size: 20px;
+}
+
+.reward-category-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+.reward-subsection {
+  margin-top: 8px;
+}
+
+.reward-subsection-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #718096;
+  margin-bottom: 8px;
+}
+
+/* 이벤트 배지 */
+.reward-event-badge {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  font-size: 9px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* 비교 결과 텍스트 */
+.reward-comparison-text {
+  font-size: 12px;
+  color: #4a5568;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #edf2f7;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* 이벤트 이름 텍스트 */
+.reward-event-name {
+  font-size: 12px;
+  color: #92400e;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  background: #fef3c7;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* 등급 배지 스타일 */
+.reward-grade-badge {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-size: 9px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.reward-grade-badge.legendary {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.reward-grade-badge.mythical {
+  background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
+}
+
+.reward-grade-badge.ultrabeast {
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+}
+
+.reward-grade-badge.paradox {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
 }

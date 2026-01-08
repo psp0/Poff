@@ -8,7 +8,7 @@
         "migrate:down": "db-migrate down -m files",
         "migrate:reset": "db-migrate reset -m files",
         "migrate:check": "db-migrate up --check -m files",
-        "migrate:create": "db-migrate create"
+        "migrate:create": "db-migrate create -m files"
     },
     "devDependencies": {
         "db-migrate": "^0.11.14",

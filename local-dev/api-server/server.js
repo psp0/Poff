@@ -115,6 +115,9 @@ app.post('/api/auth/sync', lambdaAdapter(userManagement));
 app.post('/api/user/terms-agreement', lambdaAdapter(userManagement));
 app.get('/api/shop/items', lambdaAdapter(userManagement));
 app.post('/api/user/exchange', lambdaAdapter(userManagement));
+app.get('/api/user/habitat', lambdaAdapter(userManagement));
+app.post('/api/user/habitat', lambdaAdapter(userManagement));
+app.get('/api/habitats', lambdaAdapter(userManagement));
 
 // Pokemon Management Routes
 app.post('/api/pokemon/evolve', lambdaAdapter(pokemonManagement));
@@ -131,6 +134,7 @@ app.get('/api/guest/evolution/:baseImageName', lambdaAdapter(guestMode));
 app.get('/api/guest/eggs', lambdaAdapter(guestMode));
 
 app.get('/api/guest/starter-pokemon', lambdaAdapter(guestMode));
+app.get('/api/guest/sleep-status', lambdaAdapter(guestMode));
 
 // Sleep Management Routes
 app.post('/api/sleep', lambdaAdapter(sleepManagement));

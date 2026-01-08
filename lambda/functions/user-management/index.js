@@ -31,6 +31,12 @@ const handler = async (event, context) => {
         return await getShopItems(event, db);
     } else if (method === 'GET' && routePath.endsWith('/api/config')) {
         return getConfig(event);
+    } else if (method === 'GET' && routePath.endsWith('/user/habitat')) {
+        return await getUserHabitat(event, db);
+    } else if (method === 'POST' && routePath.endsWith('/user/habitat')) {
+        return await updateUserHabitat(event, db);
+    } else if (method === 'GET' && routePath.endsWith('/habitats')) {
+        return await getHabitats(event, db);
     } else {
         logger.warn('Route not found', { path, method });
         return createErrorResponse('Not Found', 404);
@@ -327,6 +333,205 @@ async function getShopItems(event, db) {
         logger.error('Error fetching shop items', error);
         throw error;
     }
+}
+
+/**
+ * 사용자 현재 서식지 조회
+ */
+async function getUserHabitat(event, db) {
+    const auth = await authenticate(event);
+    const userId = auth.userId;
+
+    if (!userId) {
+        return createErrorResponse('User ID is required', 400);
+    }
+
+    try {
+        // user_habitats 테이블에서 조회 (없으면 기본값 'random' 반환)
+        const result = await db.query(
+            'SELECT current_habitat, current_sub_habitat, last_habitat_change_at FROM user_habitats WHERE user_id = ?',
+            [userId]
+        );
+
+        let habitatData = {
+            current_habitat: 'random',
+            current_sub_habitat: null,
+            last_habitat_change_at: null
+        };
+
+        if (result.rows.length > 0) {
+            habitatData = result.rows[0];
+        } else {
+            // 레코드가 없으면 생성 (마이그레이션에서 처리했지만 안전장치)
+            await db.query(
+                "INSERT IGNORE INTO user_habitats (user_id, current_habitat) VALUES (?, 'random')",
+                [userId]
+            );
+        }
+
+        // 오늘 대분류 이동 가능 여부 확인 (04:00 기준)
+        const canChangeHabitat = checkCanChangeHabitat(habitatData.last_habitat_change_at);
+
+        return createSuccessResponse({
+            ...habitatData,
+            can_change_habitat: canChangeHabitat
+        });
+    } catch (error) {
+        logger.error('Error fetching user habitat', error);
+        return createErrorResponse('Failed to fetch user habitat', 500);
+    }
+}
+
+/**
+ * 사용자 서식지 이동
+ */
+async function updateUserHabitat(event, db) {
+    const { userId, requestBody } = await authenticateAndParseBody(event);
+    const { habitat, subHabitat } = requestBody;
+
+    if (!userId) {
+        return createErrorResponse('User ID is required', 400);
+    }
+
+    if (!habitat) {
+        return createErrorResponse('Habitat is required', 400);
+    }
+
+    try {
+        return await db.transaction(async (client) => {
+            // 현재 상태 조회
+            const currentRes = await client.query(
+                'SELECT current_habitat, last_habitat_change_at FROM user_habitats WHERE user_id = ? FOR UPDATE',
+                [userId]
+            );
+
+            let currentHabitat = 'random';
+            let lastChange = null;
+            let recordExists = false;
+
+            if (currentRes.rows.length > 0) {
+                currentHabitat = currentRes.rows[0].current_habitat;
+                lastChange = currentRes.rows[0].last_habitat_change_at;
+                recordExists = true;
+            }
+
+            // 대분류 변경 여부 확인
+            const isHabitatChange = habitat !== currentHabitat;
+
+            // 대분류 변경 시 제한 확인
+            if (isHabitatChange) {
+                // 'random'을 제외한 일반 서식지 간 이동은 하루 1회 제한 (04:00 기준)
+                // 단, 'random'으로의 이동이나 'random'에서의 이동은 정책에 따라 다를 수 있음
+                // 요청사항: "사용자가 하루에 한번 큰 카테고리 서식지... 이동할수 있고"
+
+                const canChange = checkCanChangeHabitat(lastChange);
+                if (!canChange) {
+                    return createErrorResponse('하루에 한 번만 서식지를 이동할 수 있습니다. (매일 새벽 4시 초기화)', 403);
+                }
+            }
+
+            // 업데이트 쿼리 구성
+            let updateQuery = 'UPDATE user_habitats SET current_habitat = ?, current_sub_habitat = ?, updated_at = NOW()';
+            const params = [habitat, subHabitat || null];
+
+            if (isHabitatChange) {
+                updateQuery += ', last_habitat_change_at = NOW()';
+            }
+
+            if (recordExists) {
+                updateQuery += ' WHERE user_id = ?';
+                params.push(userId);
+                await client.query(updateQuery, params);
+            } else {
+                await client.query(
+                    `INSERT INTO user_habitats (user_id, current_habitat, current_sub_habitat, last_habitat_change_at)
+                     VALUES (?, ?, ?, ${isHabitatChange ? 'NOW()' : 'NULL'})`,
+                    [userId, habitat, subHabitat || null]
+                );
+            }
+
+            return createSuccessResponse({
+                success: true,
+                message: '서식지가 변경되었습니다.',
+                current_habitat: habitat,
+                current_sub_habitat: subHabitat
+            });
+        });
+    } catch (error) {
+        logger.error('Error updating user habitat', error);
+        return createErrorResponse('Failed to update user habitat', 500);
+    }
+}
+
+/**
+ * 04:00 기준 서식지 이동 가능 여부 체크
+ */
+function checkCanChangeHabitat(lastChangeAt) {
+    if (!lastChangeAt) return true;
+
+    const lastChange = new Date(lastChangeAt);
+    const now = new Date();
+
+    // 오늘 새벽 4시 구하기
+    const today4am = new Date(now);
+    today4am.setHours(4, 0, 0, 0);
+
+    // 현재 시간이 04:00 이전이면, 기준은 어제 04:00
+    if (now < today4am) {
+        today4am.setDate(today4am.getDate() - 1);
+    }
+
+    // 마지막 변경이 기준 시간(오늘/어제 04:00)보다 이전이면 변경 가능
+    return lastChange < today4am;
+}
+
+/**
+ * 전체 서식지 정보 조회
+ */
+async function getHabitats(event, db) {
+    try {
+        // habitat_backgrounds 테이블에서 모든 서식지 정보 조회
+        const result = await db.query('SELECT * FROM habitat_backgrounds ORDER BY habitat_slug, type_slug');
+
+        // 구조화된 데이터로 변환
+        const habitats = {};
+
+        result.rows.forEach(row => {
+            if (!habitats[row.habitat_slug]) {
+                habitats[row.habitat_slug] = {
+                    slug: row.habitat_slug,
+                    name: getHabitatName(row.habitat_slug), // 한글 이름 매핑
+                    backgrounds: []
+                };
+            }
+
+            habitats[row.habitat_slug].backgrounds.push({
+                type: row.type_slug,
+                display_name: row.display_name,
+                image: row.image_filename
+            });
+        });
+
+        return createSuccessResponse(Object.values(habitats));
+    } catch (error) {
+        logger.error('Error fetching habitats', error);
+        return createErrorResponse('Failed to fetch habitats', 500);
+    }
+}
+
+function getHabitatName(slug) {
+    const map = {
+        'grassland': '초원',
+        'forest': '숲',
+        'watersedge': '물가',
+        'sea': '바다',
+        'cave': '동굴',
+        'mountain': '산',
+        'roughterrain': '험지',
+        'urban': '도시',
+        'random': '랜덤'
+    };
+    return map[slug] || slug;
 }
 
 module.exports = { handler: withErrorHandling(handler) };
