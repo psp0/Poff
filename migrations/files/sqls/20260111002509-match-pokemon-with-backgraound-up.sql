@@ -1,0 +1,2 @@
+ALTER TABLE pokemon ADD COLUMN bg_id INT DEFAULT NULL;
+ALTER TABLE pokemon ADD CONSTRAINT fk_pokemon_bg FOREIGN KEY (bg_id) REFERENCES habitat_backgrounds(id) ON DELETE SET NULL;

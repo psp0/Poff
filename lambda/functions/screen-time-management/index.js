@@ -3,6 +3,20 @@ const { authenticateAndParseBody, authenticate } = require('../../shared/auth');
 const { createSuccessResponse, createErrorResponse, withErrorHandling } = require('../../shared/response-utils');
 const { logger } = require('../../shared/logger');
 const { processScreenTimeRewards, parseUsageCode } = require('../../shared/screen-time-rewards');
+const {
+  getKstDateString,
+  getKstDayOfWeek,
+  toKstDate,
+  getLastWeekRangeKst,
+  getCurrentWeekRangeKst,
+  getWeekRangeKst
+} = require('../../shared/timezone');
+const {
+  validate,
+  sanitizeString,
+  escapeHtml,
+  screenTimeSchemas
+} = require('../../shared/validation');
 
 /**
  * 스크린타임 관리 Lambda 함수
@@ -14,6 +28,8 @@ const { processScreenTimeRewards, parseUsageCode } = require('../../shared/scree
  * - GET /weekly-stats - 주간 스크린타임 통계
  * - GET /monthly-stats - 월간 스크린타임 통계
  * - POST /reward-check - 스크린타임 감소 보상 확인
+ * - GET /mission/status -> /screen-time/status - 미션 상태 조회 (주간 검증 + 어제 스크린타임 입력 필요 여부)
+ * - POST /screen-time/verify - 주간 검증 제출
  */
 
 const handler = async (event, context) => {
@@ -45,9 +61,9 @@ const handler = async (event, context) => {
     return await getMonthlyStats(event, db);
   } else if (method === 'POST' && routePath.endsWith('/reward-check')) {
     return await checkScreenTimeReward(event, db);
-  } else if (method === 'GET' && routePath.endsWith('/weekly-verification/status')) {
-    return await getWeeklyVerificationStatus(event, db);
-  } else if (method === 'POST' && routePath.endsWith('/weekly-verification/submit')) {
+  } else if (method === 'GET' && routePath.endsWith('/screen-time/status')) {
+    return await getMissionStatus(event, db);
+  } else if (method === 'POST' && routePath.endsWith('/screen-time/verify')) {
     return await submitWeeklyVerification(event, db);
   } else {
     return createErrorResponse('Not Found', 404);
@@ -148,9 +164,12 @@ async function saveScreenTimeRecord(event, db) {
     return createErrorResponse('Date is required', 400);
   }
 
+  // SQL Injection 방지 - date 문자열 살균
+  const sanitizedDate = sanitizeString(date);
+
   // 날짜 형식 검증
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(date)) {
+  if (!dateRegex.test(sanitizedDate)) {
     return createErrorResponse('Invalid date format. Use YYYY-MM-DD', 400);
   }
 
@@ -181,26 +200,21 @@ async function saveScreenTimeRecord(event, db) {
     return createErrorResponse('Either usageCode or (usageHours, usageMinutes) is required', 400);
   }
 
-  // 미래 날짜 방지
-  const recordDate = new Date(date);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
+  // 미래 날짜 방지 (KST 기준)
+  const recordDate = new Date(sanitizedDate + 'T00:00:00+09:00');
+  const todayKst = getKstDateString();
+  const todayDate = new Date(todayKst + 'T23:59:59+09:00');
 
-  if (recordDate > today) {
+  if (recordDate > todayDate) {
     return createErrorResponse('Cannot record screen time for future dates', 400);
   }
 
   // 오늘 입력 시, 어제 기록이 없으면 입력 불가 (순차적 입력 강제)
-  const inputDate = new Date(date);
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
-  inputDate.setHours(0, 0, 0, 0);
-
-  if (inputDate.getTime() === todayDate.getTime()) {
+  if (sanitizedDate === todayKst) {
     // 오늘 입력인 경우, 어제 기록 확인
-    const yesterday = new Date(todayDate);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayDate = new Date(todayKst + 'T00:00:00+09:00');
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
 
     const yesterdayResult = await db.query(
       'SELECT id FROM screen_time WHERE user_id = ? AND date = ?',
@@ -218,7 +232,7 @@ async function saveScreenTimeRecord(event, db) {
       // 기존 기록 확인 (새 기록 여부)
       const existingResult = await client.query(
         'SELECT id FROM screen_time WHERE user_id = ? AND date = ?',
-        [userId, date]
+        [userId, sanitizedDate]
       );
       const isNewEntry = existingResult.rows.length === 0;
 
@@ -230,16 +244,16 @@ async function saveScreenTimeRecord(event, db) {
           usage_hours = VALUES(usage_hours),
           usage_minutes = VALUES(usage_minutes),
           created_at = NOW()
-      `, [userId, date, usageHours, usageMinutes]);
+      `, [userId, sanitizedDate, usageHours, usageMinutes]);
 
       // 보상 처리 (새 기록인 경우에만)
       const rewardResult = await processScreenTimeRewards(
-        client, userId, date, usageHours, usageMinutes, isNewEntry
+        client, userId, sanitizedDate, usageHours, usageMinutes, isNewEntry
       );
 
       // 주간 통계 업데이트 (비동기, 실패해도 계속)
       try {
-        await updateWeeklyStatsInTransaction(client, userId, date);
+        await updateWeeklyStatsInTransaction(client, userId, sanitizedDate);
       } catch (statsError) {
         logger.warn('Weekly stats update failed', { errorMessage: statsError.message });
       }
@@ -247,7 +261,7 @@ async function saveScreenTimeRecord(event, db) {
       // 기록 ID 조회
       const recordResult = await client.query(
         'SELECT id FROM screen_time WHERE user_id = ? AND date = ?',
-        [userId, date]
+        [userId, sanitizedDate]
       );
       const recordId = recordResult.rows[0]?.id;
 
@@ -255,7 +269,7 @@ async function saveScreenTimeRecord(event, db) {
 
       logger.info('Screen time recorded', {
         userId,
-        date,
+        date: sanitizedDate,
         totalMinutes,
         isNewEntry,
         rewards: rewardResult.rewards
@@ -264,7 +278,7 @@ async function saveScreenTimeRecord(event, db) {
       return createSuccessResponse({
         success: true,
         id: recordId,
-        date,
+        date: sanitizedDate,
         usage: {
           hours: usageHours,
           minutes: usageMinutes,
@@ -393,17 +407,17 @@ async function getWeeklyStats(event, db) {
   const weekOffset = parseInt(queryParams.weekOffset) || 0; // 0: 이번 주, -1: 지난 주
 
   try {
-    // 주의 시작일 계산 (일요일)
-    const now = new Date();
-    const currentDay = now.getDay(); // 0=Sun
+    // 주의 시작일 계산 (KST 기준 일요일)
+    const kstNow = toKstDate();
+    const currentDay = kstNow.getUTCDay(); // 0=Sun
 
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - currentDay + (weekOffset * 7));
-    weekStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(kstNow);
+    weekStart.setUTCDate(kstNow.getUTCDate() - currentDay + (weekOffset * 7));
+    weekStart.setUTCHours(0, 0, 0, 0);
 
     const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    weekEnd.setHours(23, 59, 59, 999);
+    weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+    weekEnd.setUTCHours(23, 59, 59, 999);
 
     const query = `
       WITH daily_stats AS (
@@ -517,8 +531,10 @@ async function getMonthlyStats(event, db) {
     return createErrorResponse('User ID is required', 400);
   }
 
-  const year = parseInt(queryParams.year) || new Date().getFullYear();
-  const month = parseInt(queryParams.month) || (new Date().getMonth() + 1);
+  // KST 기준으로 연/월 계산
+  const kstNow = toKstDate();
+  const year = parseInt(queryParams.year) || kstNow.getUTCFullYear();
+  const month = parseInt(queryParams.month) || (kstNow.getUTCMonth() + 1);
 
   try {
     const monthStart = new Date(year, month - 1, 1);
@@ -615,11 +631,11 @@ async function checkScreenTimeReward(event, db) {
   const { userId, requestBody } = await authenticateAndParseBody(event);
   const { targetDate } = requestBody;
 
-  const checkDate = targetDate || new Date().toISOString().split('T')[0];
+  const checkDate = targetDate || getKstDateString();
 
   try {
     // 오늘과 어제의 스크린타임 비교
-    const yesterday = new Date(checkDate);
+    const yesterday = new Date(checkDate + 'T00:00:00+09:00');
     yesterday.setDate(yesterday.getDate() - 1);
 
     const comparisonResult = await db.query(`
@@ -751,24 +767,20 @@ async function updateWeeklyStats(db, userId, date) {
 }
 
 /**
- * 주간 검증 상태 확인
+ * 미션 상태 조회 (통합)
  * 
- * 검증이 필요한 경우:
- * - 전주(일요일~토요일)의 7일 데이터가 모두 있음
- * - 해당 주에 대한 검증이 아직 완료되지 않음
- */
-/**
- * 주간 검증 상태 확인
+ * 반환하는 정보:
+ * 1. needsVerification: 주간 검증 필요 여부
+ * 2. needsYesterdayScreenTime: 어제 스크린타임 입력 필요 여부
  * 
- * 검증이 필요한 경우:
+ * 주간 검증이 필요한 경우:
  * - 전주(일요일~토요일)의 7일 데이터가 모두 있음
  * - 해당 주에 대한 검증이 아직 완료되지 않음
  * 
  * [기준: 일요일 ~ 토요일]
- * - 오늘(수): 이번주 일요일이 weekStart가 됨? 아니야.
  * - 검증 대상: 지난주 일요일 ~ 지난주 토요일
  */
-async function getWeeklyVerificationStatus(event, db) {
+async function getMissionStatus(event, db) {
   const auth = await authenticate(event);
   const userId = auth.userId;
 
@@ -777,30 +789,43 @@ async function getWeeklyVerificationStatus(event, db) {
   }
 
   try {
-    const today = new Date();
-    const todayDayOfWeek = today.getDay(); // 0=일요일, ..., 3=수요일
+    // KST 기준 오늘/어제 날짜 계산
+    const kstNow = toKstDate();
+    const todayStr = getKstDateString();
+    const todayDayOfWeek = kstNow.getUTCDay(); // 0=일요일, ..., 6=토요일
 
+    // 어제 날짜 계산
+    const yesterday = new Date(kstNow);
+    yesterday.setUTCDate(kstNow.getUTCDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // ===== 1. 어제 스크린타임 입력 여부 확인 =====
+    const yesterdayResult = await db.query(`
+      SELECT id FROM screen_time
+      WHERE user_id = ? AND date = ?
+    `, [userId, yesterdayStr]);
+
+    const needsYesterdayScreenTime = yesterdayResult.rows.length === 0;
+
+    // ===== 2. 주간 검증 필요 여부 확인 =====
     // 이번 주 일요일 계산 (오늘 - 요일)
-    // 예: 1/7(수) -> 1/4(일)
-    const thisWeekSunday = new Date(today);
-    thisWeekSunday.setDate(today.getDate() - todayDayOfWeek);
-    thisWeekSunday.setHours(0, 0, 0, 0);
+    const thisWeekSunday = new Date(kstNow);
+    thisWeekSunday.setUTCDate(kstNow.getUTCDate() - todayDayOfWeek);
+    thisWeekSunday.setUTCHours(0, 0, 0, 0);
 
     // 지난 주 일요일 (= Week Start)
-    // 예: 1/4(일) - 7일 = 12/28(일)
     const weekStart = new Date(thisWeekSunday);
-    weekStart.setDate(thisWeekSunday.getDate() - 7);
+    weekStart.setUTCDate(thisWeekSunday.getUTCDate() - 7);
 
     // 지난 주 토요일 (= Week End)
-    // 예: 12/28(일) + 6일 = 1/3(토)
     const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    weekEnd.setHours(23, 59, 59, 999);
+    weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+    weekEnd.setUTCHours(23, 59, 59, 999);
 
     const weekStartStr = weekStart.toISOString().split('T')[0];
     const weekEndStr = weekEnd.toISOString().split('T')[0];
 
-    // 1. 해당 주의 스크린타임 데이터 조회
+    // 해당 주의 스크린타임 데이터 조회
     const weekDataResult = await db.query(`
       SELECT 
         date,
@@ -812,21 +837,24 @@ async function getWeeklyVerificationStatus(event, db) {
       ORDER BY date
     `, [userId, weekStartStr, weekEndStr]);
 
-    // 2. 7일 데이터가 모두 있는지 확인
+    // 7일 데이터가 모두 있는지 확인
     if (weekDataResult.rows.length < 7) {
+      // 주간 검증 불필요 (데이터 불충분)
       return createSuccessResponse({
         needsVerification: false,
+        needsYesterdayScreenTime,
+        yesterdayDate: yesterdayStr,
         reason: 'incomplete_data',
         weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
         daysLogged: weekDataResult.rows.length
       });
     }
 
-    // 3. 평균 계산
+    // 평균 계산
     const totalMinutes = weekDataResult.rows.reduce((sum, row) => sum + parseInt(row.total_minutes), 0);
     const calculatedAverage = Math.round(totalMinutes / 7);
 
-    // 4. 검증 상태 확인
+    // 검증 상태 확인
     const verificationResult = await db.query(`
       SELECT 
         verified,
@@ -853,6 +881,8 @@ async function getWeeklyVerificationStatus(event, db) {
 
       return createSuccessResponse({
         needsVerification: true,
+        needsYesterdayScreenTime,
+        yesterdayDate: yesterdayStr,
         weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
         warningCount: 0
       });
@@ -860,19 +890,23 @@ async function getWeeklyVerificationStatus(event, db) {
 
     const verification = verificationResult.rows[0];
 
-    // 5. 이미 검증 완료된 경우
+    // 이미 검증 완료된 경우
     if (verification.verified) {
       return createSuccessResponse({
         needsVerification: false,
+        needsYesterdayScreenTime,
+        yesterdayDate: yesterdayStr,
         reason: 'already_verified',
         weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
         verified: true
       });
     }
 
-    // 6. 검증 필요!
+    // 검증 필요!
     return createSuccessResponse({
       needsVerification: true,
+      needsYesterdayScreenTime,
+      yesterdayDate: yesterdayStr,
       weekPeriod: `${weekStartStr} ~ ${weekEndStr}`,
       weekStart: weekStartStr,
       weekEnd: weekEndStr,
@@ -881,8 +915,8 @@ async function getWeeklyVerificationStatus(event, db) {
     });
 
   } catch (error) {
-    logger.error('Failed to get weekly verification status', error);
-    return createErrorResponse('Failed to get verification status', 500);
+    logger.error('Failed to get mission status', error);
+    return createErrorResponse('Failed to get mission status', 500);
   }
 }
 
@@ -904,23 +938,8 @@ async function submitWeeklyVerification(event, db) {
 
   try {
     return await db.transaction(async (client) => {
-      // 1. 현재 검증 대상 주 계산 (getWeeklyVerificationStatus와 동일한 로직)
-      const today = new Date();
-      const todayDayOfWeek = today.getDay();
-
-      const thisWeekSunday = new Date(today);
-      thisWeekSunday.setDate(today.getDate() - todayDayOfWeek);
-      thisWeekSunday.setHours(0, 0, 0, 0);
-
-      const weekStart = new Date(thisWeekSunday);
-      weekStart.setDate(thisWeekSunday.getDate() - 7); // 지난주 일요일
-
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6); // 지난주 토요일
-      weekEnd.setHours(23, 59, 59, 999);
-
-      const weekStartStr = weekStart.toISOString().split('T')[0];
-      const weekEndStr = weekEnd.toISOString().split('T')[0];
+      // 1. 현재 검증 대상 주 계산 (KST 기준)
+      const { weekStart: weekStartStr, weekEnd: weekEndStr } = getLastWeekRangeKst();
 
       // 2. 주간 통계 조회
       const statsResult = await client.query(`

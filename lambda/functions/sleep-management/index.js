@@ -232,7 +232,7 @@ async function processRewardInternal(db, userId, sleepDate, rewardPercentage, sl
     const todayStartTimestamp = todayStart.getTime() - koreaOffset;
     const todayEndTimestamp = todayStartTimestamp + 24 * 60 * 60 * 1000;
 
-    // 오늘 획득한 포켓몬 조회 (이로치 제외, base_stat_total 높은순)
+    // 오늘 획득한 포켓몬 조회 (이로치 제외, 이미 shiny를 보유한 포켓몬 제외, base_stat_total 높은순)
     const pokemonQuery = `
         SELECT 
             p.stable_id,
@@ -244,6 +244,12 @@ async function processRewardInternal(db, userId, sleepDate, rewardPercentage, sl
           AND upc.is_shiny = false
           AND upc.obtained_date >= FROM_UNIXTIME(? / 1000)
           AND upc.obtained_date < FROM_UNIXTIME(? / 1000)
+          AND NOT EXISTS (
+              SELECT 1 FROM user_pokemon_collection upc_shiny
+              WHERE upc_shiny.user_id = upc.user_id
+                AND upc_shiny.pokemon_stable_id = upc.pokemon_stable_id
+                AND upc_shiny.is_shiny = true
+          )
         ORDER BY p.base_stat_total DESC
     `;
 
@@ -362,23 +368,55 @@ async function getSleepStatus(event, db) {
 
     const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '').replace(/\/$/, '') + '/';
 
-    // 오늘 획득한 포켓몬 조회 (이로치 제외, base_stat_total 높은순)
+    // 오늘 획득한 포켓몬 조회 (이로치 제외, 이미 shiny를 보유한 포켓몬 제외, base_stat_total 높은순)
     const pokemonQuery = `
-        SELECT 
-            p.stable_id,
-            p.name,
-            p.image_name,
-            p.form_suffix,
-            p.base_stat_total,
-            p.asset_source,
-            p.has_icon,
-            p.has_icon_shiny,
-            upc.obtained_date,
-            CONCAT(?, 
-                CASE 
+    SELECT
+    p.stable_id,
+        p.name,
+        p.image_name,
+        p.form_suffix,
+        p.base_stat_total,
+        p.asset_source,
+        p.has_icon,
+        p.has_icon_shiny,
+        upc.obtained_date,
+            (
+                WITH RECURSIVE ancestry_chain AS(
+    SELECT
+    p_start.stable_id,
+        p_start.image_name,
+        0 as level
+                  FROM pokemon p_start
+                  WHERE p_start.stable_id = p.stable_id
+
+    UNION
+
+    SELECT
+    p_parent.stable_id,
+        p_parent.image_name,
+        ac.level + 1
+                  FROM ancestry_chain ac
+                  JOIN pokemon p_equiv ON p_equiv.image_name = ac.image_name
+                  JOIN pokemon_evolutions pe ON pe.to_pokemon = p_equiv.stable_id
+                  JOIN pokemon p_parent ON p_parent.stable_id = pe.from_pokemon
+                )
+                SELECT image_name FROM ancestry_chain ORDER BY level DESC LIMIT 1
+            ) AS base_image_name,
+        CONCAT(?,
+            CASE 
                     WHEN p.has_icon_shiny = 1 THEN
                         CASE 
                             WHEN p.asset_source = 'external' THEN 'external/img/Icons%20shiny/'
+                            ELSE 'base/img/Icons%20shiny/'
+                        END
+                    WHEN p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL THEN
+                        CASE 
+                            WHEN p.asset_source = 'external' THEN 'external/img/Icons/'
+                            ELSE 'base/img/Icons/'
+                        END
+                    WHEN p.has_icon_shiny = 0 AND p.has_icon = 0 AND p.form_suffix IS NOT NULL THEN
+                        CASE 
+                            WHEN COALESCE(p_base.asset_source, 'base') = 'external' THEN 'external/img/Icons%20shiny/'
                             ELSE 'base/img/Icons%20shiny/'
                         END
                     ELSE
@@ -387,20 +425,31 @@ async function getSleepStatus(event, db) {
                             ELSE 'base/img/Icons/'
                         END
                 END,
-                CASE 
+            CASE 
                     WHEN p.has_icon_shiny = 1 AND p.form_suffix IS NOT NULL 
                     THEN CONCAT(p.image_name, p.form_suffix, '.png')
+                    WHEN p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL
+                    THEN CONCAT(p.image_name, p.form_suffix, '.png')
+                    WHEN p.has_icon_shiny = 0 AND p.has_icon = 0 AND p.form_suffix IS NOT NULL
+                    THEN CONCAT(p.image_name, '.png')
                     ELSE CONCAT(p.image_name, '.png')
                 END
-            ) AS icon_shiny_url
+        ) AS icon_shiny_url
         FROM user_pokemon_collection upc
         INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+        LEFT JOIN pokemon p_base ON p_base.image_name = p.image_name AND(p_base.form_suffix IS NULL OR p_base.form_suffix = '')
         WHERE upc.user_id = ?
-          AND upc.is_shiny = false
+        AND upc.is_shiny = false
           AND upc.obtained_date >= FROM_UNIXTIME(? / 1000)
           AND upc.obtained_date < FROM_UNIXTIME(? / 1000)
-        ORDER BY p.base_stat_total DESC       
-    `;
+          AND NOT EXISTS(
+            SELECT 1 FROM user_pokemon_collection upc_shiny
+              WHERE upc_shiny.user_id = upc.user_id
+                AND upc_shiny.pokemon_stable_id = upc.pokemon_stable_id
+                AND upc_shiny.is_shiny = true
+        )
+        ORDER BY p.base_stat_total DESC
+        `;
 
     const pokemonResult = await db.query(pokemonQuery, [
         assetsBaseUrl,
@@ -417,7 +466,7 @@ async function getSleepStatus(event, db) {
         WHERE user_id = ? AND sleep_date = ?
         ORDER BY created_at DESC
         LIMIT 1
-    `;
+        `;
 
     const sleepLogResult = await db.query(sleepLogQuery, [userId, todayDateStr]);
 

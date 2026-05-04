@@ -88,7 +88,20 @@ module "compute" {
   firebase_app_id              = var.firebase_app_id
 }
 
-# 4. Storage and CDN Module - S3 & CloudFront
+# 4. WAF Module - Web Application Firewall (MUST come before CloudFront)
+module "waf" {
+  source = "../../modules/waf"
+
+  providers = {
+    aws.us_east_1 = aws.us_east_1
+  }
+
+  project_name = var.project_name
+  environment  = var.environment
+  enable_waf   = true
+}
+
+# 5. Storage and CDN Module - S3 & CloudFront
 module "storage_cdn" {
   source = "../../modules/storage-cdn"
 
@@ -102,10 +115,13 @@ module "storage_cdn" {
 
   # API Gateway 도메인 전달 (프로토콜 제거)
   api_gateway_domain = replace(module.compute.api_gateway_endpoint, "/^https?://([^/]*).*/", "$1")
+  
+  # WAF Web ACL ID 전달
+  waf_web_acl_id = module.waf.cloudfront_web_acl_id
 }
 
-# 5. DNS Module - Route53 & ACM (Optional - only if custom domains configured)
-# 5. ACM Module - Certificate Management (No Circular Dependency)
+# 6. DNS Module - Route53 & ACM (Optional - only if custom domains configured)
+# 6. ACM Module - Certificate Management (No Circular Dependency)
 module "acm" {
   count  = var.hosted_zone_domain_name != "" ? 1 : 0
   source = "../../modules/acm"

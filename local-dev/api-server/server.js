@@ -106,10 +106,9 @@ app.post('/api/eggs/hatch', lambdaAdapter(eggManagement));
 app.get('/api/screen-time', lambdaAdapter(screenTimeManagement));
 app.post('/api/screen-time', lambdaAdapter(screenTimeManagement));
 app.delete('/api/screen-time/:date', lambdaAdapter(screenTimeManagement));
-app.post('/api/screen-time/validate', lambdaAdapter(screenTimeManagement));
-app.get('/api/screen-time/weekly-stats', lambdaAdapter(screenTimeManagement)); // Changed path to avoid conflict? Or is it just /weekly-stats?
-app.get('/api/weekly-verification/status', lambdaAdapter(screenTimeManagement));
-app.post('/api/weekly-verification/submit', lambdaAdapter(screenTimeManagement));
+app.get('/api/screen-time/weekly-stats', lambdaAdapter(screenTimeManagement));
+app.get('/api/screen-time/status', lambdaAdapter(screenTimeManagement));
+app.post('/api/screen-time/verify', lambdaAdapter(screenTimeManagement));
 
 
 

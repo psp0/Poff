@@ -363,7 +363,7 @@ async function unlockShinyPokemon(event, db) {
             if (pokemonInfo.rows.length === 0) {
                 throw new Error('포켓몬 정보를 찾을 수 없습니다.');
             }
-            // const pokemon = pokemonInfo.rows[0];
+            const pokemon = pokemonInfo.rows[0];
 
             // 2. 사용자 보유 여부 확인 (일반 버전은 있어야 함)
             const ownershipCheck = await client.query(`
@@ -423,7 +423,7 @@ async function unlockShinyPokemon(event, db) {
 
             return createSuccessResponse({
                 success: true,
-                message: '이로치 포켓몬을 획득했습니다!',
+                message: `...오잉!? ${pokemon.name}의 모습이...!`,
                 targetPokemonId: targetPokemonId
             });
         });

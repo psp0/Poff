@@ -7,11 +7,13 @@ const response = require('./response');
 const auth = require('./auth');
 const validation = require('./validation');
 const screenTimeRewards = require('./screen-time-rewards');
+const timezone = require('./timezone');
 
 module.exports = {
   db,
   response,
   auth,
   validation,
-  screenTimeRewards
+  screenTimeRewards,
+  timezone
 };

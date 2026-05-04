@@ -78,13 +78,7 @@ async function getGuestPokemonDetail(stableId, isShiny) {
     SELECT upc.*, p.*, hb.image_filename as background_filename, hb.habitat_slug as background_habitat
     FROM user_pokemon_collection upc
     JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
-    LEFT JOIN habitat_backgrounds hb ON p.habitat_en = hb.habitat_slug 
-      AND hb.type_slug = (
-        CASE 
-          WHEN LOWER(p.type1_en) = 'normal' AND p.type2_en IS NOT NULL THEN LOWER(p.type2_en)
-          ELSE LOWER(p.type1_en)
-        END
-      )
+    LEFT JOIN habitat_backgrounds hb ON p.bg_id = hb.id
     WHERE upc.user_id = ? AND p.stable_id = ?
     LIMIT 1
   `;
@@ -97,13 +91,7 @@ async function getGuestPokemonDetail(stableId, isShiny) {
     const pokemonQuery = `
       SELECT p.*, hb.image_filename as background_filename, hb.habitat_slug as background_habitat
       FROM pokemon p
-      LEFT JOIN habitat_backgrounds hb ON p.habitat_en = hb.habitat_slug 
-        AND hb.type_slug = (
-          CASE 
-            WHEN LOWER(p.type1_en) = 'normal' AND p.type2_en IS NOT NULL THEN LOWER(p.type2_en)
-            ELSE LOWER(p.type1_en)
-          END
-        )
+      LEFT JOIN habitat_backgrounds hb ON p.bg_id = hb.id
       WHERE p.stable_id = ? 
       LIMIT 1
     `;
@@ -700,7 +688,7 @@ async function getGuestSleepStatus() {
  */
 async function getGuestTodayPokemon() {
   const assetsBaseUrl = process.env.ASSETS_BASE_URL || '';
-  
+
   // 게스트 유저가 보유한 포켓몬 중 최근 획득 몇 마리를 반환
   const query = `
     SELECT 
@@ -743,7 +731,7 @@ async function getGuestTodayPokemon() {
       iconFolder = 'img/Icons';
     }
 
-    const fileName = hasIcon && formSuffix 
+    const fileName = hasIcon && formSuffix
       ? `${pokemon.image_name}${formSuffix}.png`
       : `${pokemon.image_name}.png`;
 

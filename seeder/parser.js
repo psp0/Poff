@@ -96,7 +96,7 @@ class PokemonParser {
             try {
                 const content = await this.loader.loadFile(filepath);
                 // Matches [ID], [ID,Form], [ID,,Female], [ID,Form,Female]
-                const blocks = content.split(/\[([A-Z0-9_]+)(?:,([^,\]]*))?(?:,([^,\]]*))?\]/);
+                const blocks = content.split(/\[([A-Za-z0-9_]+)(?:,([^,\]]*))?(?:,([^,\]]*))?\]/);
 
                 for (let i = 1; i < blocks.length; i += 4) {
                     const name = blocks[i];
@@ -449,7 +449,7 @@ class PokemonParser {
         const content = await this.loader.loadFile(filepath);
 
         // Split by [POKEMON_NAME]
-        const blocks = content.split(/\[([A-Z0-9_]+)\]/);
+        const blocks = content.split(/\[([A-Za-z0-9_]+)\]/);
 
         for (let i = 1; i < blocks.length; i += 2) {
             const name = blocks[i];
@@ -475,7 +475,7 @@ class PokemonParser {
                 const content = await this.loader.loadFile(filepath);
 
                 // Split by [POKEMON_NAME,form_number]
-                const blocks = content.split(/\[([A-Z0-9_]+),(\d+)\]/);
+                const blocks = content.split(/\[([A-Za-z0-9_]+),(\d+)\]/);
 
                 for (let i = 1; i < blocks.length; i += 3) {
                     const name = blocks[i];
@@ -842,13 +842,23 @@ class PokemonParser {
                 const baseName = data.base_name;
                 const formNum = data.form_number;
                 const stableId = `${baseName}_${formNum}`;
+                const formSuffix = `_${formNum}`;
 
                 if (!this.validStableIds.has(stableId)) continue;
 
                 for (const to of data.evolutions) {
+                    // Try to preserve form suffix for evolution
+                    // e.g. SANDSHREW_1 -> SANDSLASH -> Check if SANDSLASH_1 exists
+                    let targetStableId = to;
+                    const potentialTarget = `${to}${formSuffix}`;
+
+                    if (this.validStableIds.has(potentialTarget)) {
+                        targetStableId = potentialTarget;
+                    }
+
                     evolutions.push({
                         from_pokemon: stableId,
-                        to_pokemon: to
+                        to_pokemon: targetStableId
                     });
                 }
             }

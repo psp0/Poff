@@ -67,9 +67,27 @@ async function insertPokemonData(db, parser) {
     const records = await parser.createPokemonRecords();
 
     console.log(`Inserting ${records.length} Pokemon records...`);
+
+    // 1. Fetch habitat background mappings
+    console.log('  Fetching habitat background mappings...');
+    const [bgRows] = await db.query('SELECT id, habitat_slug, type_slug FROM habitat_backgrounds');
+    const bgMap = new Map();
+    bgRows.forEach(row => {
+        bgMap.set(`${row.habitat_slug}|${row.type_slug}`, row.id);
+    });
+    console.log(`  Loaded ${bgMap.size} background mappings`);
+
     let inserted = 0;
 
     for (const record of records) {
+        // Calculate background ID
+        const habitatSlug = record.habitat_en || 'rare';
+        const typeSlug = (record.type1_en?.toLowerCase() === 'normal' && record.type2_en)
+            ? record.type2_en.toLowerCase()
+            : (record.type1_en?.toLowerCase() || 'normal');
+
+        const bgId = bgMap.get(`${habitatSlug}|${typeSlug}`) || null;
+
         // MySQL: ON DUPLICATE KEY UPDATE
         await db.query(`
             INSERT INTO pokemon (
@@ -79,8 +97,9 @@ async function insertPokemonData(db, parser) {
               base_sp_defense, base_speed, base_stat_total,
               image_name, form_suffix, asset_source,
               has_icon, has_icon_shiny, has_front, has_front_shiny, has_back, has_back_shiny, has_cry,
-              back_animation_speed, front_animation_speed
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              back_animation_speed, front_animation_speed,
+              bg_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
               name = VALUES(name),
               category = VALUES(category),
@@ -88,6 +107,8 @@ async function insertPokemonData(db, parser) {
               type2 = VALUES(type2),
               type1_en = VALUES(type1_en),
               type2_en = VALUES(type2_en),
+              habitat = VALUES(habitat),
+              habitat_en = VALUES(habitat_en),
               asset_source = VALUES(asset_source),
               has_icon = VALUES(has_icon),
               has_icon_shiny = VALUES(has_icon_shiny),
@@ -98,6 +119,7 @@ async function insertPokemonData(db, parser) {
               has_cry = VALUES(has_cry),
               back_animation_speed = VALUES(back_animation_speed),
               front_animation_speed = VALUES(front_animation_speed),
+              bg_id = VALUES(bg_id),
               updated_at = NOW()
         `, [
             record.name, record.category, record.type1, record.type2,
@@ -108,7 +130,8 @@ async function insertPokemonData(db, parser) {
             record.base_speed, record.base_stat_total, record.image_name,
             record.form_suffix, record.asset_source,
             record.has_icon, record.has_icon_shiny, record.has_front, record.has_front_shiny, record.has_back, record.has_back_shiny, record.has_cry,
-            record.back_animation_speed, record.front_animation_speed
+            record.back_animation_speed, record.front_animation_speed,
+            bgId
         ]);
 
         inserted++;
@@ -175,7 +198,7 @@ async function insertEvolutions(db, parser) {
 async function insertGuestUserPokemon(db) {
     const GUEST_USER_ID = '00000000-0000-0000-0000-000000000000';
 
-// 게스트 유저에게 줄 포켓몬 목록 - 4마리만 (1단계 포켓몬)
+    // 게스트 유저에게 줄 포켓몬 목록 - 4마리만 (1단계 포켓몬)
     const guestPokemon = [
         { stable_id: 'BULBASAUR', is_shiny: false, is_favorite: false, obtained_reason: '체험모드 기본 지급' },  // 이상해씨
         { stable_id: 'CHARMANDER', is_shiny: false, is_favorite: false, obtained_reason: '체험모드 기본 지급' }, // 파이리

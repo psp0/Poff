@@ -92,101 +92,123 @@ async function searchPokemonEggs(event, db) {
   const auth = await authenticate(event); // 인증 확인 (선택사항)
   const queryParams = event.queryStringParameters || {};
   const searchQuery = queryParams.query;
+  const page = parseInt(queryParams.page) || 1;
+  const limit = parseInt(queryParams.limit) || 20;
+  const offset = (page - 1) * limit;
 
   // 보안: 인증된 사용자 ID만 사용 (클라이언트가 전달한 userId는 무시)
-  // 이렇게 하면 악의적인 사용자가 다른 사용자의 보유 정보를 조회할 수 없음
   const userId = auth?.userId || null;
 
-  if (!searchQuery || searchQuery.length < 1) {
-    return createSuccessResponse([]);
-  }
+  let query;
+  let params;
 
-  // 검색 로직:
-  // 1. 이름으로 검색 (모든 포켓몬)
-  // 2. 진화 트리를 역으로 탐색하여 Base 포켓몬 찾기
-  // 3. Base 포켓몬의 정보 반환
-  // 4. 사용자가 이미 보유한 포켓몬인지, 알이 있는지 확인
-
-  const query = `
-    WITH RECURSIVE evolution_base AS (
-      -- 시작점: 검색된 포켓몬들
+  if (!searchQuery || searchQuery.trim().length === 0) {
+    // 쿼리가 없는 경우: 모든 기초(Base) 포켓몬 반환 (미보유 필터링 및 페이징 적용)
+    // 획득 가능한(미보유 & 알 없음) 포켓몬만 조회
+    query = `
       SELECT 
-        p.image_name,
         p.stable_id,
         p.name,
+        p.image_name,
         p.base_stat_total,
-        pfr.flag_name,
-        1 as is_direct_match  -- 직접 검색된 포켓몬 표시
+        ROUND(p.base_stat_total * 0.1, 1) as hatch_hours,
+        FALSE as has_pokemon,
+        FALSE as has_egg,
+        1 as priority,
+        1 as can_acquire
       FROM pokemon p
-      LEFT JOIN pokemon_flag_relations pfr ON pfr.pokemon_stable_id = p.stable_id AND pfr.flag_name = 'Base'
-      WHERE p.name LIKE CONCAT(?, '%')
-      
-      UNION ALL
-      
-      -- 재귀: Base가 아닌 경우 부모(pre-evolution) 찾기
+      JOIN pokemon_flag_relations pfr ON p.stable_id = pfr.pokemon_stable_id
+      WHERE pfr.flag_name = 'Base'
+        AND NOT EXISTS(SELECT 1 FROM user_pokemon_collection upc WHERE upc.user_id = ? AND upc.pokemon_stable_id = p.stable_id)
+        AND NOT EXISTS(SELECT 1 FROM user_eggs ue WHERE ue.user_id = ? AND ue.pokemon_stable_id = p.stable_id)
+      ORDER BY p.pokemon_id ASC
+      LIMIT ? OFFSET ?;
+    `;
+    params = [userId, userId, limit, offset];
+  } else {
+    // 쿼리가 있는 경우: 기존 검색 로직 (진화 트리 역탐색 포함)
+    query = `
+      WITH RECURSIVE evolution_base AS (
+        -- 시작점: 검색된 포켓몬들
+        SELECT 
+          p.image_name,
+          p.stable_id,
+          p.name,
+          p.base_stat_total,
+          pfr.flag_name,
+          1 as is_direct_match  -- 직접 검색된 포켓몬 표시
+        FROM pokemon p
+        LEFT JOIN pokemon_flag_relations pfr ON pfr.pokemon_stable_id = p.stable_id AND pfr.flag_name = 'Base'
+        WHERE p.name LIKE CONCAT(?, '%')
+        
+        UNION ALL
+        
+        -- 재귀: Base가 아닌 경우 부모(pre-evolution) 찾기
+        SELECT 
+          pe.from_pokemon as image_name,
+          parent.stable_id,
+          parent.name,
+          parent.base_stat_total,
+          pfr_parent.flag_name,
+          0 as is_direct_match  -- 진화체를 통해 찾은 포켓몬
+        FROM evolution_base eb
+        JOIN pokemon_evolutions pe ON pe.to_pokemon = eb.image_name
+        JOIN pokemon parent ON parent.image_name = pe.from_pokemon
+        LEFT JOIN pokemon_flag_relations pfr_parent ON pfr_parent.pokemon_stable_id = parent.stable_id AND pfr_parent.flag_name = 'Base'
+        WHERE eb.flag_name IS NULL  -- Base가 아닌 경우만 계속 탐색
+      ),
+      final_results AS (
+        SELECT DISTINCT
+          eb.stable_id,
+          eb.name,
+          eb.image_name,
+          eb.base_stat_total,
+          ROUND(eb.base_stat_total * 0.1, 1) as hatch_hours,  -- 시간 단위
+          -- 사용자가 이미 이 포켓몬을 보유하고 있는지 확인
+          CASE 
+            WHEN ? IS NOT NULL THEN 
+              EXISTS(
+                SELECT 1 FROM user_pokemon_collection upc 
+                WHERE upc.user_id = ? AND upc.pokemon_stable_id = eb.stable_id
+              )
+            ELSE FALSE
+          END as has_pokemon,
+          -- 사용자가 이미 이 포켓몬의 알을 가지고 있는지 확인
+          CASE 
+            WHEN ? IS NOT NULL THEN 
+              EXISTS(
+                SELECT 1 FROM user_eggs ue 
+                WHERE ue.user_id = ? AND ue.pokemon_stable_id = eb.stable_id
+              )
+            ELSE FALSE
+          END as has_egg,
+          MAX(eb.is_direct_match) as priority  -- 우선순위: 직접 매칭(1)이 진화체 매칭(0)보다 앞에
+        FROM evolution_base eb
+        WHERE eb.flag_name = 'Base'  -- Base 포켓몬만 선택
+        GROUP BY eb.stable_id, eb.name, eb.image_name, eb.base_stat_total
+      )
       SELECT 
-        pe.from_pokemon as image_name,
-        parent.stable_id,
-        parent.name,
-        parent.base_stat_total,
-        pfr_parent.flag_name,
-        0 as is_direct_match  -- 진화체를 통해 찾은 포켓몬
-      FROM evolution_base eb
-      JOIN pokemon_evolutions pe ON pe.to_pokemon = eb.image_name
-      JOIN pokemon parent ON parent.image_name = pe.from_pokemon
-      LEFT JOIN pokemon_flag_relations pfr_parent ON pfr_parent.pokemon_stable_id = parent.stable_id AND pfr_parent.flag_name = 'Base'
-      WHERE eb.flag_name IS NULL  -- Base가 아닌 경우만 계속 탐색
-    ),
-    final_results AS (
-      SELECT DISTINCT
-        eb.stable_id,
-        eb.name,
-        eb.image_name,
-        eb.base_stat_total,
-        ROUND(eb.base_stat_total * 0.1, 1) as hatch_hours,  -- 시간 단위
-        -- 사용자가 이미 이 포켓몬을 보유하고 있는지 확인
-        CASE 
-          WHEN ? IS NOT NULL THEN 
-            EXISTS(
-              SELECT 1 FROM user_pokemon_collection upc 
-              WHERE upc.user_id = ? AND upc.pokemon_stable_id = eb.stable_id
-            )
-          ELSE FALSE
-        END as has_pokemon,
-        -- 사용자가 이미 이 포켓몬의 알을 가지고 있는지 확인
-        CASE 
-          WHEN ? IS NOT NULL THEN 
-            EXISTS(
-              SELECT 1 FROM user_eggs ue 
-              WHERE ue.user_id = ? AND ue.pokemon_stable_id = eb.stable_id
-            )
-          ELSE FALSE
-        END as has_egg,
-        MAX(eb.is_direct_match) as priority  -- 우선순위: 직접 매칭(1)이 진화체 매칭(0)보다 앞에
-      FROM evolution_base eb
-      WHERE eb.flag_name = 'Base'  -- Base 포켓몬만 선택
-      GROUP BY eb.stable_id, eb.name, eb.image_name, eb.base_stat_total
-    )
-    SELECT 
-      stable_id,
-      name,
-      image_name,
-      base_stat_total,
-      hatch_hours,
-      has_pokemon,
-      has_egg,
-      priority,
-      -- 획득 가능 여부 (has_pokemon=0 AND has_egg=0이면 1, 아니면 0)
-      CASE WHEN has_pokemon = 0 AND has_egg = 0 THEN 1 ELSE 0 END as can_acquire
-    FROM final_results
-    ORDER BY 
-      can_acquire DESC,  -- 획득 가능한 것 먼저 (1이 0보다 앞에)
-      priority DESC,     -- 직접 매칭된 것 먼저 (1이 0보다 앞에)
-      name               -- 이름 순
-    LIMIT 20;
-  `;
+        stable_id,
+        name,
+        image_name,
+        base_stat_total,
+        hatch_hours,
+        has_pokemon,
+        has_egg,
+        priority,
+        -- 획득 가능 여부 (has_pokemon=0 AND has_egg=0이면 1, 아니면 0)
+        CASE WHEN has_pokemon = 0 AND has_egg = 0 THEN 1 ELSE 0 END as can_acquire
+      FROM final_results
+      ORDER BY 
+        can_acquire DESC,  -- 획득 가능한 것 먼저 (1이 0보다 앞에)
+        priority DESC,     -- 직접 매칭된 것 먼저 (1이 0보다 앞에)
+        name               -- 이름 순
+      LIMIT 50;
+    `;
+    params = [searchQuery, userId, userId, userId, userId];
+  }
 
-  const result = await db.query(query, [searchQuery, userId, userId, userId, userId]);
+  const result = await db.query(query, params);
   return createSuccessResponse(result.rows);
 }
 

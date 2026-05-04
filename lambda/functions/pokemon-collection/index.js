@@ -81,21 +81,18 @@ async function getUserPokemonCollection(event, db) {
   }
 
   const query = `
-    SELECT JSON_ARRAYAGG(
-      JSON_OBJECT(
-        'collection_id', upc.collection_id,
-        'pokemon_stable_id', upc.pokemon_stable_id,
-        'is_shiny', upc.is_shiny,
-        'is_favorite', upc.is_favorite,
-        'obtained_date', upc.obtained_date,
-        'obtained_reason', upc.obtained_reason,
-        'pokemon_name', p.name,
-        'pokemon_type1', p.type1,
-        'pokemon_type2', p.type2,
-        'pokemon_category', p.category,
-        'pokemon_generation', p.generation
-      )
-    ) as collection
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.is_favorite,
+      upc.obtained_date,
+      upc.obtained_reason,
+      p.name AS pokemon_name,
+      p.type1 AS pokemon_type1,
+      p.type2 AS pokemon_type2,
+      p.category AS pokemon_category,
+      p.generation AS pokemon_generation
     FROM user_pokemon_collection upc
     INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
     WHERE upc.user_id = ?
@@ -103,11 +100,19 @@ async function getUserPokemonCollection(event, db) {
       AND (NOT ? OR upc.is_favorite = true)
     ORDER BY 
       upc.is_favorite DESC,  -- 즐겨찾기가 먼저
-      upc.obtained_date DESC  -- 최근 획듍 순
+      upc.obtained_date DESC  -- 최근 획득 순
   `;
 
   const result = await db.query(query, [userId, includeShiny, favoritesOnly]);
-  return createSuccessResponse(result.rows[0]?.collection || []);
+
+  let collection = [];
+  if (result.rows && result.rows.length > 0) {
+    collection = result.rows;
+  } else if (Array.isArray(result) && result.length > 0) {
+    collection = result;
+  }
+
+  return createSuccessResponse(collection || []);
 }
 
 /**
@@ -168,20 +173,18 @@ async function getFavoritePokemon(event, db) {
   }
 
   const query = `
-    SELECT JSON_ARRAYAGG(
-      JSON_OBJECT(
-        'collection_id', upc.collection_id,
-        'pokemon_stable_id', upc.pokemon_stable_id,
-        'is_shiny', upc.is_shiny,
-        'is_favorite', upc.is_favorite,
-        'obtained_date', upc.obtained_date,
-        'obtained_reason', upc.obtained_reason,
-        'pokemon_name', p.name,
-        'pokemon_type1', p.type1,
-        'pokemon_type2', p.type2,
-        'pokemon_category', p.category
-      )
-    ) as favorites
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.is_favorite,
+      upc.obtained_date,
+      upc.favorited_at,
+      upc.obtained_reason,
+      p.name AS pokemon_name,
+      p.type1 AS pokemon_type1,
+      p.type2 AS pokemon_type2,
+      p.category AS pokemon_category
     FROM user_pokemon_collection upc
     INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
     WHERE upc.user_id = ? AND upc.is_favorite = true
@@ -189,7 +192,15 @@ async function getFavoritePokemon(event, db) {
   `;
 
   const result = await db.query(query, [userId]);
-  return createSuccessResponse(result.rows[0]?.favorites || []);
+
+  let favorites = [];
+  if (result.rows && result.rows.length > 0) {
+    favorites = result.rows;
+  } else if (Array.isArray(result) && result.length > 0) {
+    favorites = result;
+  }
+
+  return createSuccessResponse(favorites || []);
 }
 
 /**
@@ -260,6 +271,7 @@ async function getUserPokemonIcons(event, db) {
         p.name,
         p.type1,
         p.type2,
+        p.habitat,
         -- 폼 번호 추출: _숫자 형태일 경우만 추출 (_female 등은 제외)
         CASE 
           WHEN p.form_suffix REGEXP '^_[0-9]+$'
@@ -285,6 +297,7 @@ async function getUserPokemonIcons(event, db) {
         gap.form_number,
         gap.type1,
         gap.type2,
+        gap.habitat,
         gap.name,
         upc.is_shiny,
         upc.is_favorite,
@@ -341,6 +354,7 @@ async function getUserPokemonIcons(event, db) {
         uop.obtained_date,
         uop.type1,
         uop.type2,
+        uop.habitat,
         uop.name,
         gc.owned_count,
         gc.total_count,
@@ -357,7 +371,9 @@ async function getUserPokemonIcons(event, db) {
             uop.stable_id
         ) as rn,
         MAX(uop.is_favorite) OVER (PARTITION BY uop.base_image_name) as group_has_favorite,
-        COALESCE(p_base.asset_source, 'base') AS base_form_asset_source
+        COALESCE(p_base.asset_source, 'base') AS base_form_asset_source,
+        EXISTS(SELECT 1 FROM pokemon_flag_relations pfr WHERE pfr.pokemon_stable_id = uop.stable_id AND pfr.flag_name = 'Legendary') AS is_legendary,
+        EXISTS(SELECT 1 FROM pokemon_flag_relations pfr WHERE pfr.pokemon_stable_id = uop.stable_id AND pfr.flag_name = 'Mythical') AS is_mythical
       FROM user_owned_pokemon uop
       JOIN group_completion gc ON gc.base_image_name = uop.base_image_name
       LEFT JOIN pokemon p_base ON p_base.image_name = uop.image_name AND (p_base.form_suffix IS NULL OR p_base.form_suffix = '')
@@ -454,7 +470,10 @@ async function getUserPokemonIcons(event, db) {
       ri.obtained_date,
       ri.type1,
       ri.type2,
-      ri.name
+      ri.name,
+      ri.is_legendary,
+      ri.is_mythical,
+      ri.habitat
     FROM representative_icons ri
     ORDER BY 
       CASE WHEN ri.is_favorite THEN 0 ELSE 1 END,
@@ -541,6 +560,7 @@ async function getAllUserPokemon(event, db) {
       p.type2,
       p.generation,
       p.pokemon_id,
+      p.habitat,
       p.asset_source AS display_asset_source,
       p.has_icon AS display_has_icon,
       p.has_icon_shiny AS display_has_icon_shiny,
@@ -852,13 +872,7 @@ async function getPokemonData(event, db, stableId) {
       hb.image_filename as background_filename,
       hb.habitat_slug as background_habitat
     FROM pokemon p
-    LEFT JOIN habitat_backgrounds hb ON p.habitat_en = hb.habitat_slug 
-      AND hb.type_slug = (
-        CASE 
-          WHEN LOWER(p.type1_en) = 'normal' AND p.type2_en IS NOT NULL THEN LOWER(p.type2_en)
-          ELSE LOWER(p.type1_en)
-        END
-      )
+    LEFT JOIN habitat_backgrounds hb ON p.bg_id = hb.id
     WHERE p.stable_id = ?
   `;
 
@@ -1124,25 +1138,28 @@ async function getTodayObtainedPokemon(event, db) {
       p.has_icon,
       p.has_icon_shiny,
       -- base_image_name 계산을 위한 서브쿼리
-      COALESCE(
-        (
-          WITH RECURSIVE evolution_chain AS (
-            SELECT p2.image_name AS base_image_name, p2.image_name AS current_image_name
-            FROM pokemon p2
-            WHERE p2.image_name = p.image_name
-              AND NOT EXISTS (
-                SELECT 1 FROM pokemon_evolutions pe
-                JOIN pokemon p3 ON pe.to_pokemon = p3.stable_id
-                WHERE p3.image_name = p2.image_name
-              )
-            UNION ALL
-            SELECT ec.base_image_name, pe.to_pokemon
-            FROM evolution_chain ec
-            JOIN pokemon_evolutions pe ON pe.from_pokemon = ec.current_image_name
-          )
-          SELECT base_image_name FROM evolution_chain WHERE current_image_name = p.image_name LIMIT 1
-        ),
-        p.image_name
+      (
+        WITH RECURSIVE ancestry_chain AS (
+          -- Start with the current pokemon
+          SELECT 
+            p_start.stable_id, 
+            p_start.image_name,
+            0 as level
+          FROM pokemon p_start
+          WHERE p_start.stable_id = p.stable_id
+          
+          UNION ALL
+          
+          -- Go to parent (find who evolves INTO existing)
+          SELECT 
+            p_parent.stable_id,
+            p_parent.image_name,
+            ac.level + 1
+          FROM ancestry_chain ac
+          JOIN pokemon_evolutions pe ON pe.to_pokemon = ac.stable_id
+          JOIN pokemon p_parent ON p_parent.stable_id = pe.from_pokemon
+        )
+        SELECT image_name FROM ancestry_chain ORDER BY level DESC LIMIT 1
       ) AS base_image_name,
       -- 아이콘 URL 생성
       CONCAT(?, 
@@ -1185,18 +1202,21 @@ async function getTodayObtainedPokemon(event, db) {
     JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
     LEFT JOIN pokemon p_base ON p_base.image_name = p.image_name AND (p_base.form_suffix IS NULL OR p_base.form_suffix = '')
     WHERE upc.user_id = ?
+      -- KST 새벽 4시 = UTC 전날 19:00
+      -- 모든 시간을 UTC 기준으로 비교 (obtained_date는 UTC로 저장됨)
+      -- UTC_TIMESTAMP()를 사용하여 DB 타임존과 무관하게 UTC 기준으로 계산
       AND upc.obtained_date >= (
         CASE 
-          WHEN HOUR(CONVERT_TZ(NOW(), '+00:00', '+09:00')) >= 4 
-          THEN DATE_ADD(DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00')), INTERVAL 4 HOUR)
-          ELSE DATE_ADD(DATE_SUB(DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00')), INTERVAL 1 DAY), INTERVAL 4 HOUR)
+          WHEN HOUR(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')) >= 4 
+          THEN DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')), INTERVAL -5 HOUR)
+          ELSE DATE_ADD(DATE_SUB(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')), INTERVAL 1 DAY), INTERVAL -5 HOUR)
         END
       )
       AND upc.obtained_date < (
         CASE 
-          WHEN HOUR(CONVERT_TZ(NOW(), '+00:00', '+09:00')) >= 4 
-          THEN DATE_ADD(DATE_ADD(DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00')), INTERVAL 1 DAY), INTERVAL 4 HOUR)
-          ELSE DATE_ADD(DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00')), INTERVAL 4 HOUR)
+          WHEN HOUR(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')) >= 4 
+          THEN DATE_ADD(DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')), INTERVAL 1 DAY), INTERVAL -5 HOUR)
+          ELSE DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')), INTERVAL -5 HOUR)
         END
       )
     ORDER BY upc.obtained_date DESC

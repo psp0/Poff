@@ -42,3 +42,10 @@ variable "api_gateway_domain" {
   type        = string
   default     = ""
 }
+
+variable "waf_web_acl_id" {
+  description = "WAF Web ACL ID to associate with CloudFront"
+  type        = string
+  default     = ""
+}
+

@@ -803,10 +803,27 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
             const result = await response.json();
             if (result.success) {
               showToast(result.data.message);
-              // 이로치 화면으로 전환
-              displayPokemon(pokemonStableId, true);
-              // 아이콘 목록 갱신 (백그라운드)
+
+              // Refetch evolution data to update the shiny bar and shiny icons in the modal
+              let baseImageName = pokemonData.pokemon.image_name;
+              // Try to find base_image_name from userPokemonList if available for consistency
+              if (typeof userPokemonList !== 'undefined' && Array.isArray(userPokemonList)) {
+                const found = userPokemonList.find(p => p.display_stable_id === pokemonStableId || p.pokemon_stable_id === pokemonStableId);
+                if (found && found.base_image_name) {
+                  baseImageName = found.base_image_name;
+                }
+              }
+
+              // Call showIconGroupDetail to refresh the entire modal context (evolution tree, shiny bar, and main display)
+              // This is more robust than just calling displayPokemon
+              await showIconGroupDetail(baseImageName, pokemonStableId, true, navigationContext || 'collection');
+
+              // Background updates
               loadUserPokemonIcons();
+              if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+              if (window.sleepTracker && typeof window.sleepTracker.loadSleepStatus === 'function') {
+                window.sleepTracker.loadSleepStatus();
+              }
             } else {
               showToast(result.error || '이로치 해제 실패');
             }
@@ -988,6 +1005,10 @@ logoutBtn.addEventListener("click", async () => {
     await window.firebaseSignOut(window.firebaseAuth);
     currentUserId = null;
     window.authState = 'unauthenticated';
+
+    // 탭 상태 및 데이터 초기화 (로그아웃 시)
+    resetTabState();
+
     authMessage.textContent = "로그아웃 되었습니다.";
     // UI 변경은 onAuthStateChanged에서 처리됨
   } catch (e) {
@@ -1041,14 +1062,6 @@ async function showPokemonDetail(pokemonStableId, formSuffix, isShiny = false) {
 }
 
 
-// 아이콘 컬렉션 새로고침 버튼
-const refreshIconsBtn = document.getElementById('refreshIconsBtn');
-if (refreshIconsBtn) {
-  refreshIconsBtn.addEventListener('click', async () => {
-    await loadUserPokemonIcons(true);
-  });
-}
-
 // 도감 검색 기능
 const iconSearchContainer = document.getElementById('iconSearchContainer');
 const iconSearchInput = document.getElementById('iconSearchInput');
@@ -1083,13 +1096,20 @@ if (iconSearchBtn && iconSearchInput) {
 // 네비게이션 중 중복 호출 방지 플래그
 let isNavigating = false;
 
+// 네비게이션 컨텍스트 (어디서 열렸는지)
+let navigationContext = null; // 'today', 'collection', 'sleep', null
+let todayPokemonList = []; // 오늘 획득한 포켓몬 목록
+let sleepPokemonList = []; // 수면 탭의 포켓몬 목록
+
 // 포켓몬 네비게이션 함수
 async function navigatePokemon(direction) {
   console.log('=== navigatePokemon called ===');
   console.log('userPokemonList length:', userPokemonList?.length);
+  console.log('todayPokemonList length:', todayPokemonList?.length);
+  console.log('navigationContext:', navigationContext);
   console.log('currentDisplayStableId:', currentDisplayStableId);
 
-  if (!userPokemonList || userPokemonList.length === 0 || !currentDisplayStableId) return;
+  if (!currentDisplayStableId) return;
 
   // 중복 호출 방지
   if (isNavigating) {
@@ -1097,9 +1117,45 @@ async function navigatePokemon(direction) {
     return;
   }
 
+  // 컨텍스트에 따라 네비게이션 목록 결정
+  let navigationList;
+  if (navigationContext === 'today') {
+    // 오늘 획득한 포켓몬 목록 사용 (display_stable_id 필드 매핑)
+    navigationList = (todayPokemonList || []).map(pokemon => ({
+      ...pokemon,
+      display_stable_id: pokemon.pokemon_stable_id || pokemon.display_stable_id
+    }));
+    console.log('Using today pokemon list for navigation');
+  } else if (navigationContext === 'sleep') {
+    // 수면 탭 포켓몬 목록 사용 (display_stable_id 필드 매핑)
+    navigationList = (sleepPokemonList || []).map(pokemon => ({
+      ...pokemon,
+      display_stable_id: pokemon.stable_id || pokemon.display_stable_id,
+      base_image_name: pokemon.image_name,
+      is_shiny: false  // 수면 탭에서는 항상 일반형으로 표시
+    }));
+    console.log('Using sleep pokemon list for navigation');
+  } else {
+    // 도감 컬렉션 목록 사용 (필터 적용)
+    if (!userPokemonList || userPokemonList.length === 0) {
+      console.log('userPokemonList is empty');
+      return;
+    }
+    navigationList = typeof getFilteredPokemonList === 'function'
+      ? getFilteredPokemonList(userPokemonList)
+      : userPokemonList;
+  }
+
+  console.log('navigationList length:', navigationList.length, 'context:', navigationContext);
+
+  if (navigationList.length === 0) {
+    console.log('No pokemon in filtered list');
+    return;
+  }
+
   // display_stable_id와 is_shiny로 정확한 현재 위치 찾기
   // shiny 아이콘이 없어서 일반 아이콘으로 표시되더라도, is_shiny 상태가 다르면 다른 항목으로 취급
-  const currentIndex = userPokemonList.findIndex(icon =>
+  const currentIndex = navigationList.findIndex(icon =>
     icon.display_stable_id === currentDisplayStableId &&
     Boolean(icon.is_shiny) === currentDisplayIsShiny
   );
@@ -1108,16 +1164,16 @@ async function navigatePokemon(direction) {
   if (currentIndex === -1) {
     console.warn('Current pokemon not found in list:', currentDisplayStableId, 'is_shiny:', currentDisplayIsShiny);
     // 리스트 내용 확인
-    console.log('userPokemonList IDs:', userPokemonList.map(p => ({ id: p.display_stable_id, shiny: p.is_shiny })));
+    console.log('navigationList IDs:', navigationList.map(p => ({ id: p.display_stable_id, shiny: p.is_shiny })));
     return;
   }
 
   let nextIndex = currentIndex + direction;
-  if (nextIndex < 0) nextIndex = userPokemonList.length - 1;
-  if (nextIndex >= userPokemonList.length) nextIndex = 0;
+  if (nextIndex < 0) nextIndex = navigationList.length - 1;
+  if (nextIndex >= navigationList.length) nextIndex = 0;
 
-  const nextPokemon = userPokemonList[nextIndex];
-  const currentPokemon = userPokemonList[currentIndex];
+  const nextPokemon = navigationList[nextIndex];
+  const currentPokemon = navigationList[currentIndex];
 
   console.log('currentPokemon:', currentPokemon.display_stable_id, currentPokemon.base_image_name);
   console.log('nextPokemon:', nextPokemon.display_stable_id, nextPokemon.base_image_name);
@@ -1164,181 +1220,6 @@ if (nextBtn) {
     navigatePokemon(1);
   });
 }
-
-// 사용자 포켓몬 아이콘 컬렉션 불러오기 함수
-// 사용자 포켓몬 아이콘 컬렉션 불러오기 함수
-// async function loadUserPokemonIcons() { // Original function start
-//   const grid = document.getElementById('iconCollectionGrid');
-//   if (!grid) return;
-
-//   const contentSection = grid.parentElement;
-//   let statusMsg = contentSection.querySelector('.icon-status-message');
-
-//   // 상태 메시지 요소가 없으면 생성
-//   if (!statusMsg) {
-//     statusMsg = document.createElement('div');
-//     statusMsg.className = 'icon-status-message';
-//     contentSection.insertBefore(statusMsg, grid);
-//   }
-
-//   try {
-//     // 로그인 체크 (인증 상태 기반)
-//     if (!currentUserId && !window.isGuest()) {
-//       // 로딩 중이면 메시지 표시하지 않음 (글로벌 로딩이 덮고 있거나 아직 판단 전)
-//       if (window.authState === 'loading') {
-//         return;
-//       }
-//       statusMsg.textContent = '로그인이 필요합니다.';
-//       statusMsg.style.display = 'block';
-//       grid.style.display = 'none';
-//       return;
-//     }
-
-//     // 세대별 정렬 모드인지 확인
-//     const isGenerationSort = currentFilter.sort === 'generation';
-
-//     let icons = [];
-//     // API 호출 (인증 상태에 따라 결정)
-//     const apiBase = window.isGuest() ? '/api/guest' : '/api/collection';
-//     // 정렬 옵션에 따라 API 엔드포인트 결정
-//     const apiEndpoint = isGenerationSort
-//       ? `${apiBase}/all-pokemon`
-//       : `${apiBase}/icons`;
-
-//     const headers = await getAuthHeaders();
-//     const response = await fetch(apiEndpoint, { headers });
-
-//     if (!response.ok) {
-//       throw new Error(`API Error: ${response.status}`);
-//     }
-
-//     const result = await response.json();
-//     icons = result.data;
-
-//     // 성공적으로 로드됨을 표시 (데이터가 비어있어도 로드 자체는 성공)
-//     window.isPokedexLoaded = true;
-
-//     userPokemonList = icons; // 리스트 저장 (네비게이션용 - 전체 목록)
-
-//     if (!icons || icons.length === 0) {
-//       statusMsg.textContent = '아직 보유한 포켓몬이 없습니다.';
-//       statusMsg.style.display = 'block';
-//       grid.style.display = 'none';
-//       return;
-//     }
-
-//     // 표시할 아이콘 목록 (이제 displayIcons는 icons와 동일)
-//     let displayIcons = icons;
-
-//     // 필터 적용
-//     const filteredIcons = typeof getFilteredPokemonList === 'function'
-//       ? getFilteredPokemonList(displayIcons)
-//       : displayIcons;
-
-//     // 필터 결과가 없는 경우
-//     if (filteredIcons.length === 0) {
-//       statusMsg.innerHTML = `
-//         <div class="no-filter-results">
-//           <div class="no-filter-results-icon">🔍</div>
-//           <div class="no-filter-results-text">필터 조건에 맞는 포켓몬이 없습니다.<br>필터를 변경해보세요.</div>
-//         </div>
-//       `;
-//       statusMsg.style.display = 'block';
-//       grid.style.display = 'none';
-//       return;
-//     }
-
-//     // 데이터가 있으면 상태 메시지 숨기고 그리드 표시
-//     statusMsg.style.display = 'none';
-//     grid.style.display = 'grid';
-
-//     // 포켓몬 카드 생성 함수
-//     const createPokemonCard = (icon, hideProgressBar = false) => {
-//       // 퍼센트 계산
-//       const normalPercent = icon.completion_percentage || 0;
-//       const shinyPercent = icon.total_count > 0 ? (icon.shiny_owned_count / icon.total_count * 100) : 0;
-
-//       // 100% 완료 시 아이콘 추가 (세대별 정렬에서는 숨김)
-//       let completeIcon = '';
-//       if (!hideProgressBar) {
-//         if (normalPercent >= 100 && shinyPercent >= 100) {
-//           // 둘 다 100%: MASTERBALL 표시
-//           completeIcon = `<div class="progress-complete-icon visible">
-//              <img src="${IMAGE_URLS.MASTERBALL}" alt="완료">
-//            </div>`;
-//         } else if (normalPercent >= 100) {
-//           // Green만 100%: POKEBALL 표시
-//           completeIcon = `<div class="progress-complete-icon visible">
-//              <img src="${IMAGE_URLS.POKEBALL}" alt="완료">
-//            </div>`;
-//         } else {
-//           // 둘 다 100% 아님: 빈 상태
-//           completeIcon = `<div class="progress-complete-icon">
-//              <img src="" alt="">
-//            </div>`;
-//         }
-//       }
-
-//       // 즐겨찾기 아이콘 (showFavoriteIcon 설정에 따라 표시)
-//       let favoriteIconHtml = '';
-//       if (icon.is_favorite && currentFilter.showFavoriteIcon !== false) {
-//         favoriteIconHtml = `<div class="favorite-icon-overlay">
-//           <img src="${ASSETS_BASE_URL}/custom/img/ui/favorite.png" alt="Favorite">
-//         </div>`;
-//       }
-
-//       // Progress bar HTML (세대별 정렬에서는 숨김)
-//       const progressBarHtml = hideProgressBar ? '' : `
-//           <div class="collection-progress-bg">
-//             <div class="collection-progress-fill" style="--collection-progress-width: ${normalPercent}%;"></div>
-//           </div>
-//           <div class="shiny-progress-bg">
-//             <div class="shiny-progress-fill" style="--shiny-progress-width: ${shinyPercent}%;"></div>
-//           </div>`;
-
-//       return `
-//         <div class="pokemon-card pokemon-icon${hideProgressBar ? ' no-progress' : ''}" role="button" tabindex="0"
-//              aria-label="${icon.name || icon.base_image_name} 아이콘"
-//              onclick="showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})"
-//              onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})">
-//           ${completeIcon}
-//           ${favoriteIconHtml}
-//           <div class="pokemon-sprite" data-src="${icon.icon_url}"></div>
-//           ${progressBarHtml}
-//         </div>
-//       `;
-//     };
-
-//     // 세대별 정렬 모드: 세대 구분선 포함 렌더링
-//     let gridContent = '';
-//     if (isGenerationSort) {
-//       let currentGeneration = null;
-//       filteredIcons.forEach(icon => {
-//         const generation = icon.generation || 1;
-//         if (generation !== currentGeneration) {
-//           currentGeneration = generation;
-//           gridContent += `<div class="generation-divider"><span>${generation}</span></div>`;
-//         }
-//         gridContent += createPokemonCard(icon, true); // 세대별 정렬에서는 progress bar 숨김
-//       });
-//     } else {
-//       gridContent = filteredIcons.map(icon => createPokemonCard(icon, false)).join('');
-//     }
-
-//     grid.innerHTML = gridContent;
-
-//     // 포켓몬 스프라이트 설정
-//     grid.querySelectorAll('.pokemon-sprite').forEach(sprite => {
-//       setupPokemonSprite(sprite);
-//     });
-
-//   } catch (err) {
-//     console.error("Unexpected error in loadUserPokemonIcons:", err);
-//     statusMsg.textContent = '오류가 발생했습니다.';
-//     statusMsg.style.display = 'block';
-//     grid.style.display = 'none';
-//   }
-// } // Original function end
 
 let lastLoadedIconApiEndpoint = null;
 
@@ -1446,35 +1327,43 @@ function updateUserPokemonIconsUI() {
     const normalPercent = icon.completion_percentage || 0;
     const shinyPercent = icon.total_count > 0 ? (icon.shiny_owned_count / icon.total_count * 100) : 0;
 
+    // 둘 다 100%이고 favorite이 아닐 때만 몬스터볼 아이콘 표시
     let completeIcon = '';
-    if (!hideProgressBar) {
-      if (normalPercent >= 100 && shinyPercent >= 100) {
-        completeIcon = `<div class="progress-complete-icon visible"><img src="${IMAGE_URLS.MASTERBALL}" alt="완료"></div>`;
-      } else if (normalPercent >= 100) {
-        completeIcon = `<div class="progress-complete-icon visible"><img src="${IMAGE_URLS.POKEBALL}" alt="완료"></div>`;
-      } else {
-        completeIcon = `<div class="progress-complete-icon"><img src="" alt=""></div>`;
-      }
+    if (!hideProgressBar && normalPercent >= 100 && shinyPercent >= 100 && !icon.is_favorite) {
+      completeIcon = `<div class="progress-complete-icon visible"><img src="${IMAGE_URLS.POKEBALL}" alt="완료"></div>`;
     }
 
     let favoriteIconHtml = '';
-    if (icon.is_favorite && currentFilter.showFavoriteIcon !== false) {
+    if (icon.is_favorite) {
       favoriteIconHtml = `<div class="favorite-icon-overlay"><img src="${ASSETS_BASE_URL}/custom/img/ui/favorite.png" alt="Favorite"></div>`;
     }
 
-    const progressBarHtml = hideProgressBar ? '' : `
+    // 프로그레스 바 HTML 생성 (100% 완료된 것은 숨김)
+    let progressBarHtml = '';
+    if (!hideProgressBar) {
+      const showNormalBar = normalPercent < 100;
+      const showShinyBar = shinyPercent < 100;
+
+      if (showNormalBar) {
+        progressBarHtml += `
       <div class="collection-progress-bg">
         <div class="collection-progress-fill" style="--collection-progress-width: ${normalPercent}%;"></div>
-      </div>
+      </div>`;
+      }
+
+      if (showShinyBar) {
+        progressBarHtml += `
       <div class="shiny-progress-bg">
         <div class="shiny-progress-fill" style="--shiny-progress-width: ${shinyPercent}%;"></div>
       </div>`;
+      }
+    }
 
     return `
       <div class="pokemon-card pokemon-icon${hideProgressBar ? ' no-progress' : ''}" role="button" tabindex="0"
            aria-label="${icon.name || icon.base_image_name} 아이콘"
-           onclick="showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})"
-           onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})">
+           onclick="showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny}, 'collection')"
+           onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny}, 'collection')">
         ${completeIcon}
         ${favoriteIconHtml}
         <div class="pokemon-sprite" data-src="${icon.icon_url}"></div>
@@ -1566,8 +1455,13 @@ function hideGlobalLoading() {
 
 // 아이콘 그룹 상세 보기 - 진화도 다이어그램 표시
 // 아이콘 그룹 상세 보기 - 진화도 다이어그램 표시
-async function showIconGroupDetail(baseImageName, specificId = null, isShiny = false) {
-  console.log("Icon group clicked:", baseImageName, "specificId:", specificId);
+async function showIconGroupDetail(baseImageName, specificId = null, isShiny = false, context = 'collection') {
+  console.log("Icon group clicked:", baseImageName, "specificId:", specificId, "context:", context);
+
+  // 네비게이션 컨텍스트 설정
+  if (!isNavigating) {
+    navigationContext = context;
+  }
 
   // 현재 포켓몬 ID와 shiny 상태 설정 (네비게이션용)
   // 네비게이션 중일 때는 이미 navigatePokemon에서 설정했으므로 건너뜀
@@ -1717,14 +1611,52 @@ function getTypeClass(typeName) {
   return typeMap[typeName] || 'normal';
 }
 
+// 타입 영문명을 한글로 변환하는 헬퍼 함수
+function getKoreanType(typeEng) {
+  const map = {
+    'grass': '풀',
+    'poison': '독',
+    'fire': '불꽃',
+    'water': '물',
+    'bug': '벌레',
+    'normal': '노말',
+    'flying': '비행',
+    'electric': '전기',
+    'ground': '땅',
+    'fairy': '페어리',
+    'fighting': '격투',
+    'psychic': '에스퍼',
+    'rock': '바위',
+    'steel': '강철',
+    'ice': '얼음',
+    'ghost': '고스트',
+    'dragon': '드래곤',
+    'dark': '악'
+  };
+  return map[typeEng] || typeEng;
+}
+
 // 진화도 다이어그램 렌더링
 function renderEvolutionDiagram(data) {
   const { evolution_tree, completion } = data;
 
   // 진행 바
   const progressBar = document.getElementById('evolution-progress-bar');
+  const progressPercentage = document.getElementById('evolution-progress-percentage');
   progressBar.style.width = `${completion.completion_percentage}%`;
   progressBar.className = `progress-bar ${completion.is_complete ? 'complete' : ''}`;
+  if (progressPercentage) {
+    progressPercentage.textContent = `${Math.round(completion.completion_percentage)}%`;
+  }
+
+  // 이로치 진행 바
+  const shinyBar = document.getElementById('evolution-shiny-bar');
+  const shinyPercentage = document.getElementById('evolution-shiny-percentage');
+  if (shinyBar && shinyPercentage) {
+    const shinyPercent = completion.total_count > 0 ? (completion.shiny_owned_count / completion.total_count * 100) : 0;
+    shinyBar.style.width = `${shinyPercent}%`;
+    shinyPercentage.textContent = `${Math.round(shinyPercent)}%`;
+  }
 
   // 진화 다이어그램 렌더링
   const diagramDiv = document.getElementById('evolution-diagram');
@@ -1783,6 +1715,35 @@ function renderEvolutionDiagram(data) {
       // 폼 위치 추적
       const formKey = `${imageName}${form.form_suffix || ''}`;
       formIndexMap.set(formKey, { levelIndex, formIndex });
+
+      // 이로치 아이콘 (보유 시)
+      if (form.is_shiny_owned) {
+        const shinyIcon = document.createElement('div');
+        shinyIcon.className = 'shiny-icon';
+        shinyIcon.textContent = '✨';
+
+        shinyIcon.style.position = 'absolute';
+
+        shinyIcon.style.width = '1.25rem';
+        shinyIcon.style.height = '1.25rem';
+        shinyIcon.style.display = 'flex';
+        shinyIcon.style.alignItems = 'center';
+        shinyIcon.style.justifyContent = 'center';
+        shinyIcon.style.top = '-0.125rem'; // Slightly adjusted position
+        shinyIcon.style.right = '-0.125rem';
+        shinyIcon.style.zIndex = '10';
+        shinyIcon.style.color = '#F59E0B'; // Gold color
+        shinyIcon.style.fontSize = '0.875rem'; // 카드 크기에 맞춰 사이즈 조정
+        shinyIcon.style.cursor = 'pointer';
+        shinyIcon.title = '이로치 보기';
+
+        shinyIcon.onclick = (e) => {
+          e.stopPropagation();
+          showPokemonDetail(form.stable_id, '', true);
+        };
+
+        pokemonDiv.appendChild(shinyIcon);
+      }
 
       // 클릭 이벤트 및 상태 처리
       if (form.is_owned) {
@@ -1979,9 +1940,6 @@ async function displayHomePokemon(pokemonStableId, isShiny = false) {
   // 컨테이너 표시
   container.style.display = 'flex';
 
-  // 이름 업데이트
-  const nameEl = document.getElementById('home-pokemon-name');
-  if (nameEl) nameEl.textContent = pokemonData.pokemon.name;
 
   // 배경 이미지 설정
   const background = document.getElementById('home-background');
@@ -2011,20 +1969,6 @@ async function displayHomePokemon(pokemonStableId, isShiny = false) {
     flipper.style.opacity = '1';
   });
 
-  // 회전 버튼 이벤트 (중복 방지를 위해 cloneNode 사용)
-  const rotateBtn = document.getElementById('home-rotate-btn');
-  if (rotateBtn) {
-    const newRotateBtn = rotateBtn.cloneNode(true);
-    rotateBtn.parentNode.replaceChild(newRotateBtn, rotateBtn);
-
-    let homeRotation = 0;
-    newRotateBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      homeRotation += 180;
-      flipper.style.transition = 'transform 0.6s ease';
-      flipper.style.transform = `translate(-50%, -50%) rotateY(${homeRotation}deg)`;
-    });
-  }
 }
 
 // 홈 화면 즐겨찾기 목록 및 인덱스
@@ -2144,6 +2088,9 @@ async function loadTodayObtainedPokemon() {
       const todayPokemon = result.data || [];
       console.log('Today obtained pokemon loaded:', todayPokemon.length);
 
+      // 전역 변수에 저장 (네비게이션용)
+      todayPokemonList = todayPokemon;
+
       if (todayPokemon.length > 0) {
         section.style.display = 'block';
         countBadge.textContent = todayPokemon.length;
@@ -2154,8 +2101,8 @@ async function loadTodayObtainedPokemon() {
                role="button" 
                tabindex="0"
                aria-label="${pokemon.name} 아이콘"
-               onclick="showIconGroupDetail('${pokemon.base_image_name}', '${pokemon.pokemon_stable_id}', ${pokemon.is_shiny})"
-               onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${pokemon.base_image_name}', '${pokemon.pokemon_stable_id}', ${pokemon.is_shiny})">
+               onclick="showIconGroupDetail('${pokemon.base_image_name}', '${pokemon.pokemon_stable_id}', ${pokemon.is_shiny}, 'today')"
+               onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${pokemon.base_image_name}', '${pokemon.pokemon_stable_id}', ${pokemon.is_shiny}, 'today')">
             <div class="pokemon-sprite" data-src="${pokemon.icon_url}"></div>
           </div>
         `).join('');
@@ -2773,11 +2720,28 @@ window.addEventListener('click', (e) => {
   }
 });
 
+// Infinite Scroll State
+let eggSearchPage = 1;
+let eggSearchLoading = false;
+let eggSearchHasMore = true;
+let eggSearchObserver = null;
+
 async function openEggModal() {
   eggModal.style.display = 'flex';
   document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
   onModalOpen();
   await loadUserEggs();
+
+  // Reset infinite scroll state
+  eggSearchPage = 1;
+  eggSearchHasMore = true;
+  eggSearchLoading = false;
+
+  // Clear previous results
+  const resultsContainer = document.getElementById('egg-search-results');
+  if (resultsContainer) resultsContainer.innerHTML = '';
+
+  await searchEggs(); // 열 때 초기 리스트 로드
 }
 
 // 전역 함수로 노출 (HTML onclick에서 사용)
@@ -2980,7 +2944,7 @@ if (eggSearchInput) {
   });
 }
 
-async function searchEggs() {
+async function searchEggs(isAppend = false) {
   const searchInput = document.getElementById('egg-search-input');
   const resultsContainer = document.getElementById('egg-search-results');
 
@@ -2990,15 +2954,24 @@ async function searchEggs() {
   }
 
   const query = searchInput.value.trim();
-  if (!query) return;
 
-  resultsContainer.innerHTML = '<div style="padding:10px; text-align:center;">🥚 알을 찾는 중...</div>';
+  // Prevent duplicate loads
+  if (eggSearchLoading) return;
+  if (isAppend && !eggSearchHasMore) return;
+
+  eggSearchLoading = true;
+
+  // If new search (not append), clear container and show loading
+  if (!isAppend) {
+    resultsContainer.innerHTML = `<div style="padding:10px; text-align:center;">${query ? '🥚 알을 찾는 중...' : '🥚 목록을 불러오는 중...'}</div>`;
+    eggSearchPage = 1; // Reset page on new search
+    eggSearchHasMore = true;
+  }
 
   try {
-    // 실제 API 호출
     const headers = await getAuthHeaders();
-    // 보안: userId는 백엔드에서 인증 토큰으로부터 추출 (클라이언트에서 전달하지 않음)
-    const response = await fetch(`/api/eggs/search?query=${encodeURIComponent(query)}`, { headers });
+    // Pass page and limit
+    const response = await fetch(`/api/eggs/search?query=${encodeURIComponent(query)}&page=${eggSearchPage}&limit=20`, { headers });
 
     if (!response.ok) {
       throw new Error(`API Error: ${response.status}`);
@@ -3007,39 +2980,74 @@ async function searchEggs() {
     const result = await response.json();
 
     if (result.success) {
-      renderEggSearchResults(result.data, resultsContainer);
+      const newItems = result.data;
+
+      // If we got fewer items than limit, we reached the end
+      if (newItems.length < 20) {
+        eggSearchHasMore = false;
+      } else {
+        eggSearchHasMore = true;
+      }
+
+      if (newItems.length > 0) {
+        eggSearchPage++; // Prepare for next page
+      }
+
+      renderEggSearchResults(newItems, resultsContainer, isAppend);
     } else {
       throw new Error(result.error);
     }
 
   } catch (err) {
     console.error(err);
-    resultsContainer.innerHTML = '<div style="padding:10px; color:red; text-align:center;">오류가 발생했습니다.</div>';
+    if (!isAppend) {
+      resultsContainer.innerHTML = '<div style="padding:10px; color:red; text-align:center;">오류가 발생했습니다.</div>';
+    }
+  } finally {
+    eggSearchLoading = false;
   }
 }
 
-function renderEggSearchResults(results, container) {
+function renderEggSearchResults(results, container, isAppend) {
   const resultsContainer = container || document.getElementById('egg-search-results');
-  if (!resultsContainer) {
-    console.error('Egg search results container not found');
+  if (!resultsContainer) return;
+
+  // If not appending (new search), clear previous content
+  if (!isAppend) {
+    resultsContainer.innerHTML = '';
+  }
+
+  if (results.length === 0 && !isAppend) {
+    const searchInput = document.getElementById('egg-search-input');
+    const query = searchInput ? searchInput.value.trim() : '';
+
+    if (query) {
+      resultsContainer.innerHTML = `
+        <div style="padding:10px; text-align:center; color:#718096;">
+          <div>검색 결과가 없습니다.</div>
+          <small>포켓몬 이름을 정확히 입력해주세요.</small>
+          <div style="margin-top: 15px; font-size: 0.85em; color: #a0aec0; background: rgba(0,0,0,0.03); padding: 8px; border-radius: 8px;">
+            💡 <strong>전설/환상/울트라비스트/패러독스</strong> 등<br>
+            희귀한 포켓몬은 특별한 이벤트를 통해서만 만날 수 있어요!
+          </div>
+        </div>`;
+    } else {
+      resultsContainer.innerHTML = '<div style="padding:10px; text-align:center; color:#718096;">획득 가능한 새로운 알이 없습니다.<br><small>이미 모든 종류를 수집하셨나요? 😎</small></div>';
+    }
     return;
   }
 
-  resultsContainer.innerHTML = '';
-  if (results.length === 0) {
-    resultsContainer.innerHTML = '<div style="padding:10px; text-align:center; color:#718096;">검색 결과가 없습니다.<br><small>포켓몬 이름을 정확히 입력해주세요.</small></div>';
-    return;
-  }
+  // Remove existing sentinel if any
+  const existingSentinel = document.getElementById('egg-search-sentinel');
+  if (existingSentinel) existingSentinel.remove();
 
   results.forEach(pokemon => {
     const item = document.createElement('div');
     item.className = 'egg-result-item';
 
-    // 이미 보유했거나 알이 있는 경우 체크
     const isDisabled = pokemon.has_pokemon || pokemon.has_egg;
     const statusText = pokemon.has_pokemon ? '보유중' : (pokemon.has_egg ? '알 보유중' : '');
 
-    // 아이콘은 pokemon-sprite로 렌더링
     item.innerHTML = `
       <div class="pokemon-sprite ${isDisabled ? 'grayscale' : ''}" data-src="${getPokemonImageUrl(pokemon.image_name, '', 'icon')}" data-fallback-image="${pokemon.image_name}" data-fallback-suffix=""></div>
       <div class="egg-result-info">
@@ -3050,20 +3058,16 @@ function renderEggSearchResults(results, container) {
       <button class="acquire-btn ${isDisabled ? 'disabled' : ''}" ${isDisabled ? 'disabled' : ''}>${isDisabled ? '획득불가' : '선택'}</button>
     `;
 
-    // 버튼에 직접 이벤트 리스너 추가 (비활성화된 경우 제외)
     const btn = item.querySelector('.acquire-btn');
     if (btn && !isDisabled) {
       btn.addEventListener('click', (e) => {
-        e.stopPropagation(); // 부모 요소로의 이벤트 전파 방지
-        console.log('알 선택 버튼 클릭됨:', pokemon.name);
+        e.stopPropagation();
         confirmAcquireEgg(pokemon);
       });
     }
 
-    // 아이템 전체 클릭 시에도 동작하도록 (비활성화된 경우 제외)
     if (!isDisabled) {
       item.addEventListener('click', () => {
-        console.log('알 아이템 클릭됨:', pokemon.name);
         confirmAcquireEgg(pokemon);
       });
     } else {
@@ -3074,10 +3078,38 @@ function renderEggSearchResults(results, container) {
     resultsContainer.appendChild(item);
   });
 
-  // 모든 pokemon-sprite에 애니메이션 적용
+  // 애니메이션 적용
   resultsContainer.querySelectorAll('.pokemon-sprite').forEach(sprite => {
+    // 이미 애니메이션이 적용된 경우(appending 시) 제외하고 싶지만, 
+    // setupPokemonSprite 내부에서 체크하거나 그냥 다시 호출해도 무방함.
     setupPokemonSprite(sprite);
   });
+
+  // Add sentinel for infinite scroll if there are more items
+  if (eggSearchHasMore) {
+    const sentinel = document.createElement('div');
+    sentinel.id = 'egg-search-sentinel';
+    sentinel.style.height = '20px';
+    sentinel.style.width = '100%';
+    resultsContainer.appendChild(sentinel);
+
+    setupInfiniteScrollObserver(sentinel);
+  }
+}
+
+function setupInfiniteScrollObserver(sentinel) {
+  if (eggSearchObserver) {
+    eggSearchObserver.disconnect();
+  }
+
+  eggSearchObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && eggSearchHasMore && !eggSearchLoading) {
+      // 검색어가 있으면 검색어 유지, 없으면 빈 문자열 (searchEggs 내부에서 input value 참조함)
+      searchEggs(true);
+    }
+  }, { threshold: 0.5 });
+
+  eggSearchObserver.observe(sentinel);
 }
 
 // 커스텀 확인 모달 로직
@@ -3194,7 +3226,7 @@ function showToast(message, duration = 2500) {
     color: 'white',
     padding: '12px 24px',
     borderRadius: '30px',
-    zIndex: '3000',
+    zIndex: '10000',
     fontSize: '14px',
     fontWeight: 'bold',
     boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
@@ -3592,6 +3624,11 @@ async function executeEvolution(currentId, targetId, cost, baseImageName) {
     await showIconGroupDetail(baseImageName, targetId);
     // 아이콘 목록도 갱신
     loadUserPokemonIcons();
+    // 오늘의 포켓몬 및 수면 상태 갱신
+    if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+    if (window.sleepTracker && typeof window.sleepTracker.loadSleepStatus === 'function') {
+      await window.sleepTracker.loadSleepStatus();
+    }
 
   } catch (e) {
     showToast(e.message);
@@ -3690,6 +3727,11 @@ async function handleFormUnlockClick(targetStableId, targetName, baseImageName, 
       showToast(`${result.data.message}`);
       await showIconGroupDetail(baseImageName, targetStableId);
       loadUserPokemonIcons();
+      // 오늘의 포켓몬 및 수면 상태 갱신
+      if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+      if (window.sleepTracker && typeof window.sleepTracker.loadSleepStatus === 'function') {
+        await window.sleepTracker.loadSleepStatus();
+      }
 
     } catch (e) {
       showToast(e.message);
@@ -4186,9 +4228,11 @@ document.addEventListener('DOMContentLoaded', () => {
 const FILTER_STORAGE_KEY = 'pokemonCollectionFilter';
 let currentFilter = {
   favoritesOnly: false,
-  showFavoriteIcon: true, // 즐겨찾기 아이콘 표시 여부
+  legendaryOnly: false, // 전설만 보기
+  mythicalOnly: false, // 환상만 보기
   completion: 'all', // 'all', 'complete', 'incomplete'
   types: [], // 복수 타입 선택 가능 ([] = 전체)
+  habitats: [], // 복수 서식지 선택 가능 ([] = 전체)
   generations: [], // 복수 세대 선택 가능 ([] = 전체)
   sort: 'default', // 'default', 'progress-high', 'progress-low', 'generation'
   searchQuery: '' // 검색어
@@ -4226,7 +4270,8 @@ function initPokemonFilter() {
   const filterApply = document.getElementById('filter-apply-btn');
   const filterReset = document.getElementById('filter-reset-btn');
   const favoritesToggle = document.getElementById('filter-favorites-toggle');
-  const showFavoriteIconToggle = document.getElementById('filter-show-favorite-icon');
+  const legendaryToggle = document.getElementById('filter-legendary-toggle');
+  const mythicalToggle = document.getElementById('filter-mythical-toggle');
 
   if (!filterBtn || !filterModal) return;
 
@@ -4262,10 +4307,17 @@ function initPokemonFilter() {
     });
   }
 
-  // 즐겨찾기 아이콘 표시 토글
-  if (showFavoriteIconToggle) {
-    showFavoriteIconToggle.addEventListener('click', () => {
-      showFavoriteIconToggle.classList.toggle('active');
+  // 전설 토글
+  if (legendaryToggle) {
+    legendaryToggle.addEventListener('click', () => {
+      legendaryToggle.classList.toggle('active');
+    });
+  }
+
+  // 환상 토글
+  if (mythicalToggle) {
+    mythicalToggle.addEventListener('click', () => {
+      mythicalToggle.classList.toggle('active');
     });
   }
 
@@ -4328,6 +4380,22 @@ function initPokemonFilter() {
             filterModal.querySelector('.filter-chip[data-filter="generation"][data-value="all"]')?.classList.add('active');
           }
         }
+      } else if (filterType === 'habitat') {
+        // 서식지는 다중 선택 가능
+        if (value === 'all') {
+          filterModal.querySelectorAll('.filter-chip[data-filter="habitat"]').forEach(c => {
+            c.classList.remove('active');
+          });
+          chip.classList.add('active');
+        } else {
+          filterModal.querySelector('.filter-chip[data-filter="habitat"][data-value="all"]')?.classList.remove('active');
+          chip.classList.toggle('active');
+
+          const anyHabitatSelected = filterModal.querySelectorAll('.filter-chip[data-filter="habitat"].active:not([data-value="all"])').length > 0;
+          if (!anyHabitatSelected) {
+            filterModal.querySelector('.filter-chip[data-filter="habitat"][data-value="all"]')?.classList.add('active');
+          }
+        }
       } else {
         // 다른 필터들은 단일 선택
         filterModal.querySelectorAll(`.filter-chip[data-filter="${filterType}"]`).forEach(c => {
@@ -4370,6 +4438,8 @@ function openFilterModal() {
 // 필터 UI 동기화
 function syncFilterUI() {
   const favoritesToggle = document.getElementById('filter-favorites-toggle');
+  const legendaryToggle = document.getElementById('filter-legendary-toggle');
+  const mythicalToggle = document.getElementById('filter-mythical-toggle');
   const showFavoriteIconToggle = document.getElementById('filter-show-favorite-icon');
 
   // 즐겨찾기 토글
@@ -4381,12 +4451,21 @@ function syncFilterUI() {
     }
   }
 
-  // 즐겨찾기 아이콘 표시 토글
-  if (showFavoriteIconToggle) {
-    if (currentFilter.showFavoriteIcon !== false) {
-      showFavoriteIconToggle.classList.add('active');
+  // 전설 토글
+  if (legendaryToggle) {
+    if (currentFilter.legendaryOnly) {
+      legendaryToggle.classList.add('active');
     } else {
-      showFavoriteIconToggle.classList.remove('active');
+      legendaryToggle.classList.remove('active');
+    }
+  }
+
+  // 환상 토글
+  if (mythicalToggle) {
+    if (currentFilter.mythicalOnly) {
+      mythicalToggle.classList.add('active');
+    } else {
+      mythicalToggle.classList.remove('active');
     }
   }
 
@@ -4412,6 +4491,13 @@ function syncFilterUI() {
       } else if (currentFilter.generations.includes(value)) {
         chip.classList.add('active');
       }
+    } else if (filterType === 'habitat') {
+      // 서식지: 배열이 비어있으면 'all', 아니면 해당 서식지들 활성화
+      if (currentFilter.habitats.length === 0 && value === 'all') {
+        chip.classList.add('active');
+      } else if (currentFilter.habitats.includes(value)) {
+        chip.classList.add('active');
+      }
     } else if (filterType === 'sort' && currentFilter.sort === value) {
       chip.classList.add('active');
     }
@@ -4421,11 +4507,14 @@ function syncFilterUI() {
 // 필터 적용
 function applyFilter() {
   const favoritesToggle = document.getElementById('filter-favorites-toggle');
+  const legendaryToggle = document.getElementById('filter-legendary-toggle');
+  const mythicalToggle = document.getElementById('filter-mythical-toggle');
   const showFavoriteIconToggle = document.getElementById('filter-show-favorite-icon');
 
   // UI에서 필터 값 읽기
   currentFilter.favoritesOnly = favoritesToggle?.classList.contains('active') || false;
-  currentFilter.showFavoriteIcon = showFavoriteIconToggle?.classList.contains('active') !== false;
+  currentFilter.legendaryOnly = legendaryToggle?.classList.contains('active') || false;
+  currentFilter.mythicalOnly = mythicalToggle?.classList.contains('active') || false;
 
   // 완료 상태
   const completionChip = document.querySelector('.filter-chip[data-filter="completion"].active');
@@ -4438,6 +4527,10 @@ function applyFilter() {
   // 세대 (복수 선택)
   const activeGenerationChips = document.querySelectorAll('.filter-chip[data-filter="generation"].active:not([data-value="all"])');
   currentFilter.generations = Array.from(activeGenerationChips).map(chip => chip.dataset.value);
+
+  // 서식지 (복수 선택)
+  const activeHabitatChips = document.querySelectorAll('.filter-chip[data-filter="habitat"].active:not([data-value="all"])');
+  currentFilter.habitats = Array.from(activeHabitatChips).map(chip => chip.dataset.value);
 
   // 정렬
   const sortChip = document.querySelector('.filter-chip[data-filter="sort"].active');
@@ -4466,9 +4559,9 @@ function resetFilter() {
   currentFilter = {
     ...currentFilter,
     favoritesOnly: false,
-    showFavoriteIcon: true,
     completion: 'all',
     types: [],
+    habitats: [],
     generations: [],
     sort: 'default',
     searchQuery: ''
@@ -4497,8 +4590,11 @@ function updateFilterBadge() {
   // 기본값이 아닌 필터가 있으면 배지 표시
   const hasActiveFilter =
     currentFilter.favoritesOnly ||
+    currentFilter.legendaryOnly ||
+    currentFilter.mythicalOnly ||
     currentFilter.completion !== 'all' ||
     currentFilter.types.length > 0 ||
+    currentFilter.habitats.length > 0 ||
     currentFilter.generations.length > 0 ||
     currentFilter.sort !== 'default';
 
@@ -4531,6 +4627,27 @@ function getFilteredPokemonList(icons) {
     filtered = filtered.filter(icon => icon.is_favorite);
   }
 
+  // 1.5. 전설/환상 필터
+  if (currentFilter.legendaryOnly && currentFilter.mythicalOnly) {
+    // 둘 다 선택된 경우: 전설 OR 환상
+    filtered = filtered.filter(icon => icon.is_legendary || icon.is_mythical);
+  } else {
+    // 개별 선택인 경우 (둘 중 하나만 선택 or 둘 다 미선택)
+    if (currentFilter.legendaryOnly) {
+      filtered = filtered.filter(icon => icon.is_legendary);
+    }
+    if (currentFilter.mythicalOnly) {
+      filtered = filtered.filter(icon => icon.is_mythical);
+    }
+  }
+
+  // 1.8. 서식지 필터 (OR 검색)
+  if (currentFilter.habitats.length > 0) {
+    filtered = filtered.filter(icon => {
+      return currentFilter.habitats.includes(icon.habitat);
+    });
+  }
+
   // 2. 완료 상태 필터
   if (currentFilter.completion === 'complete') {
     filtered = filtered.filter(icon => (icon.completion_percentage || 0) >= 100);
@@ -4541,8 +4658,10 @@ function getFilteredPokemonList(icons) {
   // 3. 타입 필터 (복수 선택 가능)
   if (currentFilter.types.length > 0) {
     filtered = filtered.filter(icon => {
-      // 선택된 타입 중 하나라도 일치하면 표시
-      return currentFilter.types.includes(icon.type1) || currentFilter.types.includes(icon.type2);
+      // 선택된 모든 타입을 포함하는 포켓몬만 표시 (AND 검색)
+      return currentFilter.types.every(selectedType =>
+        icon.type1 === selectedType || icon.type2 === selectedType
+      );
     });
   }
 
@@ -4555,9 +4674,7 @@ function getFilteredPokemonList(icons) {
   }
 
   // 4. 정렬
-  if (currentFilter.sort === 'progress-high') {
-    filtered.sort((a, b) => (b.completion_percentage || 0) - (a.completion_percentage || 0));
-  } else if (currentFilter.sort === 'progress-low') {
+  if (currentFilter.sort === 'progress-low') {
     filtered.sort((a, b) => (a.completion_percentage || 0) - (b.completion_percentage || 0));
   } else if (currentFilter.sort === 'recent') {
     filtered.sort((a, b) => {
@@ -5240,56 +5357,6 @@ if (submitScreenTimeBtn) {
           resultDiv.style.display = 'none';
         }
       }
-
-      // 모달이 표시되지 않았을 때만 텍스트 결과 표시
-      if (!modalShown) {
-        resultDiv.className = 'result-message result-success';
-        resultDiv.style.display = 'block';
-
-        // 보상 정보 렌더링 (텍스트 요약) - 모달이 안 떴는데 보상이 있는 경우(거의 없겠지만) 또는 기존 로직 호환
-        let rewardHtml = '';
-        if (data.isNewEntry && data.rewards) {
-          // ... (기존 텍스트 생성 로직 유지, 혹시 모를 상황 대비)
-          const rewards = data.rewards;
-          const rewardItems = [];
-          // ... (아래 코드는 그대로 두거나, 필요하면 복사해서 넣어야 함. 
-          // 여기서는 기존 로직을 감싸는 형태로 변경하므로 아래 텍스트 생성 로직이 이 블록 안에 있어야 함)
-
-          if (rewards.mysticCharmReceived > 0) rewardItems.push(`신비의 부적 x${rewards.mysticCharmReceived}`);
-          if (rewards.rareCandyReceived > 0) rewardItems.push(`이상한 사탕 x${rewards.rareCandyReceived}`);
-          if (rewards.ovalCharmReceived > 0) rewardItems.push(`둥근 부적 x${rewards.ovalCharmReceived}`);
-          if (rewards.shinyCharmReceived > 0) rewardItems.push(`빛나는 부적 x${rewards.shinyCharmReceived}`);
-          if (rewards.brillianceCharmReceived > 0) rewardItems.push(`찬란한 부적 x${rewards.brillianceCharmReceived}`);
-          if (rewards.basePokemonList && rewards.basePokemonList.length > 0) rewardItems.push(`기초 포켓몬 ${rewards.basePokemonList.length}마리`);
-          if (rewards.legendaryPokemon) rewardItems.push(`전설 포켓몬 획득!`);
-          if (rewards.mythicalPokemon) rewardItems.push(`환상 포켓몬 획득!`);
-          if (rewards.specialDayPokemon) rewardItems.push(`특별 보상 포켓몬!`);
-
-          if (rewardItems.length > 0) {
-            rewardHtml = `<br><strong>🎁 보상:</strong> ${rewardItems.join(', ')}`;
-          }
-        }
-
-        // 전주 비교 정보
-        let comparisonHtml = '';
-        if (data.weeklyComparison && data.weeklyComparison.comparisonResult) {
-          comparisonHtml = `<br><small>📊 ${data.weeklyComparison.comparisonResult}</small>`;
-        }
-
-        resultDiv.innerHTML = `
-            <strong>✅ 저장 완료!</strong><br>
-            날짜: ${dateInput}<br>
-            📱 ${data.usage?.hours || 0}시간 ${data.usage?.minutes || 0}분
-            ${comparisonHtml}
-            ${rewardHtml}
-          `;
-
-        // 5초 후 결과 메시지 숨기기
-        setTimeout(() => {
-          resultDiv.style.display = 'none';
-        }, 3000);
-      }
-
       // 입력 필드 초기화
       clearScreenTimeCodeInputs();
       document.getElementById('isOver10Hours').checked = false;
@@ -5302,6 +5369,17 @@ if (submitScreenTimeBtn) {
 
       // 주간 달성 바 업데이트
       if (typeof updateWeeklyAchievementBar === 'function') updateWeeklyAchievementBar();
+
+      // 오늘의 포켓몬 및 수면 상태 갱신 (새로운 포켓몬 획득 시 홈화면 업데이트)
+      if (data.isNewEntry && data.rewards) {
+        const hasPokemons = data.rewards.pokemons && data.rewards.pokemons.length > 0;
+        if (hasPokemons) {
+          if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+          if (window.sleepTracker && typeof window.sleepTracker.loadSleepStatus === 'function') {
+            await window.sleepTracker.loadSleepStatus();
+          }
+        }
+      }
 
     } catch (err) {
       console.error('스크린타임 저장 중 예외 발생:', err);
@@ -5467,6 +5545,14 @@ function initTabNavigation() {
               loadUserPokemonIcons();
             }
           }
+
+          // 수면 탭 데이터 로드
+          if (targetTab === 'sleep') {
+            if (window.sleepTracker && (!window.sleepTracker.sleepStatusLoaded || !window.sleepTracker.sleepStatus)) {
+              console.log('Reloading sleep status for sleep tab');
+              window.sleepTracker.loadSleepStatus();
+            }
+          }
         } else {
           view.classList.remove('active');
           view.style.display = 'none';
@@ -5527,8 +5613,29 @@ function setupGuestModeUI() {
   }
 }
 
+// 탭 상태 및 데이터 리스트 초기화 (로그인/로그아웃 시 호출)
+function resetTabState() {
+  console.log('Resetting all tab states and data lists');
+  window.isPokedexLoaded = false;
+  lastLoadedIconApiEndpoint = null;
+
+  if (window.sleepTracker) {
+    window.sleepTracker.sleepStatusLoaded = false;
+    window.sleepTracker.sleepStatus = null;
+  }
+
+  // 데이터 리스트 초기화 (네비게이션 및 UI 잔상 방지)
+  userPokemonList = [];
+  todayPokemonList = [];
+  sleepPokemonList = [];
+  homeFavorites = [];
+}
+
 // 게스트 모드 UI 해제 함수 (로그인 시 호출)
 function clearGuestModeUI() {
+  // 탭 상태 및 데이터 초기화 우선 실행
+  resetTabState();
+
   const saveButtons = [
     'submitScreenTimeBtn',
     'validateScreenTimeBtn',
@@ -5586,6 +5693,9 @@ class SleepTracker {
       this.elements.stopBtn.addEventListener('click', () => this.finishSleep());
     }
 
+    // Handle Window Resize for snake connectors
+    window.addEventListener('resize', () => this.handleResize());
+
 
     // Setup Mascots (Komala & Musharna)
     this.setupMascots();
@@ -5620,6 +5730,12 @@ class SleepTracker {
       if (viewSleep && viewSleep.classList.contains('active')) {
         this.loadSleepStatus();
       }
+    });
+
+    // Listen for network recovery to sync queued data
+    window.addEventListener('online', () => {
+      console.log('[SleepTracker] Network recovered, syncing queued data...');
+      this.syncData();
     });
 
     // Load sleep status when sleep tab is activated
@@ -5729,23 +5845,32 @@ class SleepTracker {
   }
 
   handleVisibleState() {
-    // Step 4: Wake up (Provisional)
+    // Step 4: Wake up - Strict mode: immediately check duration
     const sessionStr = localStorage.getItem(this.storageKey);
     if (!sessionStr) return;
 
     const session = JSON.parse(sessionStr);
     if (session.status === 'sleeping') {
-      // Restore UI
-      this.showOverlay(session.startTime);
+      const now = Date.now();
+      const duration = now - session.startTime;
+      const MIN_SLEEP_DURATION = 4 * 60 * 60 * 1000; // 4 hours
 
-      // Start 5-minute timer to auto-finish if user stays active
-      if (!this.wakeUpTimeout) {
-        console.log('Wake up detected. Starting 5-min timer.');
-        this.wakeUpTimeout = setTimeout(() => {
-          console.log('Auto-finishing sleep due to 5 min activity');
-          this.finishSleep();
-        }, 5 * 60 * 1000);
+      if (duration < MIN_SLEEP_DURATION) {
+        // 4시간 미만: 즉시 수면 취소
+        console.log('Sleep cancelled: duration less than 4 hours');
+        localStorage.removeItem(this.storageKey);
+        this.hideOverlay();
+        this.releaseWakeLock();
+
+        const hours = Math.floor(duration / 3600000);
+        const minutes = Math.floor((duration % 3600000) / 60000);
+        showToast(`수면 시간이 너무 짧아 기록되지 않았어요 (${hours}시간 ${minutes}분 / 최소 4시간)`);
+        return;
       }
+
+      // 4시간 이상: 오버레이 표시하고 바로 종료 처리
+      this.showOverlay(session.startTime);
+      this.finishSleep();
     }
   }
 
@@ -5859,14 +5984,31 @@ class SleepTracker {
   }
 
   checkSleepStatus() {
-    // On load, just check if we should show overlay
+    // On load, check if we should show overlay AND validate duration
     const sessionStr = localStorage.getItem(this.storageKey);
     if (sessionStr) {
       const session = JSON.parse(sessionStr);
       if (session.status === 'sleeping') {
-        this.showOverlay(session.startTime);
+        const now = Date.now();
+        const duration = now - session.startTime;
+        const MIN_SLEEP_DURATION = 4 * 60 * 60 * 1000; // 4 hours
+
+        if (duration < MIN_SLEEP_DURATION) {
+          // 4시간 미만: 즉시 수면 취소 (오버레이 표시하지 않음)
+          console.log('Sleep cancelled on reload: duration less than 4 hours');
+          localStorage.removeItem(this.storageKey);
+
+          const hours = Math.floor(duration / 3600000);
+          const minutes = Math.floor((duration % 3600000) / 60000);
+          showToast(`수면 시간이 너무 짧아 기록되지 않았어요 (${hours}시간 ${minutes}분 / 최소 4시간)`);
+        } else {
+          // 4시간 이상: 오버레이 표시
+          this.showOverlay(session.startTime);
+        }
       }
     }
+    // Remove anti-flicker class now that JS has taken over
+    document.documentElement.classList.remove('sleep-mode-pending');
   }
 
   addToSyncQueue(log) {
@@ -5920,6 +6062,15 @@ class SleepTracker {
       } catch (err) {
         console.error('Sleep sync error:', err);
         newQueue.push(log);
+        // Schedule retry after 3 seconds (handles WiFi reconnection delay)
+        if (!this._retryScheduled) {
+          this._retryScheduled = true;
+          setTimeout(() => {
+            this._retryScheduled = false;
+            console.log('[SleepTracker] Retrying sync after 3s delay...');
+            this.syncData();
+          }, 3000);
+        }
       }
     }
 
@@ -5977,12 +6128,20 @@ class SleepTracker {
     const { todayPokemon, sleepStatus } = responseData.data;
     const timestamp = responseData.timestamp;
 
-
+    // 전역 변수에 sleepPokemonList 저장 (네비게이션용)
+    sleepPokemonList = todayPokemon || [];
 
     // Determine which percentage to show
     const displayPercentage = sleepStatus.canSleepToday
       ? sleepStatus.expectedPercentage
       : sleepStatus.currentRewardPercentage;
+
+    // Save data for resize rerendering
+    this.lastRenderData = {
+      pokemon: todayPokemon,
+      percentage: displayPercentage,
+      rewardTable: sleepStatus.rewardTable
+    };
 
     // Update percentage text
     if (this.elements.percentageText) {
@@ -6084,6 +6243,9 @@ class SleepTracker {
     let prevY = null;
     let prevObtainable = true;
 
+    // Store connector data for deferred rendering
+    const connectorData = [];
+
     mergedList.forEach((item, index) => {
       const isObtainable = item.percent <= percentage;
 
@@ -6106,6 +6268,10 @@ class SleepTracker {
         // Icon Box
         const iconBox = document.createElement('div');
         iconBox.className = 'sleep-pokemon-icon';
+
+        // 클릭 이벤트 추가 (항상 기본형 도감 표시)
+        iconBox.style.cursor = 'pointer';
+        iconBox.setAttribute('onclick', `showIconGroupDetail('${item.base_image_name || item.image_name}', '${item.stable_id}', false, 'sleep')`);
 
         // Use pokemon-sprite logic for half-split effect
         const loadAndSetupSprite = (url, isRetry = false) => {
@@ -6151,14 +6317,27 @@ class SleepTracker {
         this.elements.pokemonIcons.appendChild(markerEl);
       }
 
-      // Draw Connector
+      // Store connector data instead of drawing immediately
       if (index > 0 && prevX !== null && prevY !== null) {
-        this.drawConnector(prevX, prevY, x, y, prevObtainable && isObtainable);
+        connectorData.push({
+          x1: prevX,
+          y1: prevY,
+          x2: x,
+          y2: y,
+          isActive: prevObtainable && isObtainable
+        });
       }
 
       prevX = x;
       prevY = y;
       prevObtainable = isObtainable;
+    });
+
+    // Draw all connectors after DOM layout is complete
+    requestAnimationFrame(() => {
+      connectorData.forEach(data => {
+        this.drawConnector(data.x1, data.y1, data.x2, data.y2, data.isActive);
+      });
     });
   }
 
@@ -6168,7 +6347,15 @@ class SleepTracker {
 
     // Get container dimensions to convert % to px
     const container = this.elements.pokemonIcons;
+    if (!container) return;
+
     const w = container.offsetWidth;
+
+    // Safety check: if container width is 0, skip rendering
+    if (w <= 0) {
+      console.warn('Container width is 0, skipping connector rendering');
+      return;
+    }
 
     const px1 = (x1 / 100) * w;
     const py1 = y1; // Already in px
@@ -6188,7 +6375,18 @@ class SleepTracker {
     this.elements.pokemonIcons.prepend(connector); // Behind icons
   }
 
-
+  handleResize() {
+    if (this.resizeTimeout) clearTimeout(this.resizeTimeout);
+    this.resizeTimeout = setTimeout(() => {
+      if (this.lastRenderData) {
+        this.renderPokemonIcons(
+          this.lastRenderData.pokemon,
+          this.lastRenderData.percentage,
+          this.lastRenderData.rewardTable
+        );
+      }
+    }, 200);
+  }
 
   showMessage(text, type = 'info') {
     if (!this.elements.message) return;
@@ -6235,7 +6433,11 @@ async function initHabitat() {
   console.log('initHabitat called');
   const habitatIconBtn = document.getElementById('habitatIconBtn');
   const habitatCloseBtn = document.getElementById('habitat-close');
-  const habitatListBackBtn = document.getElementById('habitatListBackBtn');
+
+  // 탭 버튼
+  const changeTab = document.getElementById('changeTab');
+  const moveTab = document.getElementById('moveTab');
+  const pokemonDisplayBackBtn = document.getElementById('pokemonDisplayBackBtn');
 
   console.log('habitatIconBtn:', habitatIconBtn);
 
@@ -6250,8 +6452,17 @@ async function initHabitat() {
     habitatCloseBtn.addEventListener('click', closeHabitatModal);
   }
 
-  if (habitatListBackBtn) {
-    habitatListBackBtn.addEventListener('click', showHabitatMainView);
+  // 탭 전환 이벤트
+  if (changeTab) {
+    changeTab.addEventListener('click', () => switchTab('change'));
+  }
+
+  if (moveTab) {
+    moveTab.addEventListener('click', () => switchTab('move'));
+  }
+
+  if (pokemonDisplayBackBtn) {
+    pokemonDisplayBackBtn.addEventListener('click', hidePokemonDisplay);
   }
 
   // 탭 변경 시 서식지 아이콘 표시/숨김 처리 (홈 탭에서만 표시)
@@ -6268,6 +6479,32 @@ async function initHabitat() {
   // 초기 데이터 로드
   await fetchUserHabitat();
 }
+
+// 탭 전환 함수
+function switchTab(tabName) {
+  // 탭 버튼 활성화 상태 변경
+  document.querySelectorAll('.habitat-tab').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  document.getElementById(`${tabName}Tab`).classList.add('active');
+
+  // 탭 패널 표시/숨김
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.style.display = 'none';
+  });
+  document.getElementById(`${tabName}TabPane`).style.display = 'block';
+
+  // 포켓몬 디스플레이 숨기기
+  hidePokemonDisplay();
+
+  // 탭에 따라 데이터 렌더링
+  if (tabName === 'change') {
+    renderMajorHabitatsGrid();
+  } else if (tabName === 'move') {
+    renderCurrentSubHabitats();
+  }
+}
+
 
 // 사용자 서식지 정보 조회
 async function fetchUserHabitat() {
@@ -6306,12 +6543,12 @@ function updateHabitatUI() {
   const label = document.getElementById('currentHabitatLabel');
   const placeholder = document.querySelector('.habitat-icon-placeholder');
 
-  if (!iconImg || !label) return;
+  if (!iconImg || !label || !placeholder) return;
 
   const habitatNameMap = {
     'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
     'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
-    'random': '랜덤'
+    'random': '랜덤', 'rare': '희귀'
   };
 
   const habitatName = habitatNameMap[currentHabitatData.current_habitat] || '랜덤';
@@ -6345,13 +6582,74 @@ async function openHabitatModal() {
   modal.style.display = 'flex';
   onModalOpen();
 
-  // 데이터 최신화
-  await fetchUserHabitat();
-  showHabitatMainView();
+  // 데이터 최신화 (캐시 초기화 포함)
+  cachedHabitats = null;
 
-  // 전체 서식지 목록 로드 (백그라운드)
-  loadHabitatsList();
+  // 병렬로 데이터 로드 (유저 정보 + 서식지 목록)
+  await Promise.all([
+    fetchUserHabitat(),
+    loadHabitatsList()
+  ]);
+
+  // 현재 위치 렌더링 (데이터 로드 후 실행)
+  renderCurrentLocationCard();
+  renderMoveCounter();
+
+  // 포켓몬 디스플레이 숨기기
+  hidePokemonDisplay();
+
+  // 첫 번째 탭 활성화 (서식지 변경)
+  switchTab('change');
 }
+
+// ... (renderMajorHabitatsGrid는 아래에서 수정) ...
+
+// 서식지 변경 확인 및 요청
+async function confirmMajorHabitatChange(habitatSlug, displayName) {
+  // 게스트 모드에서는 기능 제한
+  if (window.isGuestMode) {
+    showToast('로그인하면 서식지를 변경할 수 있습니다!');
+    return;
+  }
+
+  let message = `메인 구역 <strong>[${displayName}]</strong>(으)로 이동하시겠습니까?`;
+
+  if (habitatSlug === 'rare') {
+    // 희귀 서식지 잠금 체크 (다른 모든 서식지 100% 완료 여부)
+    const otherHabitats = (cachedHabitats || []).filter(h => h.slug !== 'rare' && h.slug !== 'random');
+    const isFullyCompleted = otherHabitats.length > 0 && otherHabitats.every(h => {
+      const totalCollected = h.backgrounds.reduce((sum, bg) => sum + (bg.collected_count || 0), 0);
+      const totalPokemon = h.backgrounds.reduce((sum, bg) => sum + (bg.total_count || 0), 0);
+      return totalPokemon > 0 && totalCollected >= totalPokemon;
+    });
+
+    if (!isFullyCompleted) {
+      showToast('모든 서식지의 포켓몬을 수집해야 이동가능합니다.');
+      return;
+    }
+  }
+
+  if (habitatSlug !== 'random') {
+    if (!currentHabitatData.can_change_habitat) {
+      // 이미 함수 진입 전에 체크하겠지만, 한 번 더 체크
+    }
+
+    if (habitatSlug === 'rare') {
+      message = `전설의 <strong>[${displayName}]</strong>(으)로 이동하시겠습니까?<br><br><small style="color:#d97706">✨ 이곳에서는 아주 특별한 포켓몬들이 등장합니다.</small>`;
+    }
+
+    message += `<br><br><small style="color:#e74c3c">⚠️ 주의: 메인 구역 이동은 하루 1회만 가능하며, 내일 새벽 4시까지 다시 변경할 수 없습니다.</small>`;
+  } else {
+    message += `<br><br><small>랜덤 서식지에서는 모든 포켓몬을 만날 수 있지만, 특정 구역을 선택할 수 없습니다.</small>`;
+  }
+
+  const confirmed = await showConfirmModal('서식지 이동', message);
+
+  if (confirmed) {
+    requestHabitatChange(habitatSlug, null);
+  }
+}
+
 
 // 서식지 모달 닫기
 function closeHabitatModal() {
@@ -6362,65 +6660,240 @@ function closeHabitatModal() {
   }
 }
 
-// 모달 메인 뷰 표시 (현재 상태)
-function showHabitatMainView() {
-  document.getElementById('habitatListSection').style.display = 'none';
-  document.querySelector('.current-habitat-section').style.display = 'block';
-  document.getElementById('habitatDetailSection').style.display = 'block';
-
-  renderCurrentHabitatInfo();
+// 포켓몬 디스플레이 숨기기
+function hidePokemonDisplay() {
+  document.getElementById('habitatPokemonDisplay').style.display = 'none';
 }
 
-// 서식지 목록 뷰 표시 (이동 모드)
-function showHabitatListView() {
-  document.querySelector('.current-habitat-section').style.display = 'none';
-  document.getElementById('habitatDetailSection').style.display = 'none';
-  document.getElementById('habitatListSection').style.display = 'block';
-
-  // 헤더 및 뒤로가기 버튼 초기화
-  document.querySelector('.habitat-list-header h4').textContent = '이동할 서식지 선택';
-  const backBtn = document.getElementById('habitatListBackBtn');
-  backBtn.onclick = showHabitatMainView;
-
-  // 전체 목록 렌더링
-  if (cachedHabitats) {
-    renderHabitatsGrid(cachedHabitats);
-  }
-}
-
-// 현재 서식지 정보 렌더링
-function renderCurrentHabitatInfo() {
-  const container = document.getElementById('modalCurrentHabitatDisplay');
+// 현재 위치 카드 렌더링
+function renderCurrentLocationCard() {
+  const container = document.getElementById('currentLocationCard');
   if (!container) return;
 
   const habitatNameMap = {
     'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
     'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
-    'random': '랜덤'
+    'random': '랜덤', 'rare': '희귀'
   };
 
-  const name = habitatNameMap[currentHabitatData.current_habitat] || '랜덤 탐험';
-  const sub = currentHabitatData.current_sub_habitat ? '특정 구역 탐색 중' : '자유 탐험 중';
+  const name = habitatNameMap[currentHabitatData.current_habitat] || '랜덤';
+  const slug = currentHabitatData.current_habitat;
 
-  let html = `
-    <div class="current-habitat-details">
-      <div class="current-habitat-name">${name}</div>
-      <div class="current-habitat-desc">${sub}</div>
-    </div>
-  `;
+  // 기본값 설정
+  let subName = '모든 서브 구역 탐험 가능';
+  let bgImage = '';
 
-  // 이동 버튼
-  if (currentHabitatData.can_change_habitat) {
-    html += `<button class="change-habitat-btn" onclick="showHabitatListView()">서식지 이동</button>`;
+  // 서식지 정보 찾기
+  const habitat = cachedHabitats?.find(h => h.slug === slug);
+
+  if (habitat) {
+    // 기본 배경 (첫 번째)
+    bgImage = habitat.backgrounds[0]?.image || '';
+
+    // 현재 세부 서식지가 선택되어 있다면 해당 정보 찾기
+    if (currentHabitatData.current_sub_habitat) {
+      const currentBg = habitat.backgrounds.find(b => `${slug}_${b.type}` === currentHabitatData.current_sub_habitat);
+      if (currentBg) {
+        subName = currentBg.display_name; // 예: "깊은 동굴 (얼음)"
+        bgImage = currentBg.image;        // 해당 구역의 배경 이미지 사용
+      }
+    }
+  }
+
+  let html = '';
+
+  if (slug === 'random') {
+    // 랜덤 서식지 - 스플릿 이미지 생성
+    const randomSlugs = ['cave', 'forest', 'sea', 'urban', 'grassland'];
+    const selectedImages = [];
+    randomSlugs.forEach(rs => {
+      const found = (cachedHabitats || []).find(h => h.slug === rs);
+      if (found && found.backgrounds.length > 0) {
+        selectedImages.push(`${ASSETS_BASE_URL}/custom/img/background/${rs}/${found.backgrounds[0].image}`);
+      }
+    });
+
+    let collageHtml = '';
+    if (selectedImages.length >= 3) {
+      const stripHtml = selectedImages.slice(0, 5).map(url =>
+        `<div style="flex:1; background-image: url('${url}'); background-size: cover; background-position: center; border-right: 1px solid rgba(255,255,255,0.2);"></div>`
+      ).join('');
+
+      collageHtml = `
+        <div style="display: flex; width: 100%; height: 200px; position: relative;">
+          ${stripHtml}
+          <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;">
+            <img src="/poff-assets/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 72px; height: 72px; filter: brightness(0) invert(1) drop-shadow(0 4px 12px rgba(0,0,0,0.6));">
+          </div>
+        </div>
+      `;
+    } else {
+      collageHtml = `<div style="height: 200px; background: linear-gradient(135deg, rgba(255,154,158,0.8) 0%, rgba(254,207,239,0.8) 50%, rgba(255,209,255,0.8) 100%), #333; display: flex; align-items: center; justify-content: center;"><img src="/poff-assets/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 72px; height: 72px; filter: brightness(0) invert(1) drop-shadow(2px 2px 4px rgba(0,0,0,0.3));"></div>`;
+    }
+
+    html = `
+      ${collageHtml}
+      <div class="habitat-card-info">
+        <div class="habitat-card-name">${name}</div>
+        <div class="habitat-card-desc">모든 포켓몬이 등장할 수 있는 모험 지역입니다</div>
+      </div>
+    `;
   } else {
-    html += `<button class="change-habitat-btn" disabled title="내일 다시 이동할 수 있습니다">이동 완료</button>`;
+    // 특정 서식지
+    const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${slug}/${bgImage}` : '';
+
+    // 낮은 개체수 경고 로직
+    let warningHtml = '';
+    if (currentHabitatData.current_sub_habitat) {
+      const currentBg = habitat.backgrounds.find(b => `${slug}_${b.type}` === currentHabitatData.current_sub_habitat);
+      if (currentBg && currentBg.total_count <= 3) {
+        warningHtml = `<div class="habitat-warning" style="color: #e53e3e; font-size: 0.8rem; margin-top: 4px;">
+             ⚠️ 획득 가능한 포켓몬이 적은 구역입니다 (최대 ${currentBg.collected_count}마리)
+           </div>`;
+        // 토스트로도 알림 (한 번만 뜨게 하려면 플래그가 필요하지만, 여기서는 렌더링 될 때마다 표시되지 않도록 주의)
+        // 렌더링은 자주 일어나므로 토스트는 제외하고 카드 내에 표시
+      }
+    }
+
+    html = `
+      <img src="${bgUrl}" alt="${name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22200%22%3E%3Crect fill=%22%23e2e8f0%22 width=%22400%22 height=%22200%22/%3E%3C/svg%3E'">
+      <div class="habitat-card-info">
+        <div class="habitat-card-name">${currentHabitatData.current_sub_habitat ? name : name + ' 랜덤'}</div>
+        <div class="habitat-card-desc">${subName}</div>
+        ${warningHtml}
+      </div>
+    `;
   }
 
   container.innerHTML = html;
-
-  // 상세 정보 탭 로드
-  loadHabitatPokemonList(currentHabitatData.current_habitat);
 }
+
+// 이동 횟수 표시 렌더링
+function renderMoveCounter() {
+  const container = document.getElementById('moveCounter');
+  if (!container) return;
+
+  const canMove = currentHabitatData.can_change_habitat;
+  const icon = canMove ? '🚀' : '✅';
+  const text = canMove ? '오늘 이동 가능' : '금일 이동 완료';
+  const className = canMove ? '' : 'used';
+
+  container.innerHTML = `
+    <span class="icon">${icon}</span>
+    <span>${text}</span>
+  `;
+  container.className = `move-counter ${className}`;
+}
+
+
+
+// 현재 서식지의 세부 서식지들을 현재 서식지 정보 섹션에 표시
+function renderCurrentSubHabitatsInDisplay() {
+  const grid = document.getElementById('currentSubHabitatsGrid');
+  if (!grid) return;
+
+  const slug = currentHabitatData.current_habitat;
+  const habitat = cachedHabitats?.find(h => h.slug === slug);
+
+  if (!habitat) {
+    grid.innerHTML = '<p class="empty-message">서식지 정보를 불러오는 중...</p>';
+    return;
+  }
+
+  grid.innerHTML = '';
+
+  // 배경 이미지(및 표시 이름) 기준으로 그룹화
+  const groupedBackgrounds = {};
+  habitat.backgrounds.forEach(bg => {
+    const key = `${bg.display_name}|${bg.image}`;
+    if (!groupedBackgrounds[key]) {
+      groupedBackgrounds[key] = {
+        display_name: bg.display_name,
+        image: bg.image,
+        variants: []
+      };
+    }
+    groupedBackgrounds[key].variants.push(bg);
+  });
+
+  Object.values(groupedBackgrounds).forEach(group => {
+    const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${slug}/${group.image}`;
+
+    const card = document.createElement('div');
+    card.className = 'habitat-card';
+    card.innerHTML = `
+      <img src="${bgUrl}" class="habitat-card-img" alt="${group.display_name}">
+      <div class="habitat-card-overlay">
+        <div class="habitat-name">${group.display_name}</div>
+      </div>
+    `;
+
+    // 클릭 시 포켓몬 목록 표시
+    card.onclick = () => showPokemonListForSubHabitat(group.display_name, group.variants);
+
+    grid.appendChild(card);
+  });
+}
+
+// 세부 서식지의 포켓몬 목록 표시
+function showPokemonListForSubHabitat(displayName, variants) {
+  const pokemonDisplay = document.getElementById('habitatPokemonDisplay');
+  const nameEl = document.getElementById('selectedSubHabitatName');
+  const statsEl = document.getElementById('habitatPokemonStats');
+  const gridEl = document.getElementById('habitatPokemonGrid');
+
+  nameEl.textContent = displayName;
+
+  // TODO: API 호출하여 실제 포켓몬 데이터 가져오기
+  // 지금은 UI만 표시
+  statsEl.innerHTML = `<strong>이 구역의 포켓몬</strong><br><span style="font-size: 12px; color: #718096;">정보 준비 중...</span>`;
+  gridEl.innerHTML = `
+    <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+      <p>포켓몬 데이터는 API 연동 후 표시됩니다.</p>
+    </div>
+    
+    <div style="grid-column: 1 / -1; margin-top: 20px; text-align: center;">
+      <button id="confirmMoveBtn" class="confirm-move-btn" style="
+        background-color: var(--primary-color); 
+        color: white; 
+        border: none; 
+        padding: 12px 24px; 
+        border-radius: 12px; 
+        font-weight: bold; 
+        font-size: 1rem; 
+        cursor: pointer; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+      ">
+        이 구역으로 이동
+      </button>
+    </div>
+  `;
+
+  const confirmBtn = document.getElementById('confirmMoveBtn');
+  if (confirmBtn) {
+    // variants가 있으면 첫 번째 배경의 type을 사용하여 habitat_type 식별
+    // habitat는 currentHabitatData.current_habitat
+    // subHabitatKey는 "habitat_type"
+
+    const currentHabitat = currentHabitatData.current_habitat;
+    if (variants && variants.length > 0) {
+      const type = variants[0].type; // bug, ice, etc.
+      const subHabitatKey = `${currentHabitat}_${type}`;
+
+      confirmBtn.onclick = async () => {
+        // requestInnerHabitatMove 호출 (이동 후 UI 갱신 최적화)
+        // displayName (예: 숲 (벌레))
+        await requestInnerHabitatMove(currentHabitat, subHabitatKey, displayName);
+      };
+    } else {
+      confirmBtn.style.display = 'none';
+    }
+  }
+
+  pokemonDisplay.style.display = 'block';
+}
+
 
 // 전체 서식지 목록 로드 및 렌더링
 let cachedHabitats = null;
@@ -6444,8 +6917,13 @@ async function loadHabitatsList() {
     if (response.ok) {
       const result = await response.json();
       if (result.success) {
-        cachedHabitats = result.data;
-        renderHabitatsGrid(cachedHabitats);
+        cachedHabitats = result.data || [];
+
+        // 현재 모달이 열려있고, 서식지 변경 탭이 활성화된 경우 UI 갱신
+        const changeTabPane = document.getElementById('changeTabPane');
+        if (changeTabPane && changeTabPane.style.display !== 'none') {
+          renderMajorHabitatsGrid();
+        }
       }
     }
   } catch (error) {
@@ -6453,102 +6931,307 @@ async function loadHabitatsList() {
   }
 }
 
-function renderHabitatsGrid(habitats) {
-  const grid = document.getElementById('habitatGrid');
+
+
+// 대분류 서식지 목록 렌더링 (서식지간 이동)
+function renderMajorHabitatsGrid() {
+  const grid = document.getElementById('majorHabitatGrid');
   if (!grid) return;
 
   grid.innerHTML = '';
 
+  const habitatNameMap = {
+    'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
+    'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
+    'random': '랜덤', 'rare': '희귀'
+  };
+
+  // 랜덤 옵션 추가
   // 랜덤 옵션 추가
   const randomCard = document.createElement('div');
   randomCard.className = 'habitat-card';
+
+  // 스플릿 이미지 생성 (Vertical Strips)
+  let randomImagesHtml = '';
+  const randomSlugs = ['cave', 'forest', 'sea', 'urban', 'grassland'];
+  const pool = cachedHabitats || [];
+
+  // pool에서 랜덤하게 4개 정도 뽑거나, 고정된 순서로 가져옴
+  const selectedImages = [];
+  randomSlugs.forEach(slug => {
+    const found = pool.find(h => h.slug === slug);
+    if (found && found.backgrounds.length > 0) {
+      selectedImages.push(`${ASSETS_BASE_URL}/custom/img/background/${slug}/${found.backgrounds[0].image}`);
+    }
+  });
+
+  // 이미지가 3개 이상 모였을 때만 스플릿 뷰 적용
+  if (selectedImages.length >= 3) {
+    const stripHtml = selectedImages.slice(0, 5).map(url =>
+      `<div style="flex:1; background-image: url('${url}'); background-size: cover; background-position: center; border-right: 1px solid rgba(255,255,255,0.2);"></div>`
+    ).join('');
+
+    randomImagesHtml = `
+      <div style="display: flex; width: 100%; height: 100px; position: relative;">
+        ${stripHtml}
+        <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;">
+          <img src="/poff-assets/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 32px; height: 32px; filter: brightness(0) invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.6));">
+        </div>
+      </div>
+    `;
+  } else {
+    // Fallback gradient
+    randomImagesHtml = `<div style="height: 100px; background: linear-gradient(135deg, rgba(255,154,158,0.8) 0%, rgba(254,207,239,0.8) 50%, rgba(255,209,255,0.8) 100%), #333; display: flex; align-items: center; justify-content: center;"><img src="/poff-assets/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 32px; height: 32px; filter: brightness(0) invert(1) drop-shadow(2px 2px 4px rgba(0,0,0,0.3));"></div>`;
+  }
+
+  // 수집률 계산 (랜덤용 전체 통계)
+  let totalAllCollected = 0;
+  let totalAllPokemon = 0;
+  let isRareUnlocked = false;
+
+  if (cachedHabitats) {
+    const otherHabitats = cachedHabitats.filter(h => h.slug !== 'rare' && h.slug !== 'random');
+
+    // 전체 통계 계산
+    cachedHabitats.forEach(habitat => {
+      totalAllCollected += habitat.backgrounds.reduce((sum, bg) => sum + (bg.collected_count || 0), 0);
+      totalAllPokemon += habitat.backgrounds.reduce((sum, bg) => sum + (bg.total_count || 0), 0);
+    });
+
+    // 희귀 서식지 해금 여부 확인
+    isRareUnlocked = otherHabitats.length > 0 && otherHabitats.every(h => {
+      const tc = h.backgrounds.reduce((sum, bg) => sum + (bg.collected_count || 0), 0);
+      const tp = h.backgrounds.reduce((sum, bg) => sum + (bg.total_count || 0), 0);
+      return tp > 0 && tc >= tp;
+    });
+  }
+
   randomCard.innerHTML = `
-    <div style="height: 100px; background: linear-gradient(45deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%); display: flex; align-items: center; justify-content: center; font-size: 30px;">?</div>
+    ${randomImagesHtml}
     <div class="habitat-card-info">
-      <div class="habitat-card-name">랜덤</div>
-      <div class="habitat-card-type">모든 포켓몬 등장</div>
+      <div class="habitat-card-name">전체 랜덤</div>
+      <div class="habitat-card-type" style="font-size: 11px; color: #888;">
+        전체: (${totalAllCollected}/${totalAllPokemon})
+      </div>
     </div>
   `;
-  randomCard.onclick = () => confirmHabitatChange('random', null, '랜덤');
+  randomCard.onclick = () => confirmMajorHabitatChange('random', '랜덤');
   grid.appendChild(randomCard);
 
-  habitats.forEach(habitat => {
-    // 각 서식지의 첫 번째 배경 이미지를 대표 이미지로 사용
-    const bgImage = habitat.backgrounds[0]?.image || '';
-    const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${habitat.slug}/${bgImage}` : '';
+  // 실제 서식지들 (Backend에서 이미 total_count 기준으로 정렬되어 옴)
+  if (cachedHabitats) {
+    // 희귀 서식지를 항상 마지막에 배치
+    const sortedHabitats = [...cachedHabitats].sort((a, b) => {
+      if (a.slug === 'rare') return 1;
+      if (b.slug === 'rare') return -1;
+      return 0; // 나머지는 기존 순서(백엔드 정렬) 유지
+    });
 
-    const card = document.createElement('div');
-    card.className = 'habitat-card';
-    card.innerHTML = `
-      <img src="${bgUrl}" class="habitat-card-img" onerror="this.style.display='none'">
-      <div class="habitat-card-info">
-        <div class="habitat-card-name">${habitat.name}</div>
-        <div class="habitat-card-type">${habitat.backgrounds.length}개 구역</div>
+    sortedHabitats.forEach(habitat => {
+      const slug = habitat.slug;
+      if (!slug || slug === 'random') return; // 방어 코드
+      if (!habitat) return;
+
+      const bgImage = habitat.backgrounds[0]?.image || '';
+      const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${slug}/${bgImage}` : '';
+      const name = habitatNameMap[slug] || habitat.name;
+
+      // 수집률 계산
+      const totalCollected = habitat.backgrounds.reduce((sum, bg) => sum + (bg.collected_count || 0), 0);
+      const totalPokemon = habitat.backgrounds.reduce((sum, bg) => sum + (bg.total_count || 0), 0);
+      const isCompleted = totalPokemon > 0 && totalCollected >= totalPokemon;
+      const progressPercent = totalPokemon > 0 ? Math.round((totalCollected / totalPokemon) * 100) : 0;
+
+      const card = document.createElement('div');
+      card.className = 'habitat-card';
+      if (isCompleted) card.classList.add('completed-habitat'); // CSS 스타일링용 클래스
+
+      let collectionStatusHtml = '';
+      if (totalPokemon === 0) {
+        collectionStatusHtml = '<span style="color: #aaa;">발견된 포켓몬 없음</span>';
+      } else if (isCompleted) {
+        collectionStatusHtml = '<span style="color: #d97706; font-weight: bold;">🎉 수집 완료!</span>';
+      } else {
+        collectionStatusHtml = `수집률: ${progressPercent}% (${totalCollected}/${totalPokemon})`;
+      }
+
+      // 희귀 서식지 잠금 상태 처리
+      const isLockedRare = slug === 'rare' && !isRareUnlocked;
+
+      card.innerHTML = `
+      <img src="${bgUrl}" class="habitat-card-img" alt="${name}" style="${isLockedRare ? 'filter: grayscale(1) brightness(0.7);' : ''}">
+      ${isCompleted ? '<div class="habitat-completed-badge" style="background: rgba(255, 215, 0, 0.9); color: #744210; font-weight: bold; padding: 4px 8px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">👑 졸업</div>' : ''}
+      ${isLockedRare ? '<div class="habitat-lock-overlay" style="position: absolute; top:0; left:0; width:100%; height:100px; display: flex; align-items: center; justify-content: center; font-size: 30px; color: white; text-shadow: 0 0 10px rgba(0,0,0,0.8);">🔒</div>' : ''}
+      <div class="habitat-card-info" style="${isLockedRare ? 'opacity: 0.6;' : ''}">
+        <div class="habitat-card-name">${name}</div>
+        <div class="habitat-card-type" style="font-size: 11px; color: #666;">
+          ${isLockedRare ? '<span style="color: #e53e3e;">🔒 모두 수집 필요</span>' : collectionStatusHtml}
+        </div>
       </div>
     `;
 
-    card.onclick = () => showSubHabitatSelection(habitat);
-    grid.appendChild(card);
-  });
+      // TODO: 포켓몬 수집 여부에 따른 disabled 처리
+      // 지금은 일단 모두 활성화
+      const isAvailable = true; // await checkHabitatAvailability(slug);
+
+      if (!isAvailable || isLockedRare) {
+        card.classList.add('disabled');
+        if (isLockedRare) {
+          card.onclick = () => showToast('모든 서식지의 포켓몬을 수집해야 이동가능합니다.');
+        }
+      }
+
+      if (isAvailable) {
+        card.onclick = async () => {
+          if (isCompleted) {
+            const confirmed = await showConfirmModal(
+              '졸업 서식지 알림',
+              `<strong>[${name}]</strong> 서식지의 모든 포켓몬을 이미 획득했습니다! (졸업)<br><br>그래도 이동하시겠습니까?<br><small style="color: #666">(이동 시 보상으로 다른 서식지의 포켓몬이 등장할 수 있습니다)</small>`
+            );
+            if (!confirmed) return;
+          }
+          confirmMajorHabitatChange(slug, name);
+        };
+      }
+
+      grid.appendChild(card);
+    });
+  }
 }
 
-// 세부 서식지 선택 UI
-function showSubHabitatSelection(habitat) {
-  const grid = document.getElementById('habitatGrid');
+// 현재 서식지의 세부 서식지 목록 렌더링 (서식지 내 이동)
+function renderCurrentSubHabitats() {
+  const grid = document.getElementById('subHabitatGrid');
+  if (!grid) return;
+
+  const slug = currentHabitatData.current_habitat;
+
+  if (slug === 'random') {
+    grid.innerHTML = '<p class="empty-message" style="grid-column: 1 / -1; text-align: center; padding: 40px;">랜덤 서식지는 세부 구역이 없습니다<br><span style="font-size:12px; color:#888;">(모든 포켓몬이 랜덤하게 등장합니다)</span></p>';
+    return;
+  }
+
+  const habitat = cachedHabitats?.find(h => h.slug === slug);
+
+  if (!habitat) {
+    grid.innerHTML = '<p class="empty-message">서식지 정보를 불러올 수 없습니다.</p>';
+    return;
+  }
+
   grid.innerHTML = '';
 
-  // 뒤로가기 버튼: 서식지 목록으로 돌아가기
-  const backBtn = document.getElementById('habitatListBackBtn');
-  backBtn.onclick = () => {
-    renderHabitatsGrid(cachedHabitats);
-    document.querySelector('.habitat-list-header h4').textContent = '이동할 서식지 선택';
-    backBtn.onclick = showHabitatMainView; // 메인 뷰로 돌아가는 기능으로 복구
-  };
-
-  // 헤더 변경
-  document.querySelector('.habitat-list-header h4').textContent = `${habitat.name} - 구역 선택`;
-
+  // 배경 이미지 기준으로 그룹화
+  const groupedBackgrounds = {};
   habitat.backgrounds.forEach(bg => {
-    const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${habitat.slug}/${bg.image}`;
+    const key = `${bg.display_name}|${bg.image}`;
+    if (!groupedBackgrounds[key]) {
+      groupedBackgrounds[key] = {
+        display_name: bg.display_name,
+        image: bg.image,
+        variants: []
+      };
+    }
+    groupedBackgrounds[key].variants.push(bg);
+  });
+
+  Object.values(groupedBackgrounds).forEach(group => {
+    const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${slug}/${group.image}`;
+
+    // 수집률 계산 (그룹 내 합산)
+    const groupCollected = group.variants.reduce((sum, v) => sum + (v.collected_count || 0), 0);
+    const groupTotal = group.variants.reduce((sum, v) => sum + (v.total_count || 0), 0);
+    const isCompleted = groupTotal > 0 && groupCollected >= groupTotal;
+
+    // 타입 아이콘 생성
+    const typesHtml = group.variants.map(v =>
+      `<img src="${ASSETS_BASE_URL}/custom/img/ui/${v.type}.png" alt="${getKoreanType(v.type)}" class="type-icon" title="${getKoreanType(v.type)}">`
+    ).join('');
 
     const card = document.createElement('div');
     card.className = 'habitat-card';
+    if (isCompleted) {
+      // card.style.opacity = '0.7'; // 졸업한 구역은 반투명 처리 (선택사항)
+      // card.title = "졸업한 구역입니다";
+    }
+
     card.innerHTML = `
-      <img src="${bgUrl}" class="habitat-card-img">
+      <img src="${bgUrl}" class="habitat-card-img" alt="${group.display_name}">
+      ${isCompleted ? '<div class="habitat-completed-badge">👑 졸업</div>' : ''}
       <div class="habitat-card-info">
-        <div class="habitat-card-name">${bg.display_name}</div>
-        <div class="habitat-card-type">${bg.type} 타입 출몰</div>
+        <div class="habitat-card-name">${group.display_name}</div>
+        <div class="habitat-card-types">
+          ${typesHtml}
+        </div>
+        <div class="habitat-card-collection">
+          <span class="collection-count" style="${isCompleted ? 'color: #ffd700; fontWeight: bold;' : ''}">
+            ${groupCollected}/${groupTotal} ${isCompleted ? '(완료)' : ''}
+          </span>
+         
+        </div>
       </div>
     `;
 
-    // 클릭 시 이동 확인
-    // subHabitat 형식: "habitat_type" (예: "grassland_bug")
-    const subHabitat = `${habitat.slug}_${bg.type}`;
-    card.onclick = () => confirmHabitatChange(habitat.slug, subHabitat, bg.display_name);
+    // 클릭 이벤트: 구역 이동 (무제한)
+    card.onclick = async () => {
+      const currentHabitat = currentHabitatData.current_habitat;
+      const type = group.variants[0].type;
+      const subHabitatKey = `${currentHabitat}_${type}`;
+
+      const confirmed = await showConfirmModal('구역 이동', `<strong>[${group.display_name}]</strong> 구역으로 이동하시겠습니까?`);
+      if (confirmed) {
+        await requestInnerHabitatMove(currentHabitat, subHabitatKey, group.display_name);
+      }
+    };
+
     grid.appendChild(card);
   });
 }
 
-// 서식지 변경 확인 및 요청
-function confirmHabitatChange(habitatSlug, subHabitat, displayName) {
-  // 게스트 모드에서는 기능 제한
+
+// 세부 서식지 내 이동 요청 (무제한)
+async function requestInnerHabitatMove(habitat, subHabitat, displayName) {
+  // 게스트 모드
   if (window.isGuestMode) {
     showToast('로그인하면 서식지를 변경할 수 있습니다!');
     return;
   }
 
-  // 대분류 변경인지 확인
-  const isMajorChange = habitatSlug !== currentHabitatData.current_habitat;
+  try {
+    showGlobalLoading('이동 중...');
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/user/habitat`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ habitat, subHabitat, innerMove: true })
+    });
 
-  let message = `'${displayName}'(으)로 이동하시겠습니까?`;
-  if (isMajorChange && habitatSlug !== 'random') {
-    message += `\n\n주의: 다른 대분류 서식지로의 이동은 하루 1회만 가능합니다.`;
-  }
+    const result = await response.json();
+    hideGlobalLoading();
 
-  if (confirm(message)) {
-    requestHabitatChange(habitatSlug, subHabitat);
+    if (response.ok && result.success) {
+      showToast('이동하였습니다.');
+      if (result.data) {
+        currentHabitatData.current_sub_habitat = result.data.current_sub_habitat;
+        // fetchUserHabitat()를 호출하여 전체 상태를 동기화하는 것이 가장 안전함
+        await fetchUserHabitat();
+      }
+
+      // UI 업데이트
+      updateHabitatUI();
+      renderCurrentLocationCard();
+
+      // 필요하다면 모달 내 뷰를 갱신하거나 닫기할 수 있음
+      // 여기서는 토스트만 띄우고 유지 (사용자가 계속 탐색할 수 있도록)
+    } else {
+      showToast(result.message || '이동에 실패했습니다.');
+    }
+  } catch (error) {
+    hideGlobalLoading();
+    console.error('Inner habitat move error:', error);
+    showToast('이동 중 오류가 발생했습니다.');
   }
 }
+
 
 async function requestHabitatChange(habitat, subHabitat) {
   try {
@@ -6565,20 +7248,25 @@ async function requestHabitatChange(habitat, subHabitat) {
 
     if (response.ok && result.success) {
       showToast(result.data.message || '서식지가 변경되었습니다.');
-      currentHabitatData.current_habitat = result.data.current_habitat;
-      currentHabitatData.current_sub_habitat = result.data.current_sub_habitat;
+      // 데이터 재요청 (요청사항 반영)
+      await fetchUserHabitat();
 
       // UI 업데이트
       updateHabitatUI();
-      showHabitatMainView(); // 메인 뷰로 복귀
+      renderCurrentLocationCard();
+      renderMoveCounter();
+
+      if (typeof showHabitatMainView === 'function') {
+        showHabitatMainView(); // 메인 뷰로 복귀
+      }
 
     } else {
-      showToast(result.message || '서식지 이동에 실패했습니다.', true); // error toast
+      showToast(result.message || '서식지 이동에 실패했습니다.'); // error toast
     }
   } catch (error) {
     hideGlobalLoading();
     console.error('Habitat change error:', error);
-    showToast('서식지 이동 중 오류가 발생했습니다.', true);
+    showToast('서식지 이동 중 오류가 발생했습니다.');
   }
 }
 
@@ -6604,517 +7292,6 @@ async function loadHabitatPokemonList(habitatSlug) {
 // 전역 노출
 window.openHabitatModal = openHabitatModal;
 window.closeHabitatModal = closeHabitatModal;
-window.showHabitatListView = showHabitatListView;
-window.showHabitatMainView = showHabitatMainView;
-
-// // ==========================================
-// // 서식지 시스템 (Habitat System)
-// // ==========================================
-
-// let habitatData = {
-//   current: 'random',
-//   sub: null,
-//   lastChange: null,
-//   canChange: true,
-//   allHabitats: []
-// };
-
-// // 서식지 아이콘 매핑
-// const HABITAT_ICONS = {
-//   'cave': 'cave.png',
-//   'forest': 'forest.png', // 숲 아이콘이 목록에 없었음, 확인 필요. 유저 목록엔 없지만 forest는 보통 있음. 유저 목록: cave, roughterrain, sea, mountain, urban, grassland, watersedge, rare, random. 숲(forest)이 빠져있나? 유저 요청: "랜덤, 동굴,숲,초원,산,험지,바다,도시,물가". 숲이 있다. 아이콘 파일 확인 필요.
-//   'grassland': 'grassland.png',
-//   'mountain': 'mountain.png',
-//   'roughterrain': 'roughterrain.png',
-//   'sea': 'sea.png',
-//   'urban': 'urban.png',
-//   'watersedge': 'watersedge.png',
-//   'rare': 'rare.png',
-//   'random': 'random.png'
-// };
-
-// // 숲 아이콘이 없는 경우 grassland로 대체하거나 기본값 설정
-// // 유저가 제공한 목록: cave, roughterrain, sea, mountain, urban, grassland, watersedge, rare, random.
-// // 숲(forest)에 대한 아이콘 파일이 명시되지 않았음. 일단 forest.png로 가정하고 에러 시 처리.
-
-// async function initHabitat() {
-//   console.log('Initializing Habitat System...');
-
-//   // 1. 현재 서식지 정보 가져오기
-//   await fetchUserHabitat();
-
-//   // 2. 아이콘 클릭 이벤트
-//   const habitatBtn = document.getElementById('habitatIconBtn');
-//   if (habitatBtn) {
-//     habitatBtn.addEventListener('click', openHabitatModal);
-//   }
-
-//   // 3. 모달 닫기 이벤트
-//   const closeBtn = document.getElementById('habitat-close');
-//   if (closeBtn) {
-//     closeBtn.addEventListener('click', () => {
-//       document.getElementById('habitat-modal').style.display = 'none';
-//       onModalClose();
-//     });
-//   }
-
-//   // 4. 서식지 목록 뒤로가기
-//   const backBtn = document.getElementById('habitatListBackBtn');
-//   if (backBtn) {
-//     backBtn.addEventListener('click', () => {
-//       document.getElementById('habitatListSection').style.display = 'none';
-//       document.querySelector('.current-habitat-section').style.display = 'block';
-//       document.getElementById('habitatDetailSection').style.display = 'block';
-//     });
-//   }
-
-//   // 5. 탭 전환 이벤트
-//   const tabs = document.querySelectorAll('.detail-tab');
-//   tabs.forEach(tab => {
-//     tab.addEventListener('click', (e) => {
-//       tabs.forEach(t => t.classList.remove('active'));
-//       e.target.classList.add('active');
-
-//       const targetId = e.target.dataset.target;
-//       if (targetId === 'habitat-pokemon') {
-//         document.getElementById('habitatPokemonList').style.display = 'grid';
-//         document.getElementById('habitatInfo').style.display = 'none';
-//       } else {
-//         document.getElementById('habitatPokemonList').style.display = 'none';
-//         document.getElementById('habitatInfo').style.display = 'block';
-//       }
-//     });
-//   });
-// }
-
-// async function fetchUserHabitat() {
-//   if (!window.isAuthenticated()) return;
-
-//   try {
-//     const headers = await getAuthHeaders();
-//     const response = await fetch('/api/user/habitat', { headers });
-//     if (response.ok) {
-//       const result = await response.json();
-//       if (result.success) {
-//         habitatData.current = result.data.current_habitat;
-//         habitatData.sub = result.data.current_sub_habitat;
-//         habitatData.lastChange = result.data.last_habitat_change_at;
-//         habitatData.canChange = result.data.can_change_habitat;
-
-//         updateHabitatIcon();
-//       }
-//     }
-//   } catch (error) {
-//     console.error('Failed to fetch user habitat:', error);
-//   }
-// }
-
-// function updateHabitatIcon() {
-//   const iconImg = document.getElementById('currentHabitatIcon');
-//   const label = document.getElementById('currentHabitatLabel');
-//   const placeholder = document.querySelector('.habitat-icon-placeholder');
-
-//   if (iconImg && label) {
-//     const filename = HABITAT_ICONS[habitatData.current] || 'random.png';
-//     // forest 예외 처리: 파일이 없으면 grassland 사용? 일단 forest.png 시도
-//     let iconUrl = `${ASSETS_BASE_URL}/custom/img/ui/${filename}`;
-
-//     // 숲 아이콘이 목록에 없었으므로 grassland로 임시 매핑 (파일 확인 전까지)
-//     if (habitatData.current === 'forest' && !Object.values(HABITAT_ICONS).includes('forest.png')) {
-//        // 유저가 forest.png를 언급하지 않았음. grassland.png를 쓰거나 기본 이미지 사용
-//        // 일단 forest.png로 요청해보고 onerror에서 처리
-//     }
-
-//     imgLoad(iconUrl).then(() => {
-//         iconImg.src = iconUrl;
-//         iconImg.style.display = 'block';
-//         if (placeholder) placeholder.style.display = 'none';
-//     }).catch(() => {
-//         // Fallback
-//         iconImg.src = `${ASSETS_BASE_URL}/custom/img/ui/random.png`;
-//     });
-
-//     const habitatNames = {
-//       'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
-//       'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
-//       'random': '랜덤', 'rare': '희귀'
-//     };
-//     label.textContent = habitatNames[habitatData.current] || habitatData.current;
-//   }
-// }
-
-// function imgLoad(url) {
-//   return new Promise((resolve, reject) => {
-//     const img = new Image();
-//     img.onload = resolve;
-//     img.onerror = reject;
-//     img.src = url;
-//   });
-// }
-
-// async function openHabitatModal() {
-//   const modal = document.getElementById('habitat-modal');
-//   modal.style.display = 'flex';
-//   onModalOpen();
-
-//   // 최신 정보 갱신
-//   await fetchUserHabitat();
-
-//   renderCurrentHabitatSection();
-
-//   // 전체 서식지 정보 가져오기 (처음 한 번만)
-//   if (habitatData.allHabitats.length === 0) {
-//     try {
-//       const headers = await getAuthHeaders();
-//       const response = await fetch('/api/habitats', { headers });
-//       if (response.ok) {
-//         const result = await response.json();
-//         if (result.success) {
-//           habitatData.allHabitats = result.data;
-//         }
-//       }
-//     } catch (e) {
-//       console.error('Failed to fetch habitats:', e);
-//     }
-//   }
-
-//   // 하단 정보 섹션 렌더링 (현재 서식지 기준)
-//   renderHabitatDetail(habitatData.current);
-// }
-
-// function renderCurrentHabitatSection() {
-//   const container = document.getElementById('modalCurrentHabitatDisplay');
-//   container.innerHTML = '';
-
-//   const habitatNames = {
-//       'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
-//       'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
-//       'random': '랜덤', 'rare': '희귀'
-//   };
-
-//   // 1. 서식지 간 이동 버튼
-//   const moveHabitatBtn = document.createElement('div');
-//   moveHabitatBtn.className = 'habitat-nav-btn';
-//   moveHabitatBtn.innerHTML = `
-//     <span>서식지간 이동</span>
-//     <span class="arrow">→</span>
-//   `;
-//   moveHabitatBtn.onclick = () => showHabitatSelectionList();
-
-//   // 이동 불가 상태 표시 (하루 1회 제한)
-//   if (!habitatData.canChange && habitatData.current !== 'random') {
-//       const limitMsg = document.createElement('div');
-//       limitMsg.className = 'limit-message';
-//       limitMsg.textContent = '내일 새벽 4시까지 이동할 수 없습니다.';
-//       container.appendChild(limitMsg);
-//       moveHabitatBtn.classList.add('disabled');
-//       // 클릭은 가능하게 해서 메시지를 띄울지, 아예 막을지? 
-//       // 유저 요청: "변경없이 유지도 가능... 이동할수 없게 되어야한다"
-//       // 하지만 "랜덤, 동굴... 이동할수 있고"
-//       // 이미 이동했으면 클릭 조차 할 수 없게?
-//       moveHabitatBtn.onclick = () => showToast('오늘은 이미 서식지를 이동했습니다.');
-//   }
-
-//   container.appendChild(moveHabitatBtn);
-
-//   // 2. 서식지 내 이동 버튼
-//   const moveSubHabitatBtn = document.createElement('div');
-//   moveSubHabitatBtn.className = 'habitat-nav-btn';
-//   moveSubHabitatBtn.innerHTML = `
-//     <span>서식지 내 이동 (${habitatNames[habitatData.current] || habitatData.current})</span>
-//     <span class="arrow">→</span>
-//   `;
-//   moveSubHabitatBtn.onclick = () => showSubHabitatSelectionList(habitatData.current);
-//   container.appendChild(moveSubHabitatBtn);
-// }
-
-// function showHabitatSelectionList() {
-//   const listSection = document.getElementById('habitatListSection');
-//   const grid = document.getElementById('habitatGrid');
-
-//   document.querySelector('.current-habitat-section').style.display = 'none';
-//   document.getElementById('habitatDetailSection').style.display = 'none';
-//   listSection.style.display = 'block';
-
-//   grid.innerHTML = '';
-
-//   // 희귀(rare) 제외하고 렌더링
-//   const habitatsToShow = habitatData.allHabitats.filter(h => h.slug !== 'rare');
-
-//   habitatsToShow.forEach(habitat => {
-//     const card = document.createElement('div');
-//     card.className = 'habitat-card';
-
-//     // 배경 이미지: 해당 서식지의 'normal' 타입 이미지 또는 첫 번째 이미지
-//     const bgImage = habitat.backgrounds.find(b => b.type === 'normal') || habitat.backgrounds[0];
-//     const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${habitat.slug}/${bgImage.image}` : '';
-
-//     card.style.backgroundImage = `url('${bgUrl}')`;
-//     card.innerHTML = `
-//       <div class="habitat-card-overlay">
-//         <span class="habitat-name">${habitat.name}</span>
-//       </div>
-//     `;
-
-//     // 클릭 이벤트
-//     card.onclick = () => confirmMoveHabitat(habitat);
-
-//     grid.appendChild(card);
-//   });
-// }
-
-// async function confirmMoveHabitat(habitat) {
-//   if (!habitatData.canChange && habitatData.current !== 'random') {
-//     showToast('오늘은 이미 서식지를 이동했습니다.');
-//     return;
-//   }
-
-//   const confirmed = await showConfirmModal(
-//     '서식지 이동',
-//     `대분류 <strong>${habitat.name}</strong> 서식지로 이동하시겠습니까?<br>
-//     <small style="color:#e74c3c">이동 후에는 내일 새벽 4시까지 다시 이동할 수 없습니다.</small>`
-//   );
-
-//   if (confirmed) {
-//     try {
-//       showGlobalLoading('서식지 이동 중...');
-//       const headers = await getAuthHeaders();
-//       const response = await fetch('/api/user/habitat', {
-//         method: 'POST',
-//         headers: headers,
-//         body: JSON.stringify({
-//           habitat: habitat.slug,
-//           subHabitat: null // 대분류 이동 시 서브는 초기화(또는 랜덤)
-//         })
-//       });
-
-//       if (response.ok) {
-//         const result = await response.json();
-//         if (result.success) {
-//           showToast(`'${habitat.name}' 서식지로 이동하였습니다.`);
-//           // 데이터 갱신
-//           await fetchUserHabitat();
-//           // UI 복귀
-//           document.getElementById('habitatListSection').style.display = 'none';
-//           document.querySelector('.current-habitat-section').style.display = 'block';
-//           document.getElementById('habitatDetailSection').style.display = 'block';
-//           renderCurrentHabitatSection();
-//           renderHabitatDetail(habitatData.current);
-//         } else {
-//             showToast(result.error || '이동 실패');
-//         }
-//       }
-//     } catch (e) {
-//       console.error(e);
-//       showToast('오류가 발생했습니다.');
-//     } finally {
-//       hideGlobalLoading();
-//     }
-//   }
-// }
-
-// function showSubHabitatSelectionList(habitatSlug) {
-//   const listSection = document.getElementById('habitatListSection');
-//   const grid = document.getElementById('habitatGrid');
-
-//   document.querySelector('.current-habitat-section').style.display = 'none';
-//   document.getElementById('habitatDetailSection').style.display = 'none';
-//   listSection.style.display = 'block';
-
-//   // 헤더 텍스트 변경
-//   listSection.querySelector('h4').textContent = '세부 서식지 선택 (무제한)';
-
-//   grid.innerHTML = '';
-
-//   const habitatInfo = habitatData.allHabitats.find(h => h.slug === habitatSlug);
-//   if (!habitatInfo) return;
-
-//   habitatInfo.backgrounds.forEach(bg => {
-//     const card = document.createElement('div');
-//     card.className = 'habitat-card sub-habitat';
-
-//     const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${habitatSlug}/${bg.image}`;
-
-//     card.style.backgroundImage = `url('${bgUrl}')`;
-//     card.innerHTML = `
-//       <div class="habitat-card-overlay">
-//         <span class="habitat-name">${bg.display_name}</span>
-//       </div>
-//     `;
-
-//     card.onclick = () => moveSubHabitat(habitatSlug, bg.type);
-
-//     grid.appendChild(card);
-//   });
-// }
-
-// async function moveSubHabitat(habitatSlug, typeSlug) {
-//   try {
-//     showGlobalLoading('이동 중...');
-//     const headers = await getAuthHeaders();
-//     const response = await fetch('/api/user/habitat', {
-//       method: 'POST',
-//       headers: headers,
-//       body: JSON.stringify({
-//         habitat: habitatSlug,
-//         subHabitat: typeSlug
-//       })
-//     });
-
-//     if (response.ok) {
-//         const result = await response.json();
-//         if (result.success) {
-//             showToast('이동했습니다.');
-//             await fetchUserHabitat();
-
-//             // UI 복귀
-//             document.getElementById('habitatListSection').style.display = 'none';
-//             document.querySelector('.current-habitat-section').style.display = 'block';
-//             document.getElementById('habitatDetailSection').style.display = 'block';
-
-//             // 헤더 텍스트 원복
-//             document.querySelector('#habitatListSection h4').textContent = '이동할 서식지 선택';
-
-//             renderCurrentHabitatSection();
-//             renderHabitatDetail(habitatData.current);
-//         }
-//     }
-//   } catch (e) {
-//       console.error(e);
-//       showToast('오류가 발생했습니다.');
-//   } finally {
-//       hideGlobalLoading();
-//   }
-// }
-
-// async function renderHabitatDetail(habitatSlug) {
-//   const pokemonListContainer = document.getElementById('habitatPokemonList');
-//   const infoContainer = document.getElementById('habitatInfo');
-
-//   pokemonListContainer.innerHTML = '<div class="loading-spinner"></div>';
-
-//   // 현재 서식지의 서브 서식지(타입)가 선택되어 있다면 그것을 우선 보여줌?
-//   // 아니면 전체? 유저 요청: "클릭하면 세부 서식지가나오는게 아니라... 모달 하단에는 서식지들의 정보를 확인할수 있게 마찬가지로 카드형태의 큰 서식지 나오고 클릭시 세부서식지들이 나온다."
-//   // 아하, 하단에는 "서식지들의 정보"를 확인할 수 있는 카드들이 나와야 함.
-//   // 즉, 하단은 "도감" 같은 역할.
-
-//   // 수정: 하단에는 현재 서식지의 포켓몬이 아니라, "서식지들의 정보"를 탐색하는 UI여야 함.
-//   // "모달 하단에는 서식지들의 정보를 확인할수 있게 마찬가지로 카드형태의 큰 서식지 나오고 클릭시 세부서식지들이 나온다."
-//   // "세부서식지도 마찬가지로 이미지가 보이는 카드형태이고 한번더 클릭시에 해당 세부서식지에 해당하는 포켓몬이몇마리이고 누구인지 확인할수 있는 창이 나오게 된다."
-
-//   // 따라서 하단 뷰를 재구성해야 함.
-//   // 1. 대분류 서식지 카드 목록 (가로 스크롤?)
-//   // 2. 클릭 -> 세부 서식지 카드 목록
-//   // 3. 클릭 -> 포켓몬 목록 모달(또는 뷰)
-
-//   // 현재 구조: #habitatDetailSection 안에 탭이 있음.
-//   // 탭을 없애고 카드 리스트로 변경하는 게 나을 듯.
-
-//   const detailSection = document.getElementById('habitatDetailSection');
-//   detailSection.innerHTML = `
-//     <h4>서식지 정보 탐색</h4>
-//     <div class="habitat-info-grid" id="habitatInfoGrid"></div>
-//   `;
-
-//   const grid = document.getElementById('habitatInfoGrid');
-
-//   // 대분류 렌더링
-//   habitatData.allHabitats.forEach(h => {
-//       if (h.slug === 'rare') return; // 희귀 제외? 포함? 정보 확인이니까 포함해도 될듯 하지만 일단 제외
-
-//       const card = document.createElement('div');
-//       card.className = 'habitat-info-card';
-//       const bgImage = h.backgrounds.find(b => b.type === 'normal') || h.backgrounds[0];
-//       const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${h.slug}/${bgImage.image}` : '';
-
-//       card.style.backgroundImage = `url('${bgUrl}')`;
-//       card.innerHTML = `<span class="name">${h.name}</span>`;
-
-//       card.onclick = () => showHabitatInfoSubList(h);
-//       grid.appendChild(card);
-//   });
-// }
-
-// function showHabitatInfoSubList(habitat) {
-//     const detailSection = document.getElementById('habitatDetailSection');
-//     detailSection.innerHTML = `
-//         <div class="habitat-list-header">
-//             <h4>${habitat.name} - 세부 서식지</h4>
-//             <button class="back-btn" onclick="renderHabitatDetail('${habitatData.current}')">뒤로</button>
-//         </div>
-//         <div class="habitat-info-grid" id="habitatInfoGrid"></div>
-//     `;
-
-//     const grid = document.getElementById('habitatInfoGrid');
-
-//     habitat.backgrounds.forEach(bg => {
-//         const card = document.createElement('div');
-//         card.className = 'habitat-info-card';
-//         const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${habitat.slug}/${bg.image}`;
-
-//         card.style.backgroundImage = `url('${bgUrl}')`;
-//         card.innerHTML = `<span class="name">${bg.display_name}</span>`;
-
-//         card.onclick = () => showHabitatPokemonInfo(habitat.slug, bg.type, bg.display_name);
-//         grid.appendChild(card);
-//     });
-// }
-
-// async function showHabitatPokemonInfo(habitatSlug, typeSlug, typeName) {
-//     // 포켓몬 목록을 보여주는 별도 모달 또는 오버레이 필요
-//     // 현재 모달 위에 덮어쓰거나, 내용을 교체
-
-//     const detailSection = document.getElementById('habitatDetailSection');
-//     detailSection.innerHTML = `
-//         <div class="habitat-list-header">
-//             <h4>${typeName} - 등장 포켓몬</h4>
-//             <button class="back-btn" onclick="showHabitatInfoSubList(habitatData.allHabitats.find(h => h.slug === '${habitatSlug}'))">뒤로</button>
-//         </div>
-//         <div class="habitat-pokemon-stats" id="habitatPokemonStats">로딩 중...</div>
-//         <div class="habitat-pokemon-grid" id="habitatPokemonGrid"></div>
-//     `;
-
-//     try {
-//         const headers = await getAuthHeaders();
-//         const response = await fetch(`/api/collection/habitats/${habitatSlug}/${typeSlug}/pokemon`, { headers });
-
-//         if (response.ok) {
-//             const result = await response.json();
-//             if (result.success) {
-//                 const { pokemon, stats } = result.data;
-
-//                 document.getElementById('habitatPokemonStats').innerHTML = `
-//                     발견된 포켓몬: <strong>${stats.total_count}</strong>마리 <br>
-//                     (수집: ${stats.owned_count} / ${stats.total_count})
-//                 `;
-
-//                 const grid = document.getElementById('habitatPokemonGrid');
-//                 if (pokemon.length === 0) {
-//                     grid.innerHTML = '<p class="empty-message">이 서식지에는 포켓몬이 없습니다.</p>';
-//                 } else {
-//                     pokemon.forEach(p => {
-//                         const pCard = document.createElement('div');
-//                         pCard.className = `pokemon-mini-card ${p.is_owned ? 'owned' : 'unknown'}`;
-
-//                         // 미수집 포켓몬은 실루엣 처리하거나 ? 표시
-//                         // 유저 요청: "누구인지 확인할수 있는 창" -> 미수집이어도 보여주는게 맞을듯? 
-//                         // 하지만 보통 도감은 미수집이면 실루엣.
-//                         // 일단 이미지는 보여주되 흑백 처리 등을 CSS로.
-
-//                         pCard.innerHTML = `
-//                             <img src="${p.icon_url}" alt="${p.name}">
-//                             <span class="name">${p.name}</span>
-//                         `;
-//                         grid.appendChild(pCard);
-//                     });
-//                 }
-//             }
-//         }
-//     } catch (e) {
-//         console.error(e);
-//         document.getElementById('habitatPokemonStats').textContent = '정보를 불러오지 못했습니다.';
-//     }
-// }
 
 
 /* ==========================================
@@ -7361,16 +7538,19 @@ window.showRewardResultModal = showRewardResultModal;
 
 
 // ==========================================
-// 주간 평균 검증 시스템 (Weekly Verification System)
+// 미션 상태 시스템 (Mission Status System)
 // ==========================================
 
 let weeklyVerificationData = null;
 let isWeeklyVerificationRequired = false;
+let needsYesterdayScreenTime = false;
+let yesterdayDate = null;
+let isTodayScreenTimeCompleted = false;
 
 /**
- * 앱 시작 시 주간 검증 상태 확인
+ * 앱 시작 시 미션 상태 확인 (주간 검증 + 어제 스크린타임 입력)
  */
-async function checkWeeklyVerificationStatus() {
+async function checkMissionStatus() {
   // 게스트 모드에서는 검증 불필요
   if (window.isGuest() || !window.isAuthenticated()) {
     return;
@@ -7378,28 +7558,41 @@ async function checkWeeklyVerificationStatus() {
 
   try {
     const headers = await getAuthHeaders();
-    const response = await fetch('/api/weekly-verification/status', { headers });
+    const response = await fetch('/api/screen-time/status', { headers });
 
     if (!response.ok) {
-      console.error('Failed to check weekly verification status');
+      console.error('Failed to check mission status');
       return;
     }
 
     const result = await response.json();
 
-    if (result.success && result.data.needsVerification) {
-      // 검증 필요! - 카드만 표시하고 모달은 사용자가 클릭할 때 열림
-      weeklyVerificationData = result.data;
-      isWeeklyVerificationRequired = true;
-      // 미션 카드 상태 업데이트 (모달은 자동으로 열지 않음)
+    if (result.success) {
+      const data = result.data;
+
+      // 주간 검증 필요 여부 처리
+      if (data.needsVerification) {
+        weeklyVerificationData = data;
+        isWeeklyVerificationRequired = true;
+      } else {
+        isWeeklyVerificationRequired = false;
+        weeklyVerificationData = null;
+      }
+
+      // 어제 스크린타임 입력 필요 여부 처리
+      needsYesterdayScreenTime = data.needsYesterdayScreenTime || false;
+      yesterdayDate = data.yesterdayDate || null;
+
+      // 미션 카드 상태 업데이트
       if (typeof updateHomeMissionCards === 'function') updateHomeMissionCards();
-    } else {
-      isWeeklyVerificationRequired = false;
     }
   } catch (error) {
-    console.error('Weekly verification check error:', error);
+    console.error('Mission status check error:', error);
   }
 }
+
+// 호환성을 위해 기존 함수명도 유지
+const checkWeeklyVerificationStatus = checkMissionStatus;
 
 /**
  * 주간 검증 모달 표시
@@ -7609,7 +7802,7 @@ function setupWeeklyVerificationInputs() {
     const codeStr = d1 + d2 + d3 + d4;
 
     if (codeStr.length === 0) {
-      showToast('평균 스크린타임을 입력해주세요', true);
+      showToast('평균 스크린타임을 입력해주세요');
       return;
     }
 
@@ -7646,7 +7839,7 @@ async function submitWeeklyVerification(userInputAverage) {
     showGlobalLoading('검증 중...');
 
     const headers = await getAuthHeaders();
-    const response = await fetch('/api/weekly-verification/submit', {
+    const response = await fetch('/api/screen-time/verify', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ userInputAverage })
@@ -7656,7 +7849,7 @@ async function submitWeeklyVerification(userInputAverage) {
     hideGlobalLoading();
 
     if (!response.ok) {
-      showToast(result.message || '검증 실패', true);
+      showToast(result.message || '검증 실패');
       return;
     }
 
@@ -7680,7 +7873,7 @@ async function submitWeeklyVerification(userInputAverage) {
   } catch (error) {
     hideGlobalLoading();
     console.error('Weekly verification submit error:', error);
-    showToast('검증 중 오류가 발생했습니다', true);
+    showToast('검증 중 오류가 발생했습니다');
   }
 }
 
@@ -7694,7 +7887,7 @@ function handleVerificationFailure(data) {
 
   if (data.penalty) {
     // 🚨 3회 오입력 - 포켓몬 삭제
-    showToast(data.message, true);
+    showToast(data.message);
 
     // 주간 검증 UI 내 경고 표시
     if (warningStatusEl) {
@@ -7719,7 +7912,7 @@ function handleVerificationFailure(data) {
 
   } else {
     // 1~2회 경고
-    showToast(data.message, true);
+    showToast(data.message);
 
     if (warningStatusEl) {
       warningStatusEl.style.display = 'flex';
@@ -7749,7 +7942,7 @@ function handleVerificationFailure(data) {
  */
 function checkScreenTimeInputAllowed() {
   if (isWeeklyVerificationRequired) {
-    showToast('지난주 평균 검증을 먼저 완료해주세요!', true);
+    showToast('지난주 평균 검증을 먼저 완료해주세요!');
 
     // 홈 탭으로 전환
     const homeTabBtn = document.querySelector('[data-tab="home"]');
@@ -7763,6 +7956,7 @@ function checkScreenTimeInputAllowed() {
 
 // 전역 노출
 window.checkScreenTimeInputAllowed = checkScreenTimeInputAllowed;
+window.checkMissionStatus = checkMissionStatus;
 window.checkWeeklyVerificationStatus = checkWeeklyVerificationStatus;
 
 // ==================== 홈탭 미션 카드 및 주간 달성 바 ==================== //
@@ -7815,12 +8009,16 @@ window.openWeeklyVerificationFromCard = openWeeklyVerificationFromCard;
  * 홈탭 미션 카드 상태 업데이트 (스택 방식)
  */
 function updateHomeMissionCards() {
+  const homeMissionsSection = document.getElementById('homeMissionsSection');
   const cardStack = document.getElementById('missionCardStack');
   const verificationCard = document.getElementById('weeklyVerificationCard');
   const screenTimeCard = document.getElementById('screenTimeCard');
   const screenTimeCardSubtitle = document.getElementById('screenTimeCardSubtitle');
 
   if (!cardStack) return;
+
+  // 기본적으로 섹션 표시
+  if (homeMissionsSection) homeMissionsSection.style.display = 'block';
 
   // 주간 검증 필요 여부에 따라 카드 표시
   if (isWeeklyVerificationRequired && weeklyVerificationData) {
@@ -7830,7 +8028,11 @@ function updateHomeMissionCards() {
     }
     // 스택에 앞쪽 카드가 있음을 표시
     cardStack.classList.add('has-front');
-    // 스크린타임 카드 메시지 업데이트
+
+    // 스크린타임 카드는 뒤에 보이도록 유지하되 메시지 변경
+    if (screenTimeCard) {
+      screenTimeCard.style.display = 'flex';
+    }
     if (screenTimeCardSubtitle) {
       screenTimeCardSubtitle.textContent = '먼저 주간 검증을 완료해주세요';
     }
@@ -7841,9 +8043,25 @@ function updateHomeMissionCards() {
     }
     // 스택에서 앞쪽 카드 제거
     cardStack.classList.remove('has-front');
-    // 스크린타임 카드 활성화
-    if (screenTimeCardSubtitle) {
-      screenTimeCardSubtitle.textContent = '스크린타임을 기록해주세요';
+
+    // 어제 스크린타임 입력 필요 여부 체크
+    if (!needsYesterdayScreenTime) {
+      // 어제 입력을 완료했다면 스크린타임 카드 숨기기
+      if (screenTimeCard) {
+        screenTimeCard.style.display = 'none';
+      }
+      // 검증도 없고 스크린타임도 완료했다면 섹션 전체 숨기기
+      if (homeMissionsSection) {
+        homeMissionsSection.style.display = 'none';
+      }
+    } else {
+      // 어제 입력이 필요하다면 스크린타임 카드 표시
+      if (screenTimeCard) {
+        screenTimeCard.style.display = 'flex';
+      }
+      if (screenTimeCardSubtitle) {
+        screenTimeCardSubtitle.textContent = '어제의 스크린타임을 기록해주세요';
+      }
     }
   }
 }
@@ -7908,20 +8126,48 @@ async function updateWeeklyAchievementBar() {
       const result = await response.json();
       if (result.success && result.data) {
         const weeklyData = result.data;
-        // weeklyData에서 각 요일별 입력 여부를 추출 (일~토 순서)
-        const completedDays = [];
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const completedDays = [false, false, false, false, false, false, false];
 
-        dayNames.forEach(day => {
-          const dayData = weeklyData[day] || weeklyData.days?.[day];
-          completedDays.push(dayData && dayData.hasRecord);
+        // dailyRecords 배열을 순회하며 완료된 요일 체크
+        const dailyRecords = weeklyData.dailyRecords || [];
+        const dailyTimes = Array(7).fill(null);
+
+        console.log('Weekly Data:', weeklyData);
+        console.log('Daily Records:', dailyRecords);
+
+        dailyRecords.forEach(record => {
+          if (record && record.date) {
+            // YYYY-MM-DD 형식의 날짜를 파싱하여 요일 인덱스 추출
+            const dateObj = new Date(record.date);
+            const dayIndex = dateObj.getDay(); // 0(일) ~ 6(토)
+            if (dayIndex >= 0 && dayIndex <= 6) {
+              completedDays[dayIndex] = true;
+
+              // 시간 포맷팅 (H'MM)
+              const hours = record.hours || 0;
+              const minutes = record.minutes || 0;
+              const timeLabel = `${hours}'${minutes.toString().padStart(2, '0')}`;
+              dailyTimes[dayIndex] = timeLabel;
+              console.log(`Day ${dayIndex} (${record.date}): hours=${hours}, minutes=${minutes}, label=${timeLabel}`);
+            }
+          }
         });
 
         // 오늘 요일 인덱스 (일=0, 월=1, ... 토=6)
         const now = new Date();
-        const todayIndex = now.getDay(); // JS에서는 일=0
+        const todayIndex = now.getDay();
 
-        updateWeeklyAchievementBarUI(completedDays, todayIndex);
+        // 오늘의 입력 완료 여부 저장 (서버 데이터 기반)
+        isTodayScreenTimeCompleted = completedDays[todayIndex];
+
+        console.log('Completed Days:', completedDays);
+        console.log('Daily Times:', dailyTimes);
+        console.log('Today Index:', todayIndex);
+
+        updateWeeklyAchievementBarUI(completedDays, dailyTimes, todayIndex);
+
+        // 미션 카드 상태 업데이트 (이미 완료했으면 카드 숨김 등)
+        updateHomeMissionCards();
       }
     }
   } catch (error) {
@@ -7932,19 +8178,21 @@ async function updateWeeklyAchievementBar() {
 /**
  * 주간 달성 바 UI 업데이트 (일~토 순서, 통합 라벨)
  */
-function updateWeeklyAchievementBarUI(completedDays, todayIndex) {
-  const dayLabels = ['(일)', '(월)', '(화)', '(수)', '(목)', '(금)', '(토)'];
+function updateWeeklyAchievementBarUI(completedDays, dailyTimes, todayIndex) {
+  const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
 
   for (let i = 0; i < 7; i++) {
     const dayCircle = document.getElementById(`weeklyDay${i}`);
     if (!dayCircle) continue;
 
     const label = dayLabels[i];
+    let timeLabel = '';
 
     // 완료 상태 업데이트
     if (completedDays[i]) {
       dayCircle.classList.add('completed');
       dayCircle.textContent = label;
+      timeLabel = dailyTimes[i] || '';
     } else {
       dayCircle.classList.remove('completed');
       dayCircle.textContent = label;
@@ -7953,9 +8201,14 @@ function updateWeeklyAchievementBarUI(completedDays, todayIndex) {
     // 오늘 표시
     if (i === todayIndex) {
       dayCircle.classList.add('today');
+      // 오늘인데 완료 안했으면 '오늘', 완료했으면 시간
+      if (!timeLabel) timeLabel = '오늘';
     } else {
       dayCircle.classList.remove('today');
     }
+
+    // 데이터 라벨 설정 (CSS content: attr(data-label)에서 사용)
+    dayCircle.setAttribute('data-label', timeLabel);
   }
 }
 window.updateWeeklyAchievementBar = updateWeeklyAchievementBar;

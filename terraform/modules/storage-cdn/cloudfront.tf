@@ -19,6 +19,7 @@ resource "aws_cloudfront_distribution" "main" {
   default_root_object = "index.html"
   price_class         = var.cloudfront_price_class
   aliases             = var.cloudfront_custom_domain_name != "" ? [var.cloudfront_custom_domain_name] : []
+  web_acl_id          = var.waf_web_acl_id != "" ? var.waf_web_acl_id : null
 
   origin {
     domain_name              = data.aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -228,7 +229,8 @@ resource "aws_cloudfront_distribution" "main" {
 
   restrictions {
     geo_restriction {
-      restriction_type = "none"
+      restriction_type = "whitelist"
+      locations        = ["KR"]  # Allow only Korea (defense-in-depth with WAF)
     }
   }
 

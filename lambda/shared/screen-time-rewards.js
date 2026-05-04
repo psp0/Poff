@@ -1,4 +1,5 @@
 const { logger } = require('./logger');
+const { getKstDayOfWeek, getKstMonth, getKstDay, getKstDateString, sqlKstDate } = require('./timezone');
 
 /**
  * 스크린타임 보상 계산 및 지급 모듈
@@ -185,6 +186,8 @@ async function grantItem(client, userId, itemName, quantity) {
  */
 async function grantRandomPokemon(client, userId, flagNames, reason, count = 1, excludeIds = [], excludeForms = false) {
     const grantedPokemon = [];
+    let remaining = count;
+    let allExcluded = [...excludeIds];
 
     // 1. 사용자의 현재 서식지 조회
     let targetHabitat = null;
@@ -200,12 +203,19 @@ async function grantRandomPokemon(client, userId, flagNames, reason, count = 1, 
             const { current_habitat, current_sub_habitat } = habitatRes.rows[0];
 
             // 랜덤 서식지가 아니고, 세부 서식지가 설정된 경우
-            if (current_habitat !== 'random' && current_sub_habitat) {
-                // current_sub_habitat 형식: "habitat_type" (예: "grassland_bug")
-                const lastUnderscoreIndex = current_sub_habitat.lastIndexOf('_');
-                if (lastUnderscoreIndex !== -1) {
-                    targetHabitat = current_sub_habitat.substring(0, lastUnderscoreIndex);
-                    targetType = current_sub_habitat.substring(lastUnderscoreIndex + 1);
+            if (current_habitat !== 'random') {
+                targetHabitat = current_habitat;
+
+                // 세부 서식지가 있으면 타입까지 지정
+                if (current_sub_habitat) {
+                    const lastUnderscoreIndex = current_sub_habitat.lastIndexOf('_');
+                    if (lastUnderscoreIndex !== -1) {
+                        // habitat 부분이 일치하는지 확인 (안전장치)
+                        const subHabitatPrefix = current_sub_habitat.substring(0, lastUnderscoreIndex);
+                        if (subHabitatPrefix === current_habitat) {
+                            targetType = current_sub_habitat.substring(lastUnderscoreIndex + 1);
+                        }
+                    }
                 }
             }
         }
@@ -217,107 +227,174 @@ async function grantRandomPokemon(client, userId, flagNames, reason, count = 1, 
     // flag_name으로 직접 조회 (pokemon_flag_relations 테이블은 flag_name을 사용)
     const flagPlaceholders = flagNames.map(() => '?').join(', ');
 
-    for (let i = 0; i < count; i++) {
-        // 이미 소유한 포켓몬과 제외 대상 제외
-        // grantedPokemon 배열에는 이제 객체가 들어가므로 stable_id만 추출해야 함
-        const grantedIds = grantedPokemon.map(p => p.stable_id);
-        const allExcluded = [...excludeIds, ...grantedIds];
+    // 폼 제외 조건
+    const formExcludeCondition = excludeForms
+        ? "AND p.stable_id NOT REGEXP '_[0-9]+$'"
+        : '';
+
+    // 2. 서식지 타겟팅 시도 (targetHabitat이 있을 경우)
+    // Case A: Habitat + Type 둘 다 있는 경우 (세부 서식지) (우선순위 1)
+    if (targetHabitat && targetType && remaining > 0) {
 
         const excludePlaceholders = allExcluded.length > 0
             ? `AND p.stable_id NOT IN (${allExcluded.map(() => '?').join(', ')})`
             : '';
 
-        // 폼 제외 조건
-        const formExcludeCondition = excludeForms
-            ? "AND p.stable_id NOT REGEXP '_[0-9]+$'"
-            : '';
+        const habitatQueryParams = [
+            ...flagNames,
+            targetHabitat,
+            targetType, targetType,
+            userId,
+            ...(allExcluded.length > 0 ? allExcluded : []),
+            remaining
+        ];
 
-        let pokemonData = null;
+        const habitatQuery = `
+            SELECT 
+                p.stable_id, p.name, p.image_name, p.form_suffix, 
+                p.asset_source, p.has_icon, p.has_icon_shiny
+            FROM pokemon p
+            INNER JOIN pokemon_flag_relations pfr ON p.stable_id = pfr.pokemon_stable_id
+            WHERE pfr.flag_name IN (${flagPlaceholders})
+              AND p.habitat_en = ?
+              AND (p.type1_en = ? OR p.type2_en = ?)
+              AND NOT EXISTS (
+                SELECT 1 FROM user_pokemon_collection
+                WHERE user_id = ? AND pokemon_stable_id = p.stable_id
+              )
+              ${excludePlaceholders}
+              ${formExcludeCondition}
+            ORDER BY RAND()
+            LIMIT ?
+        `;
 
+        const habitatResult = await client.query(habitatQuery, habitatQueryParams);
 
-        // 2. 서식지 타겟팅 시도 (targetHabitat이 있을 경우)
-        if (targetHabitat && targetType) {
-            const habitatQueryParams = [
-                ...flagNames,
-                targetHabitat, // habitat_en 조건
-                targetType, targetType, // type1 or type2 조건
-                userId,
-                ...(allExcluded.length > 0 ? allExcluded : [])
-            ];
-
-            const habitatQuery = `
-                SELECT 
-                    p.stable_id, p.name, p.image_name, p.form_suffix, 
-                    p.asset_source, p.has_icon, p.has_icon_shiny
-                FROM pokemon p
-                INNER JOIN pokemon_flag_relations pfr ON p.stable_id = pfr.pokemon_stable_id
-                WHERE pfr.flag_name IN (${flagPlaceholders})
-                  AND p.habitat_en = ?
-                  AND (p.type1_en = ? OR p.type2_en = ?)
-                  AND NOT EXISTS (
-                    SELECT 1 FROM user_pokemon_collection
-                    WHERE user_id = ? AND pokemon_stable_id = p.stable_id
-                  )
-                  ${excludePlaceholders}
-                  ${formExcludeCondition}
-                ORDER BY RAND()
-                LIMIT 1
-            `;
-
-            const habitatResult = await client.query(habitatQuery, habitatQueryParams);
-            if (habitatResult.rows.length > 0) {
-                pokemonData = habitatResult.rows[0];
-                logger.info(`Granted pokemon from habitat ${targetHabitat}/${targetType}: ${pokemonData.stable_id}`);
-            }
-        }
-
-        // 3. 서식지 타겟팅 실패 시 (또는 설정 안된 경우) 글로벌 랜덤 시도
-        if (!pokemonData) {
-            const globalQueryParams = [
-                ...flagNames,
-                userId,
-                ...(allExcluded.length > 0 ? allExcluded : [])
-            ];
-
-            const globalQuery = `
-                SELECT 
-                    p.stable_id, p.name, p.image_name, p.form_suffix, 
-                    p.asset_source, p.has_icon, p.has_icon_shiny
-                FROM pokemon p
-                INNER JOIN pokemon_flag_relations pfr ON p.stable_id = pfr.pokemon_stable_id
-                WHERE pfr.flag_name IN (${flagPlaceholders})
-                  AND NOT EXISTS (
-                    SELECT 1 FROM user_pokemon_collection
-                    WHERE user_id = ? AND pokemon_stable_id = p.stable_id
-                  )
-                  ${excludePlaceholders}
-                  ${formExcludeCondition}
-                ORDER BY RAND()
-                LIMIT 1
-            `;
-
-            const globalResult = await client.query(globalQuery, globalQueryParams);
-            if (globalResult.rows.length > 0) {
-                pokemonData = globalResult.rows[0];
-                logger.info(`Granted random pokemon (fallback): ${pokemonData.stable_id}`);
-            }
-        }
-
-        if (pokemonData) {
+        for (const pokemonData of habitatResult.rows) {
             await client.query(`
                 INSERT INTO user_pokemon_collection (user_id, pokemon_stable_id, obtained_reason)
                 VALUES (?, ?, ?)
                 ON DUPLICATE KEY UPDATE obtained_reason = obtained_reason
             `, [userId, pokemonData.stable_id, reason]);
 
-            // Add obtained_reason to the object
             grantedPokemon.push({
                 ...pokemonData,
                 obtained_reason: reason
             });
-        } else {
-            // 더 이상 받을 포켓몬이 없으면 중단
-            break;
+        }
+
+        remaining -= habitatResult.rows.length;
+        allExcluded.push(...habitatResult.rows.map(p => p.stable_id));
+
+        if (habitatResult.rows.length > 0) {
+            logger.info(`Granted ${habitatResult.rows.length} pokemon from habitat ${targetHabitat}/${targetType}`);
+        }
+    }
+
+    // Case B: Habitat만 있는 경우 (세부 서식지 파싱 실패 혹은 미설정 시 fallback) (우선순위 2)
+    if (targetHabitat && remaining > 0) {
+
+        const excludePlaceholders = allExcluded.length > 0
+            ? `AND p.stable_id NOT IN (${allExcluded.map(() => '?').join(', ')})`
+            : '';
+
+        const habitatOnlyQueryParams = [
+            ...flagNames,
+            targetHabitat,
+            userId,
+            ...(allExcluded.length > 0 ? allExcluded : []),
+            remaining
+        ];
+
+        const habitatOnlyQuery = `
+            SELECT 
+                p.stable_id, p.name, p.image_name, p.form_suffix, 
+                p.asset_source, p.has_icon, p.has_icon_shiny
+            FROM pokemon p
+            INNER JOIN pokemon_flag_relations pfr ON p.stable_id = pfr.pokemon_stable_id
+            WHERE pfr.flag_name IN (${flagPlaceholders})
+              AND p.habitat_en = ?
+              AND NOT EXISTS (
+                SELECT 1 FROM user_pokemon_collection
+                WHERE user_id = ? AND pokemon_stable_id = p.stable_id
+              )
+              ${excludePlaceholders}
+              ${formExcludeCondition}
+            ORDER BY RAND()
+            LIMIT ?
+        `;
+
+        const habitatOnlyResult = await client.query(habitatOnlyQuery, habitatOnlyQueryParams);
+
+        for (const pokemonData of habitatOnlyResult.rows) {
+            await client.query(`
+                INSERT INTO user_pokemon_collection (user_id, pokemon_stable_id, obtained_reason)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE obtained_reason = obtained_reason
+            `, [userId, pokemonData.stable_id, reason]);
+
+            grantedPokemon.push({
+                ...pokemonData,
+                obtained_reason: reason
+            });
+        }
+
+        remaining -= habitatOnlyResult.rows.length;
+        allExcluded.push(...habitatOnlyResult.rows.map(p => p.stable_id));
+
+        if (habitatOnlyResult.rows.length > 0) {
+            logger.info(`Granted ${habitatOnlyResult.rows.length} pokemon from general habitat ${targetHabitat}`);
+        }
+    }
+
+    // 3. 서식지 타겟팅 실패 시 (또는 설정 안된 경우) 글로벌 랜덤 시도 (최종 fallback)
+    if (remaining > 0) {
+
+        const excludePlaceholders = allExcluded.length > 0
+            ? `AND p.stable_id NOT IN (${allExcluded.map(() => '?').join(', ')})`
+            : '';
+
+        const globalQueryParams = [
+            ...flagNames,
+            userId,
+            ...(allExcluded.length > 0 ? allExcluded : []),
+            remaining
+        ];
+
+        const globalQuery = `
+            SELECT 
+                p.stable_id, p.name, p.image_name, p.form_suffix, 
+                p.asset_source, p.has_icon, p.has_icon_shiny
+            FROM pokemon p
+            INNER JOIN pokemon_flag_relations pfr ON p.stable_id = pfr.pokemon_stable_id
+            WHERE pfr.flag_name IN (${flagPlaceholders})
+              AND NOT EXISTS (
+                SELECT 1 FROM user_pokemon_collection
+                WHERE user_id = ? AND pokemon_stable_id = p.stable_id
+              )
+              ${excludePlaceholders}
+              ${formExcludeCondition}
+            ORDER BY RAND()
+            LIMIT ?
+        `;
+
+        const globalResult = await client.query(globalQuery, globalQueryParams);
+
+        for (const pokemonData of globalResult.rows) {
+            await client.query(`
+                INSERT INTO user_pokemon_collection (user_id, pokemon_stable_id, obtained_reason)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE obtained_reason = obtained_reason
+            `, [userId, pokemonData.stable_id, reason]);
+
+            grantedPokemon.push({
+                ...pokemonData,
+                obtained_reason: reason
+            });
+        }
+
+        if (globalResult.rows.length > 0) {
+            logger.info(`Granted ${globalResult.rows.length} random pokemon (fallback)`);
         }
     }
 
@@ -354,24 +431,26 @@ async function processScreenTimeRewards(client, userId, date, hours, minutes, is
         }
     };
 
-    // // 새로운 기록이 아니면 보상 없음
-    // if (!isNewEntry) {
-    //     return result;
-    // }
+    // 새로운 기록이 아니면 보상 없음
+    if (!isNewEntry) {
+        return result;
+    }
 
     const usageMinutes = hours * 60 + minutes;
 
     // 공휴일 및 절기 확인
+    // KST 기준 날짜로 조회 (UTC 환경에서도 일관된 결과)
+    const kstDateStr = getKstDateString();
     const dateInfoResult = await client.query(
-        'SELECT type, is_holiday, name FROM date_info WHERE date = CURRENT_DATE',
-        []
+        'SELECT type, is_holiday, name FROM date_info WHERE date = ?',
+        [kstDateStr]
     );
     const isHoliday = dateInfoResult.rows.some(r => r.is_holiday);
     const isSolarTerm = dateInfoResult.rows.some(r => r.type === 'solar_term');
     const eventName = dateInfoResult.rows.length > 0 ? dateInfoResult.rows[0].name : null;
 
-    // 토요일 여부 확인
-    const dayOfWeek = new Date().getDay();
+    // 토요일 여부 확인 (KST 기준)
+    const dayOfWeek = getKstDayOfWeek();
     const isSaturday = dayOfWeek === 6;
 
     // 전주 평균 조회
@@ -499,9 +578,9 @@ async function processScreenTimeRewards(client, userId, date, hours, minutes, is
         result.rewards.shinyCharmReceived = 1;
     }
 
-    // 포켓몬 데이 (2월 27일) 특별 보상
-    const currentMonth = new Date().getMonth() + 1;
-    const currentDay = new Date().getDate();
+    // 포켓몬 데이 (2월 27일) 특별 보상 (KST 기준)
+    const currentMonth = getKstMonth();
+    const currentDay = getKstDay();
     if (currentMonth === 2 && currentDay === 27) {
         await grantItem(client, userId, 'Brilliance Charm', 5);
         result.rewards.items.push({ name: 'Brilliance Charm', nameKr: '광휘의 부적', count: 5 });
