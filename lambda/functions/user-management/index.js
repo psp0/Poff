@@ -2,7 +2,7 @@ const { getDatabase } = require('../../shared/database');
 const { createSuccessResponse, createErrorResponse, withErrorHandling } = require('../../shared/response-utils');
 const { authenticate, authenticateAndParseBody } = require('../../shared/auth');
 const { logger } = require('../../shared/logger');
-const { getLastWeekRangeKst, toKstDate, getKstHour } = require('../../shared/timezone');
+const { getLastWeekRangeKst, toKstDate, getKstHour, KST_OFFSET_MS } = require('../../shared/timezone');
 const { sanitizeString, escapeHtml, validate, userSchemas } = require('../../shared/validation');
 
 const handler = async (event, context) => {
@@ -508,8 +508,8 @@ function checkCanChangeHabitat(lastChangeAt) {
         kst4am.setUTCDate(kst4am.getUTCDate() - 1);
     }
 
-    // KST를 UTC로 변환 (9시간 빼기)
-    const today4amUtc = new Date(kst4am.getTime() - 9 * 60 * 60 * 1000);
+    // KST를 UTC로 변환
+    const today4amUtc = new Date(kst4am.getTime() - KST_OFFSET_MS);
 
     // 마지막 변경이 기준 시간보다 이전이면 변경 가능
     return lastChange < today4amUtc;

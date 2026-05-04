@@ -8,6 +8,7 @@
 const { success, notFound, internalServerError } = require('../../shared/response');
 const db = require('../../shared/database');
 const { logger } = require('../../shared/logger');
+const { toKstDate, getKstDateString } = require('../../shared/timezone');
 
 // 게스트 유저 ID (고정)
 const GUEST_USER_ID = '00000000-0000-0000-0000-000000000000';
@@ -641,9 +642,8 @@ async function getGuestFavorites() {
  * 게스트 유저의 수면 상태 조회 (Mock 데이터 및 실제 컬렉션 일부)
  */
 async function getGuestSleepStatus() {
-  const now = Date.now();
-  const koreaOffset = 9 * 60 * 60 * 1000;
-  const koreaTime = new Date(now + koreaOffset);
+  // KST 기준 오늘 날짜 계산
+  const todayDateStr = getKstDateString();
 
   // 게스트 유저가 보유한 포켓몬 중 일부를 오늘 획득한 것처럼 표시
   const pokemonQuery = `
@@ -678,7 +678,7 @@ async function getGuestSleepStatus() {
         "22": 100, "23": 80, "00": 70, "01": 60, "02": 40, "03": 30, "04": 20
       }
     },
-    todayDate: koreaTime.toISOString().split('T')[0]
+    todayDate: todayDateStr
   };
 }
 

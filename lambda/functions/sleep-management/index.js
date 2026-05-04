@@ -2,6 +2,12 @@ const { getDatabase } = require('../../shared/database');
 const { authenticateAndParseBody, authenticate } = require('../../shared/auth');
 const { createSuccessResponse, createErrorResponse, withErrorHandling } = require('../../shared/response-utils');
 const { logger } = require('../../shared/logger');
+const {
+    toKstDate,
+    getTodayStartUtc,
+    getTodayEndUtc,
+    KST_OFFSET_MS
+} = require('../../shared/timezone');
 
 /**
  * 수면 관리 Lambda 함수
@@ -55,15 +61,12 @@ const handler = async (event, context) => {
  * @returns {string} YYYY-MM-DD 형식의 수면 날짜
  */
 function calculateSleepDate(timestamp) {
-    // 한국 시간대로 변환 (UTC+9)
-    const koreaOffset = 9 * 60 * 60 * 1000;
-    const koreaTime = new Date(timestamp + koreaOffset);
+    const koreaTime = toKstDate(timestamp);
 
     // 새벽 4시(04:00) 기준 - 4시 이전이면 전날로 간주
     const hours = koreaTime.getUTCHours();
 
     if (hours < 4) {
-        // 4시 이전이면 전날 날짜
         koreaTime.setUTCDate(koreaTime.getUTCDate() - 1);
     }
 
@@ -82,9 +85,7 @@ function calculateSleepDate(timestamp) {
  * @returns {number} 보상 퍼센트 (0-100)
  */
 function calculateRewardPercentage(sleepStartTime, isWeekendOrHoliday) {
-    // 한국 시간대로 변환
-    const koreaOffset = 9 * 60 * 60 * 1000;
-    const koreaTime = new Date(sleepStartTime + koreaOffset);
+    const koreaTime = toKstDate(sleepStartTime);
 
     const hours = koreaTime.getUTCHours();
     const minutes = koreaTime.getUTCMinutes();
@@ -215,22 +216,8 @@ async function saveSleepLog(event, db) {
  * 보상 지급 내부 로직
  */
 async function processRewardInternal(db, userId, sleepDate, rewardPercentage, sleepLogId) {
-    // 현재 한국 시간 기준 "오늘" 계산 (4AM 기준)
-    const koreaOffset = 9 * 60 * 60 * 1000;
-    const now = Date.now();
-    const koreaTime = new Date(now + koreaOffset);
-    const hours = koreaTime.getUTCHours();
-
-    // 오늘 4AM 시작점 계산
-    let todayStart = new Date(koreaTime);
-    todayStart.setUTCHours(4, 0, 0, 0);
-
-    if (hours < 4) {
-        todayStart.setUTCDate(todayStart.getUTCDate() - 1);
-    }
-
-    const todayStartTimestamp = todayStart.getTime() - koreaOffset;
-    const todayEndTimestamp = todayStartTimestamp + 24 * 60 * 60 * 1000;
+    const todayStartTimestamp = getTodayStartUtc().getTime();
+    const todayEndTimestamp = getTodayEndUtc().getTime();
 
     // 오늘 획득한 포켓몬 조회 (이로치 제외, 이미 shiny를 보유한 포켓몬 제외, base_stat_total 높은순)
     const pokemonQuery = `
@@ -312,9 +299,7 @@ async function processRewardInternal(db, userId, sleepDate, rewardPercentage, sl
  * 주말 또는 공휴일 여부 확인
  */
 async function checkWeekendOrHoliday(db, timestamp) {
-    // 한국 시간으로 변환
-    const koreaOffset = 9 * 60 * 60 * 1000;
-    const koreaTime = new Date(timestamp + koreaOffset);
+    const koreaTime = toKstDate(timestamp);
 
     // 요일 확인 (0 = 일요일, 6 = 토요일)
     const dayOfWeek = koreaTime.getUTCDay();
@@ -347,24 +332,9 @@ async function getSleepStatus(event, db) {
         return createErrorResponse('User ID is required', 400);
     }
 
-    // 현재 한국 시간 기준 "오늘" 계산 (4AM 기준)
     const now = Date.now();
-    const koreaOffset = 9 * 60 * 60 * 1000;
-    const koreaTime = new Date(now + koreaOffset);
-    const hours = koreaTime.getUTCHours();
-
-    // 오늘 4AM 시작점 계산
-    let todayStart = new Date(koreaTime);
-    todayStart.setUTCHours(4, 0, 0, 0);
-
-    if (hours < 4) {
-        // 현재 4시 이전이면 어제 4AM부터
-        todayStart.setUTCDate(todayStart.getUTCDate() - 1);
-    }
-
-    // UTC timestamp 변환
-    const todayStartTimestamp = todayStart.getTime() - koreaOffset;
-    const todayEndTimestamp = todayStartTimestamp + 24 * 60 * 60 * 1000;
+    const todayStartTimestamp = getTodayStartUtc().getTime();
+    const todayEndTimestamp = getTodayEndUtc().getTime();
 
     const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '').replace(/\/$/, '') + '/';
 
@@ -486,7 +456,7 @@ async function getSleepStatus(event, db) {
     // "일어나는 날" 판단: 현재 시각으로부터 가장 가까운 미래의 04:01 KST가 어떤 날인지 확인
     // - 04:00 이전 (00:00 ~ 03:59) → 오늘 04:01이 "일어나는 시점" → 오늘 날짜
     // - 04:00 이후 (04:00 ~ 23:59) → 내일 04:01이 "일어나는 시점" → 내일 날짜
-    const koreaTimeNow = new Date(now + koreaOffset);
+    const koreaTimeNow = toKstDate(now);
     const currentHour = koreaTimeNow.getUTCHours();
 
     // 다음 04:01 KST 계산
@@ -498,8 +468,8 @@ async function getSleepStatus(event, db) {
         nextWakeUpTime.setUTCDate(nextWakeUpTime.getUTCDate() + 1);
     }
 
-    // UTC timestamp로 변환하여 checkWeekendOrHoliday 호출
-    const nextWakeUpTimestamp = nextWakeUpTime.getTime() - koreaOffset;
+    // KST 기준 시각을 UTC timestamp로 변환하여 checkWeekendOrHoliday 호출
+    const nextWakeUpTimestamp = nextWakeUpTime.getTime() - KST_OFFSET_MS;
     const isWakeUpDayOff = await checkWeekendOrHoliday(db, nextWakeUpTimestamp);
 
     // 현재 시간 기준 예상 보상 퍼센트 계산

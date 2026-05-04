@@ -2,6 +2,7 @@ const { getDatabase } = require('../../shared/database');
 const { authenticateAndParseBody, authenticate } = require('../../shared/auth');
 const { createSuccessResponse, createErrorResponse, withErrorHandling } = require('../../shared/response-utils');
 const { logger } = require('../../shared/logger');
+const { sqlTodayStartUtc, sqlTodayEndUtc } = require('../../shared/timezone');
 
 /**
  * 포켓몬 컬렉션 관련 Lambda 함수
@@ -1205,20 +1206,8 @@ async function getTodayObtainedPokemon(event, db) {
       -- KST 새벽 4시 = UTC 전날 19:00
       -- 모든 시간을 UTC 기준으로 비교 (obtained_date는 UTC로 저장됨)
       -- UTC_TIMESTAMP()를 사용하여 DB 타임존과 무관하게 UTC 기준으로 계산
-      AND upc.obtained_date >= (
-        CASE 
-          WHEN HOUR(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')) >= 4 
-          THEN DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')), INTERVAL -5 HOUR)
-          ELSE DATE_ADD(DATE_SUB(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')), INTERVAL 1 DAY), INTERVAL -5 HOUR)
-        END
-      )
-      AND upc.obtained_date < (
-        CASE 
-          WHEN HOUR(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')) >= 4 
-          THEN DATE_ADD(DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')), INTERVAL 1 DAY), INTERVAL -5 HOUR)
-          ELSE DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00')), INTERVAL -5 HOUR)
-        END
-      )
+      AND upc.obtained_date >= ${sqlTodayStartUtc()}
+      AND upc.obtained_date < ${sqlTodayEndUtc()}
     ORDER BY upc.obtained_date DESC
   `;
 

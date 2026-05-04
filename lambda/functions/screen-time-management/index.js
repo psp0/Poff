@@ -306,15 +306,8 @@ async function saveScreenTimeRecord(event, db) {
  * 트랜잭션 내에서 주간 통계 업데이트
  */
 async function updateWeeklyStatsInTransaction(client, userId, date) {
-  const recordDate = new Date(date);
-  const dayOfWeek = recordDate.getDay(); // 0=Sun
-
-  // Calculate start of the week (Sunday)
-  const weekStart = new Date(recordDate);
-  weekStart.setDate(recordDate.getDate() - dayOfWeek);
-
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
+  // KST 기준 주 범위 계산 (date는 KST 기준 YYYY-MM-DD 문자열)
+  const { weekStart, weekEnd } = getWeekRangeKst(date);
 
   await client.query(`
     INSERT INTO screen_time_weekly_stats (
@@ -343,11 +336,11 @@ async function updateWeeklyStatsInTransaction(client, userId, date) {
       updated_at = NOW()
   `, [
     userId,
-    weekStart.toISOString().split('T')[0],
-    weekEnd.toISOString().split('T')[0],
+    weekStart,
+    weekEnd,
     userId,
-    weekStart.toISOString().split('T')[0],
-    weekEnd.toISOString().split('T')[0]
+    weekStart,
+    weekEnd
   ]);
 }
 
@@ -537,8 +530,9 @@ async function getMonthlyStats(event, db) {
   const month = parseInt(queryParams.month) || (kstNow.getUTCMonth() + 1);
 
   try {
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0);
+    // UTC Date 객체로 생성해 로컬 타임존 영향 차단
+    const monthStart = new Date(Date.UTC(year, month - 1, 1));
+    const monthEnd = new Date(Date.UTC(year, month, 0));
 
     const query = `
       WITH daily_stats AS (
@@ -715,15 +709,8 @@ async function checkScreenTimeReward(event, db) {
  */
 async function updateWeeklyStats(db, userId, date) {
   try {
-    const recordDate = new Date(date);
-    const dayOfWeek = recordDate.getDay(); // 0=Sun
-
-    // Calculate start of the week (Sunday)
-    const weekStart = new Date(recordDate);
-    weekStart.setDate(recordDate.getDate() - dayOfWeek);
-
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
+    // KST 기준 주 범위 계산 (date는 KST 기준 YYYY-MM-DD 문자열)
+    const { weekStart, weekEnd } = getWeekRangeKst(date);
 
     // 주간 통계 계산 및 업데이트
     await db.query(`
@@ -753,11 +740,11 @@ async function updateWeeklyStats(db, userId, date) {
         updated_at = NOW()
     `, [
       userId,
-      weekStart.toISOString().split('T')[0],
-      weekEnd.toISOString().split('T')[0],
+      weekStart,
+      weekEnd,
       userId,
-      weekStart.toISOString().split('T')[0],
-      weekEnd.toISOString().split('T')[0]
+      weekStart,
+      weekEnd
     ]);
 
   } catch (error) {
