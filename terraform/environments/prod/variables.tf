@@ -244,7 +244,11 @@ variable "datadog_site" {
   default     = "datadoghq.com"
 }
 
-
+variable "datadog_external_id" {
+  description = "External ID for Datadog AWS integration"
+  type        = string
+  default     = ""
+}
 
 variable "enable_datadog_monitoring" {
   description = "Enable Datadog monitoring integration"
@@ -282,4 +286,34 @@ variable "firebase_service_account" {
   description = "Firebase Service Account JSON (Base64 encoded)"
   type        = string
   sensitive   = true
+}
+
+variable "firebase_api_key" {
+  description = "Firebase API Key"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_auth_domain" {
+  description = "Firebase Auth Domain"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_project_id" {
+  description = "Firebase Project ID"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_messaging_sender_id" {
+  description = "Firebase Messaging Sender ID"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_app_id" {
+  description = "Firebase App ID"
+  type        = string
+  default     = ""
 }

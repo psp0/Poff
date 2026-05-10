@@ -87,12 +87,19 @@ module "compute" {
   api_throttling_rate_limit  = var.api_throttling_rate_limit
 
   datadog_api_key              = var.datadog_api_key
+  datadog_site                 = var.datadog_site
   datadog_extension_version    = var.datadog_extension_version
   datadog_lambda_layer_version = var.datadog_lambda_layer_version
 
 
 
   firebase_service_account = base64decode(var.firebase_service_account)
+
+  firebase_api_key             = var.firebase_api_key
+  firebase_auth_domain         = var.firebase_auth_domain
+  firebase_project_id          = var.firebase_project_id
+  firebase_messaging_sender_id = var.firebase_messaging_sender_id
+  firebase_app_id              = var.firebase_app_id
 }
 
 # 5. WAF Module - Web Application Firewall (must be before CloudFront)
@@ -123,6 +130,9 @@ module "storage_cdn" {
 
   # API Gateway 도메인 전달 (프로토콜 제거)
   api_gateway_domain = replace(module.compute.api_gateway_endpoint, "/^https?://([^/]*).*/", "$1")
+  
+  # WAF Web ACL ID 전달
+  waf_web_acl_id = module.waf.cloudfront_web_acl_id
 }
 
 # 7. Route53 Records - Domain Aliases (Breaks Circular Dependency)
@@ -137,7 +147,7 @@ data "aws_route53_zone" "main" {
 # A record for CloudFront
 resource "aws_route53_record" "cloudfront" {
   provider = aws.infra
-  count    = var.cloudfront_custom_domain_name != "" && module.storage_cdn.cloudfront_domain_name != "" ? 1 : 0
+  count    = var.cloudfront_custom_domain_name != "" && var.enable_cloudfront ? 1 : 0
 
   zone_id = data.aws_route53_zone.main[0].zone_id
   name    = var.cloudfront_custom_domain_name
@@ -153,7 +163,7 @@ resource "aws_route53_record" "cloudfront" {
 # AAAA record for CloudFront (IPv6)
 resource "aws_route53_record" "cloudfront_ipv6" {
   provider = aws.infra
-  count    = var.cloudfront_custom_domain_name != "" && module.storage_cdn.cloudfront_domain_name != "" ? 1 : 0
+  count    = var.cloudfront_custom_domain_name != "" && var.enable_cloudfront ? 1 : 0
 
   zone_id = data.aws_route53_zone.main[0].zone_id
   name    = var.cloudfront_custom_domain_name
