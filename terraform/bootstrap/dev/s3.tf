@@ -99,6 +99,35 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
   }
 }
 
+# Assets 버킷 CloudFront 접근 정책
+# 계정 내 모든 CloudFront 배포(dev + 모든 PR 환경)에서 접근 가능하도록 와일드카드 사용
+# PR 환경마다 정책을 덮어쓰는 충돌을 방지하기 위해 bootstrap에서 한 번만 관리
+resource "aws_s3_bucket_policy" "assets_cloudfront" {
+  bucket = aws_s3_bucket.assets.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowAllDevAccountCloudFrontDistributions"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.assets.arn}/*"
+        Condition = {
+          StringLike = {
+            "AWS:SourceArn" = "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/*"
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.assets]
+}
+
 # S3 Bucket for CloudFront Logs
 resource "aws_s3_bucket" "cloudfront_logs" {
   bucket = "${var.project_name}-${var.environment}-cloudfront-logs"

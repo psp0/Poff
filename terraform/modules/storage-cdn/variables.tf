@@ -49,3 +49,9 @@ variable "waf_web_acl_id" {
   default     = ""
 }
 
+variable "base_environment" {
+  description = "Base environment name (e.g., 'dev') used for shared resources like assets, logs"
+  type        = string
+  default     = ""
+}
+

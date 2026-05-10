@@ -5,6 +5,11 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+locals {
+  is_pr_env         = length(regexall("pr-", var.environment)) > 0
+  cloudfront_domain = local.is_pr_env ? "" : var.cloudfront_custom_domain_name
+}
+
 # 1. Network Module - VPC, NAT, Subnets
 module "network" {
   source = "../../modules/network"
@@ -68,7 +73,7 @@ module "compute" {
   lambda_runtime            = var.lambda_runtime
   lambda_log_retention_days = var.lambda_log_retention_days
 
-  api_cors_allowed_origins   = var.api_cors_allowed_origins
+  api_cors_allowed_origins   = local.is_pr_env ? ["*"] : var.api_cors_allowed_origins
   api_throttling_burst_limit = var.api_throttling_burst_limit
   api_throttling_rate_limit  = var.api_throttling_rate_limit
 
@@ -107,10 +112,11 @@ module "storage_cdn" {
 
   project_name                  = var.project_name
   environment                   = var.environment
+  base_environment              = "dev" # For sharing assets bucket
   aws_region                    = data.aws_region.current.id
   enable_cloudfront             = var.enable_cloudfront
-  cloudfront_custom_domain_name = var.cloudfront_custom_domain_name
-  cloudfront_certificate_arn    = var.cloudfront_custom_domain_name != "" && var.hosted_zone_domain_name != "" ? module.acm[0].cloudfront_certificate_arn : ""
+  cloudfront_custom_domain_name = local.cloudfront_domain
+  cloudfront_certificate_arn    = local.cloudfront_domain != "" && var.hosted_zone_domain_name != "" ? module.acm[0].cloudfront_certificate_arn : ""
   cloudfront_price_class        = var.cloudfront_price_class
 
   # API Gateway 도메인 전달 (프로토콜 제거)
@@ -134,7 +140,7 @@ module "acm" {
   project_name                         = var.project_name
   environment                          = var.environment
   hosted_zone_domain_name              = var.hosted_zone_domain_name
-  cloudfront_custom_domain_name        = var.cloudfront_custom_domain_name
+  cloudfront_custom_domain_name        = local.cloudfront_domain
   cloudfront_subject_alternative_names = var.cloudfront_subject_alternative_names
 }
 
@@ -150,10 +156,10 @@ data "aws_route53_zone" "main" {
 # A record for CloudFront
 resource "aws_route53_record" "cloudfront" {
   provider = aws.infra
-  count    = var.cloudfront_custom_domain_name != "" && var.enable_cloudfront ? 1 : 0
+  count    = local.cloudfront_domain != "" && var.enable_cloudfront ? 1 : 0
 
   zone_id = data.aws_route53_zone.main[0].zone_id
-  name    = var.cloudfront_custom_domain_name
+  name    = local.cloudfront_domain
   type    = "A"
 
   alias {
@@ -166,10 +172,10 @@ resource "aws_route53_record" "cloudfront" {
 # AAAA record for CloudFront (IPv6)
 resource "aws_route53_record" "cloudfront_ipv6" {
   provider = aws.infra
-  count    = var.cloudfront_custom_domain_name != "" && var.enable_cloudfront ? 1 : 0
+  count    = local.cloudfront_domain != "" && var.enable_cloudfront ? 1 : 0
 
   zone_id = data.aws_route53_zone.main[0].zone_id
-  name    = var.cloudfront_custom_domain_name
+  name    = local.cloudfront_domain
   type    = "AAAA"
 
   alias {

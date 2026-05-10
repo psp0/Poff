@@ -38,7 +38,7 @@ output "cloudfront_url" {
 
 output "website_url" {
   description = "Main website URL (CloudFront or custom domain)"
-  value       = var.cloudfront_custom_domain_name != "" ? "https://${var.cloudfront_custom_domain_name}" : (var.enable_cloudfront ? "https://${module.storage_cdn.cloudfront_domain_name}" : "CloudFront not enabled")
+  value       = local.dynamic_cloudfront_domain != "" ? "https://${local.dynamic_cloudfront_domain}" : (var.enable_cloudfront ? "https://${module.storage_cdn.cloudfront_domain_name}" : "CloudFront not enabled")
 }
 
 output "cloudfront_distribution_id" {
