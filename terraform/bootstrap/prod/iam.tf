@@ -409,7 +409,6 @@ resource "aws_iam_role" "github_actions_ci_role" {
           StringLike = {
             "token.actions.githubusercontent.com:sub" = [
               "repo:${var.full_repo_path}:pull_request",
-              "repo:${var.full_repo_path}:ref:refs/heads/develop",
               "repo:${var.full_repo_path}:ref:refs/heads/main"
             ]
           }
