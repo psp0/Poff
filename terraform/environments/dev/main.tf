@@ -121,7 +121,7 @@ module "storage_cdn" {
 
   # API Gateway 도메인 전달 (프로토콜 제거)
   api_gateway_domain = replace(module.compute.api_gateway_endpoint, "/^https?://([^/]*).*/", "$1")
-  
+
   # WAF Web ACL ID 전달
   waf_web_acl_id = module.waf.cloudfront_web_acl_id
 }
@@ -192,10 +192,10 @@ module "monitoring" {
   # 모듈 전체를 조건부로 생성 (Datadog 안 쓸 거면 아예 로드하지 않음)
   count = var.enable_datadog_monitoring ? 1 : 0
 
-  project_name   = var.project_name
-  environment    = var.environment
-  aws_account_id = data.aws_caller_identity.current.account_id
-  aws_region     = data.aws_region.current.id
+  project_name    = var.project_name
+  environment     = var.environment
+  aws_account_id  = data.aws_caller_identity.current.account_id
+  aws_region      = data.aws_region.current.id
   datadog_api_key = var.datadog_api_key
   datadog_site    = var.datadog_site
 }

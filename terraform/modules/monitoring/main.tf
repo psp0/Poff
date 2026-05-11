@@ -35,8 +35,8 @@ resource "datadog_integration_aws_account" "main" {
 
   logs_config {
     lambda_forwarder {
-      lambdas  = [aws_serverlessapplicationrepository_cloudformation_stack.datadog_forwarder.outputs["DatadogForwarderArn"]]
-      sources  = []
+      lambdas = [aws_serverlessapplicationrepository_cloudformation_stack.datadog_forwarder.outputs["DatadogForwarderArn"]]
+      sources = []
     }
   }
 
@@ -55,8 +55,8 @@ resource "aws_serverlessapplicationrepository_cloudformation_stack" "datadog_for
   capabilities     = ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"]
 
   parameters = {
-    DdApiKey  = var.datadog_api_key
-    DdSite    = var.datadog_site
+    DdApiKey     = var.datadog_api_key
+    DdSite       = var.datadog_site
     FunctionName = "${var.project_name}-datadog-forwarder"
   }
 }

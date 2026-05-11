@@ -130,7 +130,7 @@ module "storage_cdn" {
 
   # API Gateway 도메인 전달 (프로토콜 제거)
   api_gateway_domain = replace(module.compute.api_gateway_endpoint, "/^https?://([^/]*).*/", "$1")
-  
+
   # WAF Web ACL ID 전달
   waf_web_acl_id = module.waf.cloudfront_web_acl_id
 }

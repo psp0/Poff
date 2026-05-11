@@ -46,15 +46,15 @@ locals {
   api_routes = {
 
 
-    "POST /api/screen-time"                 = "screen-time-management"
-    "GET /api/screen-time"                  = "screen-time-management"
-    "GET /api/screen-time/today"            = "screen-time-management"
-    "DELETE /api/screen-time/{date}"        = "screen-time-management"
-    "GET /api/screen-time/weekly-stats"     = "screen-time-management" # Specific path
-    "GET /api/screen-time/monthly-stats"    = "screen-time-management"
-    "POST /api/screen-time/reward-check"    = "screen-time-management"
-    "GET /api/screen-time/status"           = "screen-time-management"
-    "POST /api/screen-time/verify"          = "screen-time-management"
+    "POST /api/screen-time"              = "screen-time-management"
+    "GET /api/screen-time"               = "screen-time-management"
+    "GET /api/screen-time/today"         = "screen-time-management"
+    "DELETE /api/screen-time/{date}"     = "screen-time-management"
+    "GET /api/screen-time/weekly-stats"  = "screen-time-management" # Specific path
+    "GET /api/screen-time/monthly-stats" = "screen-time-management"
+    "POST /api/screen-time/reward-check" = "screen-time-management"
+    "GET /api/screen-time/status"        = "screen-time-management"
+    "POST /api/screen-time/verify"       = "screen-time-management"
 
     "GET /api/pokemon"                              = "pokemon-collection"
     "GET /api/pokemon/{id}"                         = "pokemon-collection"
@@ -246,7 +246,7 @@ resource "aws_lambda_function" "functions" {
 
       # Asset Configuration
       # Empty string allows URLs to start with /custom, /base etc. which matches CloudFront behaviors
-      ASSETS_BASE_URL = "/"
+      ASSETS_BASE_URL      = "/"
       CORS_ALLOWED_ORIGINS = join(",", var.api_cors_allowed_origins)
     }
   }
