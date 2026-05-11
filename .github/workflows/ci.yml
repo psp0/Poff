@@ -2,7 +2,7 @@ name: CI - Continuous Integration
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     paths-ignore:
       - '.github/dependabot.yml'
       - 'LICENSE'     
@@ -10,7 +10,7 @@ on:
       - 'docs/**'             
       - '.gitignore'     
   pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths-ignore:
       - '.github/dependabot.yml'
       - 'LICENSE'
@@ -275,7 +275,15 @@ jobs:
           role-session-name: github-actions-ci
           role-skip-session-tagging: true
 
-
+      - name: Assume Execution Role
+        if: github.actor != 'dependabot[bot]'
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_PROD_EXECUTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-ci-execution
+          role-chaining: true
+          role-skip-session-tagging: true
 
       - name: Terraform Init and Validate (Prod)
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -331,15 +339,16 @@ jobs:
           fi
           echo "EOF" >> $GITHUB_OUTPUT
 
-  # Deploy to Dev (only on push to develop, not on PR)
+  # Deploy to Dev (on PR to main)
   deploy-dev:
     name: Deploy to Dev
     needs: [build-frontend, build-lambda, validate-terraform-dev, call-security]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.actor != 'dependabot[bot]'
     uses: ./.github/workflows/deploy-dev.yml
     with:
       action: apply
       seed_data: false
+      env_suffix: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || '' }}
     secrets: inherit
 
 
@@ -365,14 +374,14 @@ jobs:
           path: lambda/packages/*.zip
           retention-days: 30
 
-  # CI Failure Notification (main/develop only)
+  # CI Failure Notification (main only)
   notify-ci-failure:
     name: Notify CI Failure
     needs: [pr-checks, build-frontend, build-lambda, validate-terraform-dev, validate-terraform-prod, call-security]
     if: |
       always() &&
       github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+      github.ref == 'refs/heads/main' &&
       (needs.pr-checks.result == 'failure' ||
        needs.build-frontend.result == 'failure' || 
        needs.build-lambda.result == 'failure' || 
@@ -477,3 +486,24 @@ jobs:
             <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}
+  # Comment PR Preview URL
+  comment-pr-preview:
+    name: Comment PR Preview URL
+    needs: [deploy-dev]
+    if: github.event_name == 'pull_request' && needs.deploy-dev.result == 'success' && needs.deploy-dev.outputs.website_url != '' && needs.deploy-dev.outputs.website_url != 'CloudFront not enabled'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = "${{ needs.deploy-dev.outputs.website_url }}";
+            const api = "${{ needs.deploy-dev.outputs.api_endpoint }}";
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 **PR Preview Environment is Ready!**\n\n🌐 **Frontend URL:** ${url}\n🔌 **API Endpoint:** ${api}\n\n*Note: CORS is configured to allow wildcard (*) for PR preview environments.*`
+            });

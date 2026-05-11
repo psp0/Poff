@@ -12,6 +12,12 @@ on:
           - apply
           - destroy
 
+      env_suffix:
+        description: "Environment suffix (e.g. pr-123) for dynamic environment. Leave empty for default dev"
+        required: false
+        type: string
+        default: ""
+
       seed_data:
         description: "Seed database with initial data (Pokemon, Holidays)"
         required: false
@@ -37,6 +43,11 @@ on:
         type: string
         default: "apply"
         description: "Action to perform (apply or destroy)"
+      env_suffix:
+        required: false
+        type: string
+        default: ""
+        description: "Environment suffix (e.g. pr-123) for dynamic environment. Leave empty for default dev"
       seed_data:
         required: false
         type: boolean
@@ -76,10 +87,10 @@ jobs:
   deploy-dev:
     name: Deploy dev
     runs-on: ubuntu-latest
-    # Enforce develop branch for workflow_dispatch, allow workflow_call from ci.yml (which preserves 'push' event name)
+    # Enforce main branch for workflow_dispatch, allow workflow_call from ci.yml (which preserves 'push' event name)
     if: |
       github.event_name != 'workflow_dispatch' || 
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop')
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
 
     permissions:
       contents: read
@@ -94,7 +105,9 @@ jobs:
       TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_WORKING_DIR: terraform/environments/dev
-      TF_STATE_KEY: environments/dev/terraform.tfstate
+      ENV_SUFFIX_HYPHEN: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.env_suffix != '' && format('-{0}', github.event.inputs.env_suffix)) || (inputs.env_suffix != '' && format('-{0}', inputs.env_suffix)) || '' }}
+      TF_STATE_KEY: environments/dev/terraform${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.env_suffix != '' && format('-{0}', github.event.inputs.env_suffix)) || (inputs.env_suffix != '' && format('-{0}', inputs.env_suffix)) || '' }}.tfstate
+      TF_VAR_environment: "dev${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.env_suffix != '' && format('-{0}', github.event.inputs.env_suffix)) || (inputs.env_suffix != '' && format('-{0}', inputs.env_suffix)) || '' }}"
       TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
       TF_VAR_datadog_app_key: ${{ secrets.DATADOG_APP_KEY }}
       TF_VAR_datadog_site: ${{ secrets.DATADOG_SITE || 'datadoghq.com' }}
@@ -109,18 +122,21 @@ jobs:
       TF_VAR_enable_datadog_monitoring: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.enable_datadog) || inputs.enable_datadog || 'false' }}
 
     outputs:
+      action: ${{ steps.set-variables.outputs.action }}
       vpc_id: ${{ steps.set-outputs.outputs.vpc_id }}
       rds_endpoint: ${{ steps.set-outputs.outputs.rds_endpoint }}
       rds_port: ${{ steps.set-outputs.outputs.rds_port }}
       database_name: ${{ steps.set-outputs.outputs.database_name }}
       api_endpoint: ${{ steps.set-outputs.outputs.api_endpoint }}
       s3_bucket: ${{ steps.set-outputs.outputs.s3_bucket }}
+      website_url: ${{ steps.set-outputs.outputs.website_url }}
       nat_instance_id: ${{ steps.set-outputs.outputs.nat_instance_id }}
       cloudfront_distribution_id: ${{ steps.set-outputs.outputs.cloudfront_distribution_id }}
       infra_duration: ${{ steps.apply.outputs.infra_duration }}
       seed_data: ${{ steps.set-variables.outputs.seed_data }}
       skip_migration: ${{ steps.set-variables.outputs.skip_migration }}
       failure_log: ${{ steps.capture-log.outputs.failure_log }}
+      env_suffix_hyphen: ${{ steps.set-variables.outputs.env_suffix_hyphen }}
 
     steps:
       - name: Checkout code
@@ -132,15 +148,15 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: |
           BRANCH_NAME="${{ github.ref_name }}"
-          if [ "$BRANCH_NAME" != "develop" ]; then
+          if [ "$BRANCH_NAME" != "main" ]; then
             echo "## ❌ Wrong Branch Selected" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**deploy-dev.yml** can only be run from the \`develop\` branch." >> $GITHUB_STEP_SUMMARY
+            echo "**deploy-dev.yml** can only be run from the \`main\` branch." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "- Current branch: \`$BRANCH_NAME\`" >> $GITHUB_STEP_SUMMARY
-            echo "- Required branch: \`develop\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Required branch: \`main\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Please select **develop** from the branch dropdown and try again." >> $GITHUB_STEP_SUMMARY
+            echo "Please select **main** from the branch dropdown and try again." >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
           echo "✅ Branch validation passed: $BRANCH_NAME"
@@ -163,6 +179,7 @@ jobs:
           echo "seed_data=${SEED_DATA:-false}" >> $GITHUB_OUTPUT
           echo "enable_datadog=${ENABLE_DATADOG:-false}" >> $GITHUB_OUTPUT
           echo "skip_migration=${SKIP_MIGRATION:-false}" >> $GITHUB_OUTPUT
+          echo "env_suffix_hyphen=${ENV_SUFFIX_HYPHEN}" >> $GITHUB_OUTPUT
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v5
@@ -389,6 +406,7 @@ jobs:
             "database_name"
             "api_endpoint"
             "s3_bucket"
+            "website_url"
             "nat_instance_id"
             "cloudfront_distribution_id"
           )
@@ -541,7 +559,7 @@ jobs:
     if: needs.deploy-dev.outputs.rds_endpoint != '' && needs.deploy-dev.outputs.skip_migration != 'true'
     uses: ./.github/workflows/db-migration.yml
     with:
-      environment: 'dev'
+      environment: dev${{ needs.deploy-dev.outputs.env_suffix_hyphen }}
       migration_action: 'up'  # Run pending migrations
       skip_notifications: true
     secrets:
@@ -556,13 +574,13 @@ jobs:
     if: needs.deploy-dev.outputs.rds_endpoint != '' && needs.deploy-dev.outputs.seed_data == 'true'
     uses: ./.github/workflows/seed-rds.yml
     with:
-      environment: 'dev'
+      environment: dev${{ needs.deploy-dev.outputs.env_suffix_hyphen }}
       seed_holidays: true
       rds_endpoint: ${{ needs.deploy-dev.outputs.rds_endpoint }}
       rds_port: ${{ needs.deploy-dev.outputs.rds_port }}
       database_name: ${{ needs.deploy-dev.outputs.database_name }}
       nat_instance_id: ${{ needs.deploy-dev.outputs.nat_instance_id }}
-      assets_bucket_name: "poff-dev-assets"
+      assets_bucket_name: "poff-dev${{ needs.deploy-dev.outputs.env_suffix_hyphen }}-assets"
     secrets:
       AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
       AWS_EXECUTION_ROLE_ARN: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
@@ -588,6 +606,9 @@ jobs:
             echo "Error: API_URL is missing"
             exit 1
           fi
+          echo "Testing API at: $API_URL"
+          
+          # Health check & Smoke Test
           node scripts/smoke-test.js
 
   notify:
@@ -625,16 +646,16 @@ jobs:
         run: |
           # Determine overall deployment status
           if [[ "${{ needs.deploy-dev.result }}" == "success" && \
-                "${{ needs.run-migration.result }}" == "success" && \
+                ("${{ needs.run-migration.result }}" == "success" || "${{ needs.run-migration.result }}" == "skipped") && \
                 ("${{ needs.seed-database.result }}" == "success" || "${{ needs.seed-database.result }}" == "skipped") && \
-                "${{ needs.smoke-test.result }}" == "success" ]]; then
+                ("${{ needs.smoke-test.result }}" == "success" || "${{ needs.smoke-test.result }}" == "skipped") ]]; then
             DEPLOYMENT_STATUS="success"
           else
             DEPLOYMENT_STATUS="failure"
           fi
           
-          # Generate version for dev (commit-based)
-          VERSION="dev-${{ github.sha }}"
+          # Generate version for dev (commit-based or pr-based)
+          VERSION="dev${{ steps.set-variables.outputs.env_suffix_hyphen }}-${{ github.sha }}"
           
           chmod +x scripts/send-deployment-to-datadog.sh
           
@@ -654,7 +675,7 @@ jobs:
           status: success
           channel: '#poff-deployments'
           text: |
-            ✅ *개발 환경 배포 성공!*
+            ✅ *개발 환경 ${{ needs.deploy-dev.outputs.action == 'destroy' && '자원 정리' || '배포' }} 성공!*
             
             🕒 시각: ${{ steps.time.outputs.time }}
             러너 소요 시간: ${{ steps.time.outputs.duration }}

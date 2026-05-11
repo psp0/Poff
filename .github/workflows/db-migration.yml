@@ -1,10 +1,6 @@
 name: Database Migration with db-migrate
 
 on:
-  push:
-    paths:
-      - 'migrations/**'
-    branches: [ develop, main ]
   workflow_dispatch:
     inputs:
       environment:
@@ -87,7 +83,7 @@ jobs:
               ENV="prod"
               ACTION="up"
             else
-              # Default to dev for develop branch
+              # Fallback context (e.g. dynamic environments)
               ENV="dev"
               ACTION="up"
             fi
