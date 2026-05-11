@@ -90,8 +90,29 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot = var.rds_skip_final_snapshot
   apply_immediately   = true
 
+  enabled_cloudwatch_logs_exports = ["error", "slowquery"]
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds"
+  })
+}
+
+# CloudWatch Log Groups for RDS (pre-create to control retention)
+resource "aws_cloudwatch_log_group" "rds_error" {
+  name              = "/aws/rds/instance/${var.project_name}-rds/error"
+  retention_in_days = 30
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-error-logs"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "rds_slowquery" {
+  name              = "/aws/rds/instance/${var.project_name}-rds/slowquery"
+  retention_in_days = 30
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-slowquery-logs"
   })
 }
 

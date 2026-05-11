@@ -195,5 +195,7 @@ module "monitoring" {
   project_name   = var.project_name
   environment    = var.environment
   aws_account_id = data.aws_caller_identity.current.account_id
-  # enable_datadog_monitoring 변수는 이제 내부에 전달할 필요가 없을 수도 있음
+  aws_region     = data.aws_region.current.id
+  datadog_api_key = var.datadog_api_key
+  datadog_site    = var.datadog_site
 }
