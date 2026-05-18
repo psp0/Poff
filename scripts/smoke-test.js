@@ -14,26 +14,26 @@ const endpoints = [
   { path: '/health', method: 'GET', expectedStatus: 200, optional: true },
 
   // User Management
-  { path: '/shop/items', method: 'GET', expectedStatus: 401 },
-  { path: '/api/config', method: 'GET', expectedStatus: 401 }, // Likely protected or public? Assuming 401/200 safe check below
+  { path: '/api/shop/items', method: 'GET', expectedStatus: 401 },
+  { path: '/api/config', method: 'GET', expectedStatus: 200 }, // Config is public by design
 
   // Egg Management
-  { path: '/eggs', method: 'GET', expectedStatus: 401 },
+  { path: '/api/eggs', method: 'GET', expectedStatus: 401 },
 
   // Pokemon Collection
-  { path: '/collection', method: 'GET', expectedStatus: 401 },
-  { path: '/all-pokemon', method: 'GET', expectedStatus: 401 },
-  { path: '/starters', method: 'GET', expectedStatus: 401 },
+  { path: '/api/collection', method: 'GET', expectedStatus: 401 },
+  { path: '/api/guest/all-pokemon', method: 'GET', expectedStatus: 200 }, // Guest is public
+  { path: '/api/guest/starter-pokemon', method: 'GET', expectedStatus: 200 }, // Guest is public
 
   // Pokemon Management
-  { path: '/user/items', method: 'GET', expectedStatus: 401 },
+  { path: '/api/user/items', method: 'GET', expectedStatus: 401 },
 
   // Screen Time
-  { path: '/screen-time', method: 'GET', expectedStatus: 401 },
-  { path: '/weekly-stats', method: 'GET', expectedStatus: 401 },
+  { path: '/api/screen-time', method: 'GET', expectedStatus: 401 },
+  { path: '/api/screen-time/weekly-stats', method: 'GET', expectedStatus: 401 },
 
   // Sleep Management
-  { path: '/sleep/status', method: 'GET', expectedStatus: 401 },
+  { path: '/api/sleep/status', method: 'GET', expectedStatus: 401 },
 ];
 
 async function runSmokeTest() {
