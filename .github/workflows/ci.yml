@@ -176,15 +176,6 @@ jobs:
           role-session-name: github-actions-ci
           role-skip-session-tagging: true
 
-      - name: Assume Execution Role
-        if: github.actor != 'dependabot[bot]'
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          role-to-assume: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions-ci-execution
-          role-chaining: true
-          role-skip-session-tagging: true
 
       - name: Terraform Format Check
         run: |
@@ -275,15 +266,6 @@ jobs:
           role-session-name: github-actions-ci
           role-skip-session-tagging: true
 
-      - name: Assume Execution Role
-        if: github.actor != 'dependabot[bot]'
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          role-to-assume: ${{ secrets.AWS_PROD_EXECUTION_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions-ci-execution
-          role-chaining: true
-          role-skip-session-tagging: true
 
       - name: Terraform Init and Validate (Prod)
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -490,7 +472,7 @@ jobs:
   comment-pr-preview:
     name: Comment PR Preview URL
     needs: [deploy-dev]
-    if: github.event_name == 'pull_request' && needs.deploy-dev.result == 'success' && needs.deploy-dev.outputs.website_url != '' && needs.deploy-dev.outputs.website_url != 'CloudFront not enabled'
+    if: always() && github.event_name == 'pull_request' && needs.deploy-dev.result == 'success' && needs.deploy-dev.outputs.website_url != '' && needs.deploy-dev.outputs.website_url != 'CloudFront not enabled'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
