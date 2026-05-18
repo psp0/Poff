@@ -64,6 +64,14 @@ on:
         default: false
         description: "Skip database migration"
         
+    outputs:
+      website_url:
+        description: "The website URL of the deployed dev environment"
+        value: ${{ jobs.deploy-dev.outputs.website_url }}
+      api_endpoint:
+        description: "The API endpoint of the deployed dev environment"
+        value: ${{ jobs.deploy-dev.outputs.api_endpoint }}
+
     secrets:
       AWS_DEV_GHA_DEPLOY_ROLE_ARN:
         required: true
