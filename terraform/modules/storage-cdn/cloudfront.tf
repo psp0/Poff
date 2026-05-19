@@ -2,8 +2,8 @@
 resource "aws_cloudfront_origin_access_control" "main" {
   count = var.enable_cloudfront ? 1 : 0
 
-  name                              = "${var.project_name}-oac"
-  description                       = "OAC for ${var.project_name} S3 bucket"
+  name                              = "${var.project_name}-${var.environment}-oac"
+  description                       = "OAC for ${var.project_name} ${var.environment} S3 bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
