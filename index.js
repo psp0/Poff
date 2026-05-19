@@ -6723,12 +6723,12 @@ function renderCurrentLocationCard() {
         <div style="display: flex; width: 100%; height: 200px; position: relative;">
           ${stripHtml}
           <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;">
-            <img src="/poff-assets/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 72px; height: 72px; filter: brightness(0) invert(1) drop-shadow(0 4px 12px rgba(0,0,0,0.6));">
+            <img src="/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 72px; height: 72px; filter: brightness(0) invert(1) drop-shadow(0 4px 12px rgba(0,0,0,0.6));">
           </div>
         </div>
       `;
     } else {
-      collageHtml = `<div style="height: 200px; background: linear-gradient(135deg, rgba(255,154,158,0.8) 0%, rgba(254,207,239,0.8) 50%, rgba(255,209,255,0.8) 100%), #333; display: flex; align-items: center; justify-content: center;"><img src="/poff-assets/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 72px; height: 72px; filter: brightness(0) invert(1) drop-shadow(2px 2px 4px rgba(0,0,0,0.3));"></div>`;
+      collageHtml = `<div style="height: 200px; background: linear-gradient(135deg, rgba(255,154,158,0.8) 0%, rgba(254,207,239,0.8) 50%, rgba(255,209,255,0.8) 100%), #333; display: flex; align-items: center; justify-content: center;"><img src="/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 72px; height: 72px; filter: brightness(0) invert(1) drop-shadow(2px 2px 4px rgba(0,0,0,0.3));"></div>`;
     }
 
     html = `
@@ -6975,13 +6975,13 @@ function renderMajorHabitatsGrid() {
       <div style="display: flex; width: 100%; height: 100px; position: relative;">
         ${stripHtml}
         <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;">
-          <img src="/poff-assets/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 32px; height: 32px; filter: brightness(0) invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.6));">
+          <img src="/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 32px; height: 32px; filter: brightness(0) invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.6));">
         </div>
       </div>
     `;
   } else {
     // Fallback gradient
-    randomImagesHtml = `<div style="height: 100px; background: linear-gradient(135deg, rgba(255,154,158,0.8) 0%, rgba(254,207,239,0.8) 50%, rgba(255,209,255,0.8) 100%), #333; display: flex; align-items: center; justify-content: center;"><img src="/poff-assets/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 32px; height: 32px; filter: brightness(0) invert(1) drop-shadow(2px 2px 4px rgba(0,0,0,0.3));"></div>`;
+    randomImagesHtml = `<div style="height: 100px; background: linear-gradient(135deg, rgba(255,154,158,0.8) 0%, rgba(254,207,239,0.8) 50%, rgba(255,209,255,0.8) 100%), #333; display: flex; align-items: center; justify-content: center;"><img src="/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 32px; height: 32px; filter: brightness(0) invert(1) drop-shadow(2px 2px 4px rgba(0,0,0,0.3));"></div>`;
   }
 
   // 수집률 계산 (랜덤용 전체 통계)
