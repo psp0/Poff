@@ -1,7 +1,7 @@
 -- 1. 사용자 서식지 테이블 (현재 위치 및 이동 제한)
 CREATE TABLE IF NOT EXISTS user_habitats (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id VARCHAR(255) NOT NULL UNIQUE,
+  user_id CHAR(36) NOT NULL UNIQUE,
   -- 현재 대분류 서식지 (cave, forest, grassland, mountain, roughterrain, sea, urban, watersedge, random)
   current_habitat VARCHAR(50) NOT NULL DEFAULT 'random',
   -- 현재 세부 서식지 (habitat + type 조합, 예: grassland_bug, cave_dark)
