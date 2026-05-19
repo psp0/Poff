@@ -288,6 +288,7 @@ jobs:
           MIGRATION_ACTION: ${{ needs.determine-environment.outputs.migration_action }}
           DB_ENV: ${{ needs.determine-environment.outputs.environment }}
         run: |
+          set -o pipefail
           cd migrations
           echo "Running db-migrate through SSM Port Forwarding..."
           echo "Migration action: $MIGRATION_ACTION"
