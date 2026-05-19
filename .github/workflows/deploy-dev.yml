@@ -588,7 +588,7 @@ jobs:
       rds_port: ${{ needs.deploy-dev.outputs.rds_port }}
       database_name: ${{ needs.deploy-dev.outputs.database_name }}
       nat_instance_id: ${{ needs.deploy-dev.outputs.nat_instance_id }}
-      assets_bucket_name: "poff-dev${{ needs.deploy-dev.outputs.env_suffix_hyphen }}-assets"
+      assets_bucket_name: "poff-dev-assets"
     secrets:
       AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
       AWS_EXECUTION_ROLE_ARN: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
