@@ -2,6 +2,7 @@ const { getDatabase } = require('../../shared/database');
 const { authenticateAndParseBody, authenticate } = require('../../shared/auth');
 const { createSuccessResponse, createErrorResponse, withErrorHandling } = require('../../shared/response-utils');
 const { logger } = require('../../shared/logger');
+const { sqlTodayStartUtc, sqlTodayEndUtc } = require('../../shared/timezone');
 
 /**
  * 포켓몬 컬렉션 관련 Lambda 함수
@@ -12,37 +13,54 @@ const { logger } = require('../../shared/logger');
  * - GET /favorites - 즐겨찾기 포켓몬 목록
  * - GET /icons - 포켓몬 아이콘 컬렉션
  * - GET /all-pokemon - 모든 보유 포켓몬 (세대별 정렬용)
+ * - GET /today - 오늘 획득한 포켓몬 (새벽4시~다음새벽4시)
  * - GET /evolution/{baseImageName} - 진화 트리 조회
- * - POST /reward - 운동 보상 이로치 포켓몬 지급
  */
 
 const handler = async (event, context) => {
   const db = getDatabase();
-  const method = event.httpMethod;
-  const path = event.path;
+  const method = event.requestContext?.http?.method || event.httpMethod;
+  const path = event.rawPath || event.path;
   const pathParameters = event.pathParameters || {};
 
-  // 라우팅
-  if (method === 'GET' && path.endsWith('/collection')) {
-    return await getUserPokemonCollection(event, db);
-  } else if (method === 'POST' && path.endsWith('/favorite')) {
-    return await toggleFavoritePokemon(event, db);
-  } else if (method === 'GET' && path.endsWith('/favorites')) {
-    return await getFavoritePokemon(event, db);
-  } else if (method === 'GET' && path.endsWith('/icons')) {
-    return await getUserPokemonIcons(event, db);
-  } else if (method === 'GET' && path.endsWith('/all-pokemon')) {
-    return await getAllUserPokemon(event, db);
-  } else if (method === 'GET' && path.includes('/evolution/')) {
-    return await getEvolutionTree(event, db, pathParameters.baseImageName);
-  } else if (method === 'POST' && path.endsWith('/reward')) {
-    return await rewardShinyPokemonForExercise(event, db);
+  // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+  const stage = event.requestContext?.stage;
+  let normalizedPath = path;
+  if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+    normalizedPath = path.substring(stage.length + 1);
+  }
 
-  } else if (method === 'GET' && path.endsWith('/starters')) {
+  // Use normalizedPath for routing
+  const routePath = normalizedPath;
+
+  // 라우팅
+  if (method === 'GET' && routePath.endsWith('/collection')) {
+    return await getUserPokemonCollection(event, db);
+  } else if (method === 'POST' && routePath.endsWith('/favorite')) {
+    return await toggleFavoritePokemon(event, db);
+  } else if (method === 'GET' && routePath.endsWith('/favorites')) {
+    return await getFavoritePokemon(event, db);
+  } else if (method === 'GET' && routePath.endsWith('/icons')) {
+    return await getUserPokemonIcons(event, db);
+  } else if (method === 'GET' && routePath.endsWith('/all-pokemon')) {
+    return await getAllUserPokemon(event, db);
+  } else if (method === 'GET' && routePath.endsWith('/today')) {
+    return await getTodayObtainedPokemon(event, db);
+  } else if (method === 'GET' && routePath.includes('/evolution/')) {
+    return await getEvolutionTree(event, db, pathParameters.baseImageName);
+
+
+  } else if (method === 'GET' && routePath.endsWith('/starters')) {
     return await getStarterPokemon(event, db);
-  } else if (method === 'GET' && path.includes('/pokemon/')) {
-    const stableId = path.split('/pokemon/')[1];
+  } else if (method === 'GET' && routePath.includes('/pokemon/')) {
+    const stableId = routePath.split('/pokemon/')[1];
     return await getPokemonData(event, db, stableId);
+  } else if (method === 'GET' && routePath.includes('/habitats/') && routePath.endsWith('/pokemon')) {
+    // /habitats/:habitatSlug/:typeSlug/pokemon
+    const parts = routePath.split('/');
+    const habitatSlug = parts[parts.length - 3];
+    const typeSlug = parts[parts.length - 2];
+    return await getPokemonByHabitat(event, db, habitatSlug, typeSlug);
   } else {
     return createErrorResponse('Not Found', 404);
   }
@@ -64,21 +82,18 @@ async function getUserPokemonCollection(event, db) {
   }
 
   const query = `
-    SELECT JSON_ARRAYAGG(
-      JSON_OBJECT(
-        'collection_id', upc.collection_id,
-        'pokemon_stable_id', upc.pokemon_stable_id,
-        'is_shiny', upc.is_shiny,
-        'is_favorite', upc.is_favorite,
-        'obtained_date', upc.obtained_date,
-        'obtained_reason', upc.obtained_reason,
-        'pokemon_name', p.name,
-        'pokemon_type1', p.type1,
-        'pokemon_type2', p.type2,
-        'pokemon_category', p.category,
-        'pokemon_generation', p.generation
-      )
-    ) as collection
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.is_favorite,
+      upc.obtained_date,
+      upc.obtained_reason,
+      p.name AS pokemon_name,
+      p.type1 AS pokemon_type1,
+      p.type2 AS pokemon_type2,
+      p.category AS pokemon_category,
+      p.generation AS pokemon_generation
     FROM user_pokemon_collection upc
     INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
     WHERE upc.user_id = ?
@@ -86,11 +101,19 @@ async function getUserPokemonCollection(event, db) {
       AND (NOT ? OR upc.is_favorite = true)
     ORDER BY 
       upc.is_favorite DESC,  -- 즐겨찾기가 먼저
-      upc.obtained_date DESC  -- 최근 획듍 순
+      upc.obtained_date DESC  -- 최근 획득 순
   `;
 
   const result = await db.query(query, [userId, includeShiny, favoritesOnly]);
-  return createSuccessResponse(result.rows[0]?.collection || []);
+
+  let collection = [];
+  if (result.rows && result.rows.length > 0) {
+    collection = result.rows;
+  } else if (Array.isArray(result) && result.length > 0) {
+    collection = result;
+  }
+
+  return createSuccessResponse(collection || []);
 }
 
 /**
@@ -151,28 +174,34 @@ async function getFavoritePokemon(event, db) {
   }
 
   const query = `
-    SELECT JSON_ARRAYAGG(
-      JSON_OBJECT(
-        'collection_id', upc.collection_id,
-        'pokemon_stable_id', upc.pokemon_stable_id,
-        'is_shiny', upc.is_shiny,
-        'is_favorite', upc.is_favorite,
-        'obtained_date', upc.obtained_date,
-        'obtained_reason', upc.obtained_reason,
-        'pokemon_name', p.name,
-        'pokemon_type1', p.type1,
-        'pokemon_type2', p.type2,
-        'pokemon_category', p.category
-      )
-    ) as favorites
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.is_favorite,
+      upc.obtained_date,
+      upc.favorited_at,
+      upc.obtained_reason,
+      p.name AS pokemon_name,
+      p.type1 AS pokemon_type1,
+      p.type2 AS pokemon_type2,
+      p.category AS pokemon_category
     FROM user_pokemon_collection upc
     INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
     WHERE upc.user_id = ? AND upc.is_favorite = true
-    ORDER BY upc.obtained_date DESC
+    ORDER BY upc.favorited_at DESC
   `;
 
   const result = await db.query(query, [userId]);
-  return createSuccessResponse(result.rows[0]?.favorites || []);
+
+  let favorites = [];
+  if (result.rows && result.rows.length > 0) {
+    favorites = result.rows;
+  } else if (Array.isArray(result) && result.length > 0) {
+    favorites = result;
+  }
+
+  return createSuccessResponse(favorites || []);
 }
 
 /**
@@ -240,6 +269,10 @@ async function getUserPokemonIcons(event, db) {
         p.has_icon,
         p.has_icon_shiny,
         eg.evolution_level,
+        p.name,
+        p.type1,
+        p.type2,
+        p.habitat,
         -- 폼 번호 추출: _숫자 형태일 경우만 추출 (_female 등은 제외)
         CASE 
           WHEN p.form_suffix REGEXP '^_[0-9]+$'
@@ -263,6 +296,10 @@ async function getUserPokemonIcons(event, db) {
         gap.has_icon_shiny,
         gap.evolution_level,
         gap.form_number,
+        gap.type1,
+        gap.type2,
+        gap.habitat,
+        gap.name,
         upc.is_shiny,
         upc.is_favorite,
         upc.obtained_date,
@@ -316,6 +353,10 @@ async function getUserPokemonIcons(event, db) {
         uop.is_shiny,
         uop.favorited_at,
         uop.obtained_date,
+        uop.type1,
+        uop.type2,
+        uop.habitat,
+        uop.name,
         gc.owned_count,
         gc.total_count,
         gc.shiny_owned_count,
@@ -323,15 +364,17 @@ async function getUserPokemonIcons(event, db) {
         ROW_NUMBER() OVER (
           PARTITION BY uop.base_image_name 
           ORDER BY 
-            uop.obtained_date DESC,
             uop.evolution_level DESC, 
+            uop.obtained_date DESC,
             uop.form_number DESC, 
             CASE WHEN uop.form_suffix IS NULL THEN 1 ELSE 0 END, -- NULLS LAST equivalent
             uop.form_suffix DESC,
             uop.stable_id
         ) as rn,
         MAX(uop.is_favorite) OVER (PARTITION BY uop.base_image_name) as group_has_favorite,
-        COALESCE(p_base.asset_source, 'base') AS base_form_asset_source
+        COALESCE(p_base.asset_source, 'base') AS base_form_asset_source,
+        EXISTS(SELECT 1 FROM pokemon_flag_relations pfr WHERE pfr.pokemon_stable_id = uop.stable_id AND pfr.flag_name = 'Legendary') AS is_legendary,
+        EXISTS(SELECT 1 FROM pokemon_flag_relations pfr WHERE pfr.pokemon_stable_id = uop.stable_id AND pfr.flag_name = 'Mythical') AS is_mythical
       FROM user_owned_pokemon uop
       JOIN group_completion gc ON gc.base_image_name = uop.base_image_name
       LEFT JOIN pokemon p_base ON p_base.image_name = uop.image_name AND (p_base.form_suffix IS NULL OR p_base.form_suffix = '')
@@ -425,7 +468,13 @@ async function getUserPokemonIcons(event, db) {
       ri.owned_count = ri.total_count AS is_complete,
       ri.shiny_owned_count,
       ri.is_shiny_complete,
-      ri.obtained_date
+      ri.obtained_date,
+      ri.type1,
+      ri.type2,
+      ri.name,
+      ri.is_legendary,
+      ri.is_mythical,
+      ri.habitat
     FROM representative_icons ri
     ORDER BY 
       CASE WHEN ri.is_favorite THEN 0 ELSE 1 END,
@@ -512,6 +561,7 @@ async function getAllUserPokemon(event, db) {
       p.type2,
       p.generation,
       p.pokemon_id,
+      p.habitat,
       p.asset_source AS display_asset_source,
       p.has_icon AS display_has_icon,
       p.has_icon_shiny AS display_has_icon_shiny,
@@ -789,77 +839,6 @@ async function getEvolutionTree(event, db, baseImageName) {
   return createSuccessResponse(result.rows[0]?.evolution_tree || {});
 }
 
-/**
- * 운동 보상 이로치 포켓몬 지급
- */
-async function rewardShinyPokemonForExercise(event, db) {
-  const { userId, requestBody } = await authenticateAndParseBody(event);
-
-  return await db.transaction(async (client) => {
-    // 제외할 플래그 이름 목록 (Legendary, Mythical, Paradox, UltraBeast)
-    const excludedFlags = ['Legendary', 'Mythical', 'Paradox', 'UltraBeast'];
-
-    // 사용자가 일반 버전은 보유했지만 이로치는 없는 포켓몬 중 랜덤 선택
-    const rewardPokemonResult = await client.query(`
-      SELECT p.stable_id
-      FROM pokemon p
-      WHERE 
-        -- 사용자가 일반 버전을 보유한 포켓몬
-        p.stable_id IN (
-          SELECT pokemon_stable_id 
-          FROM user_pokemon_collection 
-          WHERE user_id = ? 
-            AND is_shiny = false
-        )
-        -- 이로치 버전은 아직 없는 포켓몬
-        AND p.stable_id NOT IN (
-          SELECT pokemon_stable_id 
-          FROM user_pokemon_collection 
-          WHERE user_id = ? 
-            AND is_shiny = true
-        )
-        -- 제외 플래그가 없는 포켓몬만
-        AND NOT EXISTS (
-          SELECT 1 
-          FROM pokemon_flag_relations pfr
-          JOIN pokemon_flags pf ON pf.name = pfr.flag_name
-          WHERE pfr.pokemon_stable_id = p.stable_id
-            AND pf.name IN (?, ?, ?, ?)
-        )
-      ORDER BY RAND()
-      LIMIT 1
-    `, [userId, userId, ...excludedFlags]);
-
-    if (rewardPokemonResult.rows.length === 0) {
-      return createSuccessResponse({
-        success: false,
-        reward_pokemon: null,
-        is_shiny: false,
-        message: '획득 가능한 이로치 포켓몬이 없습니다.'
-      });
-    }
-
-    const rewardPokemon = rewardPokemonResult.rows[0].stable_id;
-
-    // 선택된 포켓몬을 이로치로 추가
-    await client.query(`
-      INSERT INTO user_pokemon_collection (user_id, pokemon_stable_id, is_shiny, obtained_reason)
-      VALUES (?, ?, true, '운동 보상')
-      ON DUPLICATE KEY UPDATE obtained_reason = VALUES(obtained_reason)
-    `, [userId, rewardPokemon]);
-
-
-
-    logger.info('Shiny pokemon rewarded (Exercise)', { userId, pokemonId: rewardPokemon });
-
-    return createSuccessResponse({
-      success: true,
-      reward_pokemon: rewardPokemon,
-      is_shiny: true,
-      message: '이로치 포켓몬을 획득했습니다!'
-    });
-  });
-}
 
 /**
  * 포켓몬 상세 데이터 조회
@@ -874,7 +853,7 @@ async function getPokemonData(event, db, stableId) {
     return createErrorResponse('Pokemon stable ID is required', 400);
   }
 
-  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '/pokehabit-assets').replace(/\/$/, '') + '/';
+  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '/poff-assets').replace(/\/$/, '') + '/';
 
   const query = `
     SELECT 
@@ -890,8 +869,11 @@ async function getPokemonData(event, db, stableId) {
         FROM pokemon_flag_relations pfr
         JOIN pokemon_flags pf ON pfr.flag_name = pf.name
         WHERE pfr.pokemon_stable_id = p.stable_id
-      ) as flags
+      ) as flags,
+      hb.image_filename as background_filename,
+      hb.habitat_slug as background_habitat
     FROM pokemon p
+    LEFT JOIN habitat_backgrounds hb ON p.bg_id = hb.id
     WHERE p.stable_id = ?
   `;
 
@@ -907,37 +889,23 @@ async function getPokemonData(event, db, stableId) {
   const suffix = pokemon.form_suffix || '';
   const fileName = `${imageName}${suffix}.png`;
 
-  // Determine background based on habitat and type
-  const habitat = pokemon.habitat_en ? pokemon.habitat_en.toLowerCase().replace(/\s+/g, '_') : 'unknown';
-  const type1 = pokemon.type1_en ? pokemon.type1_en.toLowerCase() : 'normal';
-  const type2 = pokemon.type2_en ? pokemon.type2_en.toLowerCase() : null;
-
   // Base URL for custom backgrounds
   const customBgBaseUrl = `${assetsBaseUrl}custom/img/background`;
 
-  // Determine primary type for background
-  // If one of the types is 'normal' and there is another type, prioritize the other type
-  let primaryType = type1;
-  let secondaryType = type2;
-
-  if (type1 === 'normal' && type2) {
-    primaryType = type2;
-    secondaryType = type1;
+  // Determine background URL from DB result
+  let backgroundUrl = null;
+  if (pokemon.background_filename && pokemon.background_habitat) {
+    backgroundUrl = `${customBgBaseUrl}/${pokemon.background_habitat}/${pokemon.background_filename}`;
+  } else {
+    // Fallback if no DB match (though seed should cover it)
+    // Try to construct based on habitat and type1 as a last resort
+    const habitat = pokemon.habitat_en ? pokemon.habitat_en : 'unknown';
+    const type1 = pokemon.type1_en ? pokemon.type1_en.toLowerCase() : 'normal';
+    backgroundUrl = `${customBgBaseUrl}/${habitat}/${type1}.png`;
   }
 
-  // 1. Habitat + Primary Type
-  const backgroundUrl = `${customBgBaseUrl}/${habitat}/${primaryType}.png`;
-
-  // Fallbacks
+  // Fallbacks are less relevant now as we have exact mapping, but we can keep empty array or minimal fallback
   const fallbackBackgrounds = [];
-
-  // 2. Habitat + Secondary Type (if exists)
-  if (secondaryType) {
-    fallbackBackgrounds.push(`${customBgBaseUrl}/${habitat}/${secondaryType}.png`);
-  }
-
-  // 3. Habitat + Normal (Habitat-specific fallback)
-  fallbackBackgrounds.push(`${customBgBaseUrl}/${habitat}/normal.png`);
 
   // Determine image folders based on shiny status and asset availability
   // If shiny but no shiny asset exists, fall back to normal asset
@@ -1000,7 +968,7 @@ async function getPokemonData(event, db, stableId) {
  * Base 플래그를 가진 포켓몬들을 반환
  */
 async function getStarterPokemon(event, db) {
-  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '/pokehabit-assets').replace(/\/$/, '') + '/';
+  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '/poff-assets').replace(/\/$/, '') + '/';
 
   const query = `
     SELECT 
@@ -1036,3 +1004,221 @@ async function getStarterPokemon(event, db) {
 }
 
 module.exports = { handler: withErrorHandling(handler) };
+/**
+ * 서식지 및 타입별 포켓몬 조회 (서식지 내 이동 시 사용)
+ */
+async function getPokemonByHabitat(event, db, habitatSlug, typeSlug) {
+  const auth = await authenticate(event);
+  const queryParams = event.queryStringParameters || {};
+  const userId = auth.isService ? queryParams.userId : auth.userId;
+
+  if (!userId) {
+    return createErrorResponse('User ID is required', 400);
+  }
+
+  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '').replace(/\/$/, '') + '/';
+
+  // habitatSlug와 typeSlug를 이용해 포켓몬 조회
+  // habitat_en 컬럼과 type1_en/type2_en 컬럼 사용
+  // typeSlug가 'normal'인 경우, 해당 서식지의 기본 포켓몬들을 의미할 수 있음
+  // 하지만 여기서는 habitat_backgrounds 테이블의 type_slug와 매칭되는 포켓몬을 찾음
+
+  const query = `
+    SELECT 
+      p.stable_id,
+      p.image_name,
+      p.name,
+      p.type1,
+      p.type2,
+      p.generation,
+      p.asset_source,
+      p.has_icon,
+      p.has_icon_shiny,
+      p.form_suffix,
+      upc.is_shiny,
+      upc.is_favorite,
+      upc.collection_id IS NOT NULL as is_owned,
+      -- 아이콘 URL 생성
+      CONCAT(?, 
+        CASE 
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 1 THEN
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons%20shiny/'
+              ELSE 'base/img/Icons%20shiny/'
+            END
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 0 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN COALESCE(p_base.asset_source, 'base') = 'external' THEN 'external/img/Icons%20shiny/'
+              ELSE 'base/img/Icons%20shiny/'
+            END
+          WHEN p.has_icon = 0 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN COALESCE(p_base.asset_source, 'base') = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+          ELSE
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+        END,
+        CASE 
+          WHEN (upc.is_shiny = 1 AND p.has_icon_shiny = 1 AND p.form_suffix IS NOT NULL) 
+               OR (upc.is_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL)
+               OR (upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL)
+          THEN CONCAT(p.image_name, p.form_suffix, '.png')
+          ELSE CONCAT(p.image_name, '.png')
+        END
+      ) AS icon_url
+    FROM pokemon p
+    LEFT JOIN user_pokemon_collection upc ON p.stable_id = upc.pokemon_stable_id AND upc.user_id = ?
+    LEFT JOIN pokemon p_base ON p_base.image_name = p.image_name AND (p_base.form_suffix IS NULL OR p_base.form_suffix = '')
+    WHERE p.habitat_en = ? 
+      AND (LOWER(p.type1_en) = ? OR LOWER(p.type2_en) = ?)
+    ORDER BY p.generation, p.pokemon_id
+  `;
+
+  try {
+    const result = await db.query(query, [assetsBaseUrl, userId, habitatSlug, typeSlug, typeSlug]);
+
+    // 통계 계산
+    const totalCount = result.rows.length;
+    const ownedCount = result.rows.filter(r => r.is_owned).length;
+
+    return createSuccessResponse({
+      pokemon: result.rows,
+      stats: {
+        total_count: totalCount,
+        owned_count: ownedCount,
+        completion_percentage: totalCount > 0 ? Math.round((ownedCount / totalCount) * 100) : 0
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching habitat pokemon', error);
+    return createErrorResponse('Failed to fetch habitat pokemon', 500);
+  }
+}
+
+/**
+ * 오늘 획득한 포켓몬 조회 (새벽 4시 ~ 다음 새벽 4시)
+ * 홈 화면에서 오늘 획득한 포켓몬 아이콘을 가로 스크롤로 표시하기 위한 API
+ */
+async function getTodayObtainedPokemon(event, db) {
+  const auth = await authenticate(event);
+  const queryParams = event.queryStringParameters || {};
+  const userId = auth.isService ? queryParams.userId : auth.userId;
+
+  if (!userId) {
+    return createErrorResponse('User ID is required', 400);
+  }
+
+  const assetsBaseUrl = (process.env.ASSETS_BASE_URL || '').replace(/\/$/, '') + '/';
+
+  // 오늘의 시작: 오늘 새벽 4시 (KST)
+  // 오늘의 끝: 내일 새벽 4시 (KST)
+  // MySQL에서는 NOW()를 기준으로 계산
+  // KST = UTC + 9, 새벽 4시 KST = 이전 날 19:00 UTC
+  const query = `
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.obtained_date,
+      upc.obtained_reason,
+      p.name,
+      p.image_name,
+      p.form_suffix,
+      p.type1,
+      p.type2,
+      p.asset_source,
+      p.has_icon,
+      p.has_icon_shiny,
+      -- base_image_name 계산을 위한 서브쿼리
+      (
+        WITH RECURSIVE ancestry_chain AS (
+          -- Start with the current pokemon
+          SELECT 
+            p_start.stable_id, 
+            p_start.image_name,
+            0 as level
+          FROM pokemon p_start
+          WHERE p_start.stable_id = p.stable_id
+          
+          UNION ALL
+          
+          -- Go to parent (find who evolves INTO existing)
+          SELECT 
+            p_parent.stable_id,
+            p_parent.image_name,
+            ac.level + 1
+          FROM ancestry_chain ac
+          JOIN pokemon_evolutions pe ON pe.to_pokemon = ac.stable_id
+          JOIN pokemon p_parent ON p_parent.stable_id = pe.from_pokemon
+        )
+        SELECT image_name FROM ancestry_chain ORDER BY level DESC LIMIT 1
+      ) AS base_image_name,
+      -- 아이콘 URL 생성
+      CONCAT(?, 
+        CASE 
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 1 THEN
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons%20shiny/'
+              ELSE 'base/img/Icons%20shiny/'
+            END
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+          WHEN upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 0 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN COALESCE(p_base.asset_source, 'base') = 'external' THEN 'external/img/Icons%20shiny/'
+              ELSE 'base/img/Icons%20shiny/'
+            END
+          WHEN p.has_icon = 0 AND p.form_suffix IS NOT NULL THEN
+            CASE 
+              WHEN COALESCE(p_base.asset_source, 'base') = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+          ELSE
+            CASE 
+              WHEN p.asset_source = 'external' THEN 'external/img/Icons/'
+              ELSE 'base/img/Icons/'
+            END
+        END,
+        CASE 
+          WHEN (upc.is_shiny = 1 AND p.has_icon_shiny = 1 AND p.form_suffix IS NOT NULL) 
+               OR (upc.is_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL)
+               OR (upc.is_shiny = 1 AND p.has_icon_shiny = 0 AND p.has_icon = 1 AND p.form_suffix IS NOT NULL)
+          THEN CONCAT(p.image_name, p.form_suffix, '.png')
+          ELSE CONCAT(p.image_name, '.png')
+        END
+      ) AS icon_url
+    FROM user_pokemon_collection upc
+    JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    LEFT JOIN pokemon p_base ON p_base.image_name = p.image_name AND (p_base.form_suffix IS NULL OR p_base.form_suffix = '')
+    WHERE upc.user_id = ?
+      -- KST 새벽 4시 = UTC 전날 19:00
+      -- 모든 시간을 UTC 기준으로 비교 (obtained_date는 UTC로 저장됨)
+      -- UTC_TIMESTAMP()를 사용하여 DB 타임존과 무관하게 UTC 기준으로 계산
+      AND upc.obtained_date >= ${sqlTodayStartUtc()}
+      AND upc.obtained_date < ${sqlTodayEndUtc()}
+    ORDER BY upc.obtained_date DESC
+  `;
+
+  try {
+    const result = await db.query(query, [assetsBaseUrl, userId]);
+
+    const pokemon = result.rows || result || [];
+
+    return createSuccessResponse(pokemon);
+  } catch (error) {
+    logger.error('Error fetching today obtained pokemon', error);
+    return createErrorResponse('Failed to fetch today obtained pokemon', 500);
+  }
+}

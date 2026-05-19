@@ -1,0 +1,12 @@
+UPDATE habitat_backgrounds SET display_name = '환각 동굴' WHERE habitat_slug = 'cave' AND type_slug = 'psychic';
+UPDATE habitat_backgrounds SET display_name = '천공굴' WHERE habitat_slug = 'cave' AND type_slug = 'flying';
+UPDATE habitat_backgrounds SET display_name = '실타래 숲' WHERE habitat_slug = 'forest' AND type_slug = 'bug';
+UPDATE habitat_backgrounds SET display_name = '고룡의 회랑' WHERE habitat_slug = 'cave' AND type_slug = 'dragon';
+UPDATE habitat_backgrounds SET display_name = '그림자굴' WHERE habitat_slug = 'cave' AND type_slug = 'dark';
+UPDATE habitat_backgrounds SET display_name = '스파크 광산' WHERE habitat_slug = 'cave' AND type_slug = 'electric';
+UPDATE habitat_backgrounds SET display_name = '별빛 수정 동굴' WHERE habitat_slug = 'cave' AND type_slug = 'fairy';
+UPDATE habitat_backgrounds SET display_name = '홍염굴' WHERE habitat_slug = 'cave' AND type_slug = 'fire';
+UPDATE habitat_backgrounds SET display_name = '영구동토의 틈' WHERE habitat_slug = 'cave' AND type_slug = 'ice';
+UPDATE habitat_backgrounds SET display_name = '천년 바위굴' WHERE habitat_slug = 'cave' AND type_slug = 'rock';
+UPDATE habitat_backgrounds SET display_name = '강철의 요새' WHERE habitat_slug = 'cave' AND type_slug = 'steel';
+UPDATE habitat_backgrounds SET display_name = '심해의 산호굴' WHERE habitat_slug = 'cave' AND type_slug = 'water';

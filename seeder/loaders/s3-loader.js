@@ -35,16 +35,53 @@ class S3Loader {
 
     /**
      * Check if a file exists in S3
+     * Uses caching to avoid thousands of API calls
      * @param {string} relativePath - Relative path from basePath
      * @returns {Promise<boolean>} True if file exists
      */
     async fileExists(relativePath) {
+        if (!this.fileCache) {
+            await this._initCache();
+        }
+
         const key = this.basePath ? `${this.basePath}/${relativePath}` : relativePath;
+        return this.fileCache.has(key);
+    }
+
+    /**
+     * Initialize file cache by listing all objects in the bucket
+     * @private
+     */
+    async _initCache() {
+        console.log('📦 Caching S3 bucket file list...');
+        this.fileCache = new Set();
+
+        let continuationToken = null;
+        let count = 0;
+
         try {
-            await this.s3.headObject({ Bucket: this.bucketName, Key: key }).promise();
-            return true;
-        } catch {
-            return false;
+            do {
+                const params = {
+                    Bucket: this.bucketName,
+                    Prefix: this.basePath || undefined,
+                    ContinuationToken: continuationToken
+                };
+
+                const data = await this.s3.listObjectsV2(params).promise();
+                if (data.Contents) {
+                    data.Contents.forEach(obj => this.fileCache.add(obj.Key));
+                    count += data.Contents.length;
+                }
+                continuationToken = data.NextContinuationToken;
+
+            } while (continuationToken);
+
+            console.log(`✓ Cached ${count} files from S3`);
+        } catch (error) {
+            console.error('Failed to cache S3 file list:', error);
+            // Fallback to no cache if listing fails (though unlikely if getObject works)
+            this.fileCache = null;
+            throw error;
         }
     }
 }

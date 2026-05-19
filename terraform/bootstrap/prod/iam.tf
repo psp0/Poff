@@ -287,6 +287,12 @@ resource "aws_iam_policy" "terraform_execution_misc_policy" {
         Effect   = "Allow"
         Action   = "route53:*"
         Resource = "*"
+      },
+      {
+        Sid      = "SecretsManagerPermissions"
+        Effect   = "Allow"
+        Action   = "secretsmanager:*"
+        Resource = "*"
       }
     ]
   })
@@ -343,7 +349,8 @@ resource "aws_iam_role" "github_actions_role" {
           },
           StringLike = {
             "token.actions.githubusercontent.com:sub" = [
-              "repo:${var.full_repo_path}:ref:refs/heads/main"
+              "repo:${var.full_repo_path}:ref:refs/heads/main",
+              "repo:${var.full_repo_path}:environment:${var.environment}"
             ]
           }
         }
@@ -402,7 +409,6 @@ resource "aws_iam_role" "github_actions_ci_role" {
           StringLike = {
             "token.actions.githubusercontent.com:sub" = [
               "repo:${var.full_repo_path}:pull_request",
-              "repo:${var.full_repo_path}:ref:refs/heads/develop",
               "repo:${var.full_repo_path}:ref:refs/heads/main"
             ]
           }

@@ -51,35 +51,6 @@ const userSchemas = {
 
 
 /**
- * 운동 관련 검증 스키마
- */
-const exerciseSchemas = {
-  log: Joi.object({
-    exercise_type: Joi.string().valid('cardio', 'strength', 'flexibility', 'sports', 'other').required(),
-    duration_minutes: Joi.number().integer().min(1).max(600).required(), // 최대 10시간
-    intensity: Joi.string().valid('low', 'moderate', 'high').required(),
-    calories_burned: Joi.number().integer().min(0).max(2000).optional(),
-    notes: Joi.string().max(500).optional().allow(''),
-    exercise_date: Joi.date().max('now').required()
-  }),
-
-  update: Joi.object({
-    exercise_type: Joi.string().valid('cardio', 'strength', 'flexibility', 'sports', 'other').optional(),
-    duration_minutes: Joi.number().integer().min(1).max(600).optional(),
-    intensity: Joi.string().valid('low', 'moderate', 'high').optional(),
-    calories_burned: Joi.number().integer().min(0).max(2000).optional(),
-    notes: Joi.string().max(500).optional().allow('')
-  }),
-
-  query: Joi.object({
-    start_date: Joi.date().optional(),
-    end_date: Joi.date().min(Joi.ref('start_date')).optional(),
-    exercise_type: Joi.string().valid('cardio', 'strength', 'flexibility', 'sports', 'other').optional(),
-    ...commonSchemas.pagination
-  })
-};
-
-/**
  * 스크린타임 관련 검증 스키마
  */
 const screenTimeSchemas = {
@@ -254,7 +225,6 @@ module.exports = {
   // 스키마들
   commonSchemas,
   userSchemas,
-  exerciseSchemas,
   screenTimeSchemas,
   pokemonSchemas,
 

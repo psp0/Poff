@@ -24,7 +24,7 @@ resource "datadog_integration_aws_account" "main" {
   metrics_config {
     enabled = true
     namespace_filters {
-      include_only = ["lambda", "rds", "apigateway"]
+      include_only = ["AWS/Lambda", "AWS/RDS", "AWS/ApiGateway"]
     }
   }
 
@@ -35,7 +35,8 @@ resource "datadog_integration_aws_account" "main" {
 
   logs_config {
     lambda_forwarder {
-      # Default empty configuration
+      lambdas = [aws_serverlessapplicationrepository_cloudformation_stack.datadog_forwarder.outputs["DatadogForwarderArn"]]
+      sources = []
     }
   }
 
@@ -44,6 +45,53 @@ resource "datadog_integration_aws_account" "main" {
       include_only = []
     }
   }
+}
+
+# Datadog Lambda Forwarder (공식 SAR 앱 사용)
+resource "aws_serverlessapplicationrepository_cloudformation_stack" "datadog_forwarder" {
+  name             = "${var.project_name}-datadog-forwarder"
+  application_id   = "arn:aws:serverlessrepo:us-east-1:464622532012:applications/Datadog-Forwarder"
+  semantic_version = "3.130.0"
+  capabilities     = ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"]
+
+  parameters = {
+    DdApiKey     = var.datadog_api_key
+    DdSite       = var.datadog_site
+    FunctionName = "${var.project_name}-datadog-forwarder"
+  }
+}
+
+# RDS Error 로그 → Datadog Forwarder
+resource "aws_cloudwatch_log_subscription_filter" "rds_error_to_datadog" {
+  name            = "${var.project_name}-rds-error-to-datadog"
+  log_group_name  = "/aws/rds/instance/${var.project_name}-rds/error"
+  filter_pattern  = ""
+  destination_arn = aws_serverlessapplicationrepository_cloudformation_stack.datadog_forwarder.outputs["DatadogForwarderArn"]
+}
+
+# RDS Slowquery 로그 → Datadog Forwarder
+resource "aws_cloudwatch_log_subscription_filter" "rds_slowquery_to_datadog" {
+  name            = "${var.project_name}-rds-slowquery-to-datadog"
+  log_group_name  = "/aws/rds/instance/${var.project_name}-rds/slowquery"
+  filter_pattern  = ""
+  destination_arn = aws_serverlessapplicationrepository_cloudformation_stack.datadog_forwarder.outputs["DatadogForwarderArn"]
+}
+
+# Forwarder에 CloudWatch 호출 권한 부여
+resource "aws_lambda_permission" "datadog_forwarder_rds_error" {
+  statement_id  = "AllowCWLogsRdsError"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_serverlessapplicationrepository_cloudformation_stack.datadog_forwarder.outputs["DatadogForwarderArn"]
+  principal     = "logs.amazonaws.com"
+  source_arn    = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws/rds/instance/${var.project_name}-rds/error:*"
+}
+
+resource "aws_lambda_permission" "datadog_forwarder_rds_slowquery" {
+  statement_id  = "AllowCWLogsRdsSlowquery"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_serverlessapplicationrepository_cloudformation_stack.datadog_forwarder.outputs["DatadogForwarderArn"]
+  principal     = "logs.amazonaws.com"
+  source_arn    = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws/rds/instance/${var.project_name}-rds/slowquery:*"
 }
 
 # Datadog IAM Role for AWS Integration
@@ -92,6 +140,9 @@ resource "aws_iam_policy" "datadog_integration" {
           "lambda:GetFunction",
           "lambda:ListFunctions",
           "rds:DescribeDBInstances",
+          "rds:DescribeEvents",
+          "rds:ListTagsForResource",
+          "rds:DescribeDBClusters",
           "apigateway:GET"
         ]
         Resource = "*"

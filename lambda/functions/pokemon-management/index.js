@@ -14,18 +14,28 @@ const { logger } = require('../../shared/logger');
 
 const handler = async (event, context) => {
     const db = getDatabase();
-    const method = event.httpMethod;
-    const path = event.path;
+    const method = event.requestContext?.http?.method || event.httpMethod;
+    const path = event.rawPath || event.path;
+
+    // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+    const stage = event.requestContext?.stage;
+    let normalizedPath = path;
+    if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+        normalizedPath = path.substring(stage.length + 1);
+    }
+
+    // Use normalizedPath for routing
+    const routePath = normalizedPath;
 
     logger.info('Incoming Request', { path, method, query: event.queryStringParameters });
 
-    if (method === 'POST' && path.endsWith('/pokemon/evolve')) {
+    if (method === 'POST' && routePath.endsWith('/pokemon/evolve')) {
         return await evolvePokemon(event, db);
-    } else if (method === 'POST' && path.endsWith('/pokemon/unlock-form')) {
+    } else if (method === 'POST' && routePath.endsWith('/pokemon/unlock-form')) {
         return await unlockPokemonForm(event, db);
-    } else if (method === 'POST' && path.endsWith('/pokemon/unlock-shiny')) {
+    } else if (method === 'POST' && routePath.endsWith('/pokemon/unlock-shiny')) {
         return await unlockShinyPokemon(event, db);
-    } else if (method === 'GET' && path.endsWith('/user/items')) {
+    } else if (method === 'GET' && routePath.endsWith('/user/items')) {
         return await getUserItems(event, db);
     } else {
         logger.warn('Route not found', { path, method });
@@ -353,7 +363,7 @@ async function unlockShinyPokemon(event, db) {
             if (pokemonInfo.rows.length === 0) {
                 throw new Error('포켓몬 정보를 찾을 수 없습니다.');
             }
-            // const pokemon = pokemonInfo.rows[0];
+            const pokemon = pokemonInfo.rows[0];
 
             // 2. 사용자 보유 여부 확인 (일반 버전은 있어야 함)
             const ownershipCheck = await client.query(`
@@ -413,7 +423,7 @@ async function unlockShinyPokemon(event, db) {
 
             return createSuccessResponse({
                 success: true,
-                message: '이로치 포켓몬을 획득했습니다!',
+                message: `...오잉!? ${pokemon.name}의 모습이...!`,
                 targetPokemonId: targetPokemonId
             });
         });

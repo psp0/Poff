@@ -159,6 +159,18 @@ const authenticate = async (event) => {
     try {
       const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
 
+      // [TEST BYPASS] For E2E testing in local environment
+      if ((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && token === 'TEST_TOKEN') {
+        logger.info('Using TEST_TOKEN bypass for E2E testing');
+        return {
+          userId: '11111111-1111-1111-1111-111111111111', // Use UUID format
+          isService: false,
+          user: { id: '11111111-1111-1111-1111-111111111111', role: 'user', username: 'testuser', firebase_uid: 'test-uid' },
+          firebaseUid: 'test-uid',
+          decodedToken: { uid: 'test-uid' }
+        };
+      }
+
       // Firebase Token 검증
       const decodedToken = await admin.auth().verifyIdToken(token);
       const firebaseUid = decodedToken.uid;

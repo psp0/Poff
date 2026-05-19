@@ -2,10 +2,22 @@ name: CI - Continuous Integration
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
+    paths-ignore:
+      - '.github/dependabot.yml'
+      - 'LICENSE'     
+      - '**/*.md'     
+      - 'docs/**'             
+      - '.gitignore'     
   pull_request:
-    branches: [main, develop]
-
+    branches: [main]
+    paths-ignore:
+      - '.github/dependabot.yml'
+      - 'LICENSE'
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+  
 permissions:
   contents: read
   id-token: write
@@ -25,16 +37,88 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Security Scan (Reusable Workflow)
+  call-security:
+    name: Security Scan
+    uses: ./.github/workflows/security.yml
+    secrets: inherit
+
+  # PR Checks: Unit Tests, Linting, Static Analysis
+  pr-checks:
+    name: Fast Checks (Test & Lint)
+    runs-on: ubuntu-latest
+    outputs:
+      failure_log: ${{ steps.capture-log.outputs.failure_log }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Linting
+        run: npm run lint
+
+      - name: Run Unit Tests with Coverage
+        run: npm run test:ci 2>&1 | tee /tmp/test_output.log
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+        if: always()
+
+      - name: Coverage Summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "## 📊 Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Metric | Percentage |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|------------|" >> $GITHUB_STEP_SUMMARY
+            LINES=$(jq -r '.total.lines.pct // 0' coverage/coverage-summary.json)
+            BRANCHES=$(jq -r '.total.branches.pct // 0' coverage/coverage-summary.json)
+            FUNCTIONS=$(jq -r '.total.functions.pct // 0' coverage/coverage-summary.json)
+            STATEMENTS=$(jq -r '.total.statements.pct // 0' coverage/coverage-summary.json)
+            echo "| Lines | ${LINES}% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Branches | ${BRANCHES}% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Functions | ${FUNCTIONS}% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Statements | ${STATEMENTS}% |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Capture Failure Log
+        id: capture-log
+        if: failure()
+        run: |
+          echo "failure_log<<EOF" >> $GITHUB_OUTPUT
+          if [ -f /tmp/test_output.log ]; then
+            tail -n 20 /tmp/test_output.log >> $GITHUB_OUTPUT
+          else
+            echo "Log file not found" >> $GITHUB_OUTPUT
+          fi
+          echo "EOF" >> $GITHUB_OUTPUT
+
   # Build and validate frontend
   build-frontend:
     name: Build Frontend
+    needs: [pr-checks]
     runs-on: ubuntu-latest
+    outputs:
+      failure_log: ${{ steps.capture-log.outputs.failure_log }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -43,10 +127,22 @@ jobs:
         run: npm ci
 
       - name: Build frontend
-        run: npm run build
+        run: npm run build 2>&1 | tee /tmp/step_output.log
+
+      - name: Capture Failure Log
+        id: capture-log
+        if: failure()
+        run: |
+          echo "failure_log<<EOF" >> $GITHUB_OUTPUT
+          if [ -f /tmp/step_output.log ]; then
+            (grep -iC 5 "error" /tmp/step_output.log || tail -n 20 /tmp/step_output.log) | tail -n 20 >> $GITHUB_OUTPUT
+          else
+            echo "Log file not found" >> $GITHUB_OUTPUT
+          fi
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Upload frontend build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: frontend-dist
           path: dist/
@@ -56,12 +152,14 @@ jobs:
   validate-terraform-dev:
     name: Validate Terraform (Dev)
     runs-on: ubuntu-latest
+    outputs:
+      failure_log: ${{ steps.capture-log.outputs.failure_log }}
     env:
       TF_WORKING_DIR: terraform/environments/dev
       TF_STATE_KEY: environments/dev/terraform.tfstate
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -70,21 +168,14 @@ jobs:
           terraform_wrapper: false
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        if: github.actor != 'dependabot[bot]'
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-ci
           role-skip-session-tagging: true
 
-      - name: Assume Execution Role
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions-ci-execution
-          role-chaining: true
-          role-skip-session-tagging: true
 
       - name: Terraform Format Check
         run: |
@@ -100,9 +191,13 @@ jobs:
           TF_IN_AUTOMATION: true
           BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
-          set -e
-          echo "::group::Creating temporary backend configuration"
-          cat > backend-ci.hcl <<EOF
+          if [ "${{ github.actor }}" == "dependabot[bot]" ]; then
+            echo "Running in Dependabot mode - skipping backend configuration"
+            terraform init -backend=false -input=false
+          else
+            set -e
+            echo "::group::Creating temporary backend configuration"
+            cat > backend-ci.hcl <<EOF
           bucket  = "${{ env.TF_STATE_BUCKET }}"
           key     = "${{ env.TF_STATE_KEY }}"
           region  = "${{ env.AWS_REGION }}"
@@ -111,35 +206,50 @@ jobs:
             role_arn = "${BACKEND_ROLE_ARN}"
           }
           EOF
-          
-          # Cleanup function to remove temporary backend config
-          cleanup() {
-            rm -f backend-ci.hcl
-            echo "Backend configuration file cleaned up"
-          }
-          trap cleanup EXIT
-          echo "::endgroup::"
-          
-          echo "::group::Terraform Init"
-          terraform init -backend-config=backend-ci.hcl -input=false
-          echo "Terraform initialization completed successfully"
-          echo "::endgroup::"
+            
+            # Cleanup function to remove temporary backend config
+            cleanup() {
+              rm -f backend-ci.hcl
+              echo "Backend configuration file cleaned up"
+            }
+            trap cleanup EXIT
+            echo "::endgroup::"
+            
+            echo "::group::Terraform Init"
+            terraform init -backend-config=backend-ci.hcl -input=false 2>&1 | tee /tmp/step_output.log
+            echo "Terraform initialization completed successfully"
+            echo "::endgroup::"
+          fi
           
           echo "::group::Terraform Validate"
-          terraform validate
+          terraform validate 2>&1 | tee -a /tmp/step_output.log
           echo "Terraform validation completed successfully"
           echo "::endgroup::"
+
+      - name: Capture Failure Log
+        id: capture-log
+        if: failure()
+        run: |
+          echo "failure_log<<EOF" >> $GITHUB_OUTPUT
+          if [ -f /tmp/step_output.log ]; then
+            (grep -iC 5 "error" /tmp/step_output.log || tail -n 20 /tmp/step_output.log) | tail -n 20 >> $GITHUB_OUTPUT
+          else
+            echo "Log file not found" >> $GITHUB_OUTPUT
+          fi
+          echo "EOF" >> $GITHUB_OUTPUT
 
   # Validate Terraform configuration (Prod)
   validate-terraform-prod:
     name: Validate Terraform (Prod)
     runs-on: ubuntu-latest
+    outputs:
+      failure_log: ${{ steps.capture-log.outputs.failure_log }}
     env:
       TF_WORKING_DIR: terraform/environments/prod
       TF_STATE_KEY: environments/prod/terraform.tfstate
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -148,13 +258,13 @@ jobs:
           terraform_wrapper: false
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        if: github.actor != 'dependabot[bot]'
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_PROD_GHA_CI_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-ci
           role-skip-session-tagging: true
-
 
 
       - name: Terraform Init and Validate (Prod)
@@ -164,9 +274,13 @@ jobs:
           TF_IN_AUTOMATION: true
           BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
-          set -e
-          echo "::group::Creating temporary backend configuration"
-          cat > backend-ci.hcl <<EOF
+          if [ "${{ github.actor }}" == "dependabot[bot]" ]; then
+            echo "Running in Dependabot mode - skipping backend configuration"
+            terraform init -backend=false -input=false
+          else
+            set -e
+            echo "::group::Creating temporary backend configuration"
+            cat > backend-ci.hcl <<EOF
           bucket  = "${{ env.TF_STATE_BUCKET }}"
           key     = "${{ env.TF_STATE_KEY }}"
           region  = "${{ env.AWS_REGION }}"
@@ -175,81 +289,60 @@ jobs:
             role_arn = "${BACKEND_ROLE_ARN}"
           }
           EOF
-          
-          # Cleanup function to remove temporary backend config
-          cleanup() {
-            rm -f backend-ci.hcl
-            echo "Backend configuration file cleaned up"
-          }
-          trap cleanup EXIT
-          echo "::endgroup::"
-          
-          echo "::group::Terraform Init"
-          terraform init -backend-config=backend-ci.hcl -input=false
-          echo "Terraform initialization completed successfully"
-          echo "::endgroup::"
+            
+            # Cleanup function to remove temporary backend config
+            cleanup() {
+              rm -f backend-ci.hcl
+              echo "Backend configuration file cleaned up"
+            }
+            trap cleanup EXIT
+            echo "::endgroup::"
+            
+            echo "::group::Terraform Init"
+            terraform init -backend-config=backend-ci.hcl -input=false 2>&1 | tee /tmp/step_output.log
+            echo "Terraform initialization completed successfully"
+            echo "::endgroup::"
+          fi
           
           echo "::group::Terraform Validate"
-          terraform validate
+          terraform validate 2>&1 | tee -a /tmp/step_output.log
           echo "Terraform validation completed successfully"
           echo "::endgroup::"
 
-  # Deploy to Dev (only on push to develop, not on PR)
+      - name: Capture Failure Log
+        id: capture-log
+        if: failure()
+        run: |
+          echo "failure_log<<EOF" >> $GITHUB_OUTPUT
+          if [ -f /tmp/step_output.log ]; then
+            (grep -iC 5 "error" /tmp/step_output.log || tail -n 20 /tmp/step_output.log) | tail -n 20 >> $GITHUB_OUTPUT
+          else
+            echo "Log file not found" >> $GITHUB_OUTPUT
+          fi
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  # Deploy to Dev (on PR to main)
   deploy-dev:
     name: Deploy to Dev
-    needs: [build-frontend, build-lambda, validate-terraform-dev]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [build-frontend, build-lambda, validate-terraform-dev, call-security]
+    if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.actor != 'dependabot[bot]'
     uses: ./.github/workflows/deploy-dev.yml
     with:
       action: apply
+      seed_data: true
+      env_suffix: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || '' }}
     secrets: inherit
 
-  # Security scanning
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy scan results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: trivy-results
-          path: trivy-results.sarif
-
-      - name: Run Checkov static analysis
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: terraform/
-          framework: terraform
-          output_format: sarif
-          output_file_path: checkov-results.sarif
-          soft_fail: true
-
-      - name: Upload Checkov scan results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: checkov-results
-          path: checkov-results.sarif
 
   # Build Lambda packages
   build-lambda:
     name: Build Lambda Packages
+    needs: [pr-checks]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build Lambda Packages
         uses: ./.github/actions/build-lambda
@@ -257,8 +350,142 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Upload Lambda packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lambda-packages
           path: lambda/packages/*.zip
           retention-days: 30
+
+  # CI Failure Notification (main only)
+  notify-ci-failure:
+    name: Notify CI Failure
+    needs: [pr-checks, build-frontend, build-lambda, validate-terraform-dev, validate-terraform-prod, call-security]
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      (needs.pr-checks.result == 'failure' ||
+       needs.build-frontend.result == 'failure' || 
+       needs.build-lambda.result == 'failure' || 
+       needs.validate-terraform-dev.result == 'failure' || 
+       needs.validate-terraform-prod.result == 'failure' ||
+       needs.call-security.result == 'failure')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Get Time and Duration
+        id: time
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "time=$(TZ='Asia/Seoul' date '+%d일 %H시 %M분')" >> $GITHUB_OUTPUT
+          
+          START_TIME=$(gh run view ${{ github.run_id }} --json startedAt,createdAt --jq '.startedAt // .createdAt')
+          START_EPOCH=$(date -d "$START_TIME" +%s)
+          NOW_EPOCH=$(date +%s)
+          DURATION_SEC=$((NOW_EPOCH - START_EPOCH))
+          DURATION_MIN=$((DURATION_SEC / 60))
+          DURATION_SEC_REMAIN=$((DURATION_SEC % 60))
+          echo "duration=${DURATION_MIN}분 ${DURATION_SEC_REMAIN}초" >> $GITHUB_OUTPUT
+
+      - name: Determine Failure Details
+        id: failure_details
+        run: |
+          FAILED_JOB=""
+          FAILED_STEP=""
+
+          if [ "${{ needs.pr-checks.result }}" == "failure" ]; then
+            FAILED_JOB="Fast Checks (Test & Lint)"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Fast Checks")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.build-frontend.result }}" == "failure" ]; then
+            FAILED_JOB="Build Frontend"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Build Frontend")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.build-lambda.result }}" == "failure" ]; then
+            FAILED_JOB="Build Lambda"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Build Lambda")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.validate-terraform-dev.result }}" == "failure" ]; then
+            FAILED_JOB="Validate Terraform (Dev)"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Validate Terraform (Dev)")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.validate-terraform-prod.result }}" == "failure" ]; then
+            FAILED_JOB="Validate Terraform (Prod)"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Validate Terraform (Prod)")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.call-security.result }}" == "failure" ]; then
+            FAILED_JOB="Security Scan"
+            FAILED_STEP="Check security scan logs"
+          else
+            FAILED_JOB="Unknown Job"
+            FAILED_STEP="Unknown Step"
+          fi
+          
+          echo "failed_job=$FAILED_JOB" >> $GITHUB_OUTPUT
+          echo "failed_step=${FAILED_STEP:-알 수 없음}" >> $GITHUB_OUTPUT
+
+          # Pick the failure log from the failed job
+          if [ "${{ needs.pr-checks.result }}" == "failure" ]; then
+            echo "log<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ needs.pr-checks.outputs.failure_log }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.build-frontend.result }}" == "failure" ]; then
+            echo "log<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ needs.build-frontend.outputs.failure_log }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.validate-terraform-dev.result }}" == "failure" ]; then
+            echo "log<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ needs.validate-terraform-dev.outputs.failure_log }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.validate-terraform-prod.result }}" == "failure" ]; then
+            echo "log<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ needs.validate-terraform-prod.outputs.failure_log }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "log=No detailed log available for this failure." >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Slack on CI Failure
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#poff-alerts'
+          text: |
+            🚨 *CI 빌드 실패!*
+            
+            브랜치: ${{ github.ref_name }}
+            실패한 잡: ${{ steps.failure_details.outputs.failed_job }}
+            실패한 스텝: ${{ steps.failure_details.outputs.failed_step }}
+            
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            커밋터: @${{ github.actor }}
+            
+            *실패 로그 (마지막 20줄):*
+            ```
+            ${{ steps.failure_details.outputs.log }}
+            ```
+            
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}
+  # Comment PR Preview URL
+  comment-pr-preview:
+    name: Comment PR Preview URL
+    needs: [deploy-dev]
+    if: always() && github.event_name == 'pull_request' && needs.deploy-dev.result == 'success' && needs.deploy-dev.outputs.website_url != '' && needs.deploy-dev.outputs.website_url != 'CloudFront not enabled'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = "${{ needs.deploy-dev.outputs.website_url }}";
+            const api = "${{ needs.deploy-dev.outputs.api_endpoint }}";
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 **PR Preview Environment is Ready!**\n\n🌐 **Frontend URL:** ${url}\n🔌 **API Endpoint:** ${api}\n\n*Note: CORS is configured to allow wildcard (*) for PR preview environments.*`
+            });

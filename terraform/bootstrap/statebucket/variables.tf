@@ -1,7 +1,7 @@
 variable "s3_bucket_name" {
   description = "Name of the S3 bucket for storing Terraform state"
   type        = string
-  default     = "pokehabit-tfstate-ap-northeast-2"
+  default     = "poff-tfstate-ap-northeast-2"
 }
 
 variable "aws_region" {

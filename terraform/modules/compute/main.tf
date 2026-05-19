@@ -5,64 +5,70 @@ locals {
   }
 
   lambda_functions = {
-    exercise-management = {
-      handler     = "functions/exercise-management/index.handler"
-      timeout     = 30
-      memory_size = 512
-    }
-    exercise-rewards = {
-      handler     = "functions/exercise-rewards/index.handler"
-      timeout     = 30
-      memory_size = 512
-    }
+
     pokemon-collection = {
       handler     = "functions/pokemon-collection/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     screen-time-management = {
       handler     = "functions/screen-time-management/index.handler"
       timeout     = 30
-      memory_size = 512
-    }
-    screen-time-rewards = {
-      handler     = "functions/screen-time-rewards/index.handler"
-      timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     egg-management = {
       handler     = "functions/egg-management/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     pokemon-management = {
       handler     = "functions/pokemon-management/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
     }
     user-management = {
       handler     = "functions/user-management/index.handler"
       timeout     = 30
-      memory_size = 512
+      memory_size = 256
+    }
+    guest-mode = {
+      handler     = "functions/guest-mode/index.handler"
+      timeout     = 30
+      memory_size = 256
+    }
+    sleep-management = {
+      handler     = "functions/sleep-management/index.handler"
+      timeout     = 30
+      memory_size = 256
     }
   }
 
   api_routes = {
-    "POST /api/exercises"               = "exercise-management"
-    "GET /api/exercises"                = "exercise-management"
-    "GET /api/exercises/{id}"           = "exercise-management"
-    "PUT /api/exercises/{id}"           = "exercise-management"
-    "DELETE /api/exercises/{id}"        = "exercise-management"
-    "POST /api/exercises/{id}/complete" = "exercise-rewards"
-    "GET /api/exercises/rewards"        = "exercise-rewards"
-    "POST /api/screen-time"             = "screen-time-management"
-    "GET /api/screen-time"              = "screen-time-management"
-    "GET /api/screen-time/today"        = "screen-time-management"
-    "POST /api/screen-time/check"       = "screen-time-rewards"
-    "GET /api/pokemon"                  = "pokemon-collection"
-    "GET /api/pokemon/{id}"             = "pokemon-collection"
-    "POST /api/pokemon/collect"         = "pokemon-collection"
-    "GET /api/collection"               = "pokemon-collection"
+
+
+    "POST /api/screen-time"              = "screen-time-management"
+    "GET /api/screen-time"               = "screen-time-management"
+    "GET /api/screen-time/today"         = "screen-time-management"
+    "DELETE /api/screen-time/{date}"     = "screen-time-management"
+    "GET /api/screen-time/weekly-stats"  = "screen-time-management" # Specific path
+    "GET /api/screen-time/monthly-stats" = "screen-time-management"
+    "POST /api/screen-time/reward-check" = "screen-time-management"
+    "GET /api/screen-time/status"        = "screen-time-management"
+    "POST /api/screen-time/verify"       = "screen-time-management"
+
+    "GET /api/pokemon"                                   = "pokemon-collection"
+    "GET /api/pokemon/{id}"                              = "pokemon-collection"
+    "POST /api/pokemon/collect"                          = "pokemon-collection"
+    "GET /api/collection"                                = "pokemon-collection"
+    "POST /api/collection/favorite"                      = "pokemon-collection"
+    "GET /api/collection/favorites"                      = "pokemon-collection"
+    "GET /api/collection/icons"                          = "pokemon-collection"
+    "GET /api/collection/all-pokemon"                    = "pokemon-collection"
+    "GET /api/collection/evolution/{baseImageName}"      = "pokemon-collection"
+    "GET /api/collection/starters"                       = "pokemon-collection"
+    "GET /api/collection/pokemon/{id}"                   = "pokemon-collection"
+    "GET /api/habitats/{habitatSlug}/{typeSlug}/pokemon" = "pokemon-collection"
+
     # Egg Management
     "GET /api/eggs"          = "egg-management"
     "GET /api/eggs/search"   = "egg-management"
@@ -78,6 +84,26 @@ locals {
     # User Management
     "POST /api/auth/sync"            = "user-management"
     "POST /api/user/terms-agreement" = "user-management"
+    "GET /api/config"                = "user-management"
+    "POST /api/user/exchange"        = "user-management"
+    "GET /api/shop/items"            = "user-management"
+    "GET /api/habitats"              = "user-management"
+    "GET /api/user/habitat"          = "user-management"
+    "POST /api/user/habitat"         = "user-management"
+
+    # Guest Mode
+    "GET /api/guest/icons"                     = "guest-mode"
+    "GET /api/guest/all-pokemon"               = "guest-mode"
+    "GET /api/guest/pokemon/{stableId}"        = "guest-mode"
+    "GET /api/guest/evolution/{baseImageName}" = "guest-mode"
+
+    "GET /api/guest/starter-pokemon" = "guest-mode"
+    "GET /api/guest/items"           = "guest-mode"
+
+    # Sleep Management
+    "POST /api/sleep"        = "sleep-management"
+    "GET /api/sleep/status"  = "sleep-management"
+    "POST /api/sleep/reward" = "sleep-management"
   }
 }
 
@@ -127,7 +153,7 @@ resource "aws_iam_role_policy" "lambda_ssm_read" {
           "ssm:GetParameters"
         ]
         Resource = [
-          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/database/*"
+          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/${var.environment}/database/*"
         ]
       },
       {
@@ -156,11 +182,20 @@ data "archive_file" "lambda_source" {
   excludes    = ["node_modules", ".git", "tests", "packages"] # Exclude packages dir to avoid recursion
 }
 
+# Random ID for Lambda function names to avoid log group conflicts
+resource "random_id" "lambda_suffix" {
+  byte_length = 4
+  keepers = {
+    project_name = var.project_name
+    environment  = var.environment
+  }
+}
+
 # Lambda Functions
 resource "aws_lambda_function" "functions" {
   for_each = local.lambda_functions
 
-  function_name = "${var.project_name}-${each.key}"
+  function_name = "${var.project_name}-${each.key}-${random_id.lambda_suffix.hex}"
   role          = aws_iam_role.lambda_execution.arn
   handler       = each.value.handler
   runtime       = var.lambda_runtime
@@ -186,12 +221,12 @@ resource "aws_lambda_function" "functions" {
       DB_HOST           = var.rds_address
       DB_PORT           = tostring(var.rds_port)
       DB_NAME           = var.database_name
-      DB_USER_PARAM     = "/${var.project_name}/database/admin/username"
-      DB_PASSWORD_PARAM = "/${var.project_name}/database/admin/password"
+      DB_USER_PARAM     = "/${var.project_name}/${var.environment}/database/admin/username"
+      DB_PASSWORD_PARAM = "/${var.project_name}/${var.environment}/database/admin/password"
 
       # Datadog Configuration
       DD_API_KEY           = var.datadog_api_key
-      DD_SITE              = "datadoghq.com"
+      DD_SITE              = var.datadog_site
       DD_LOGS_ENABLED      = var.datadog_api_key != "" ? "true" : "false"
       DD_SERVICE           = "${var.project_name}-${each.key}"
       DD_ENV               = var.environment
@@ -205,6 +240,18 @@ resource "aws_lambda_function" "functions" {
 
       # Firebase Configuration
       FIREBASE_SERVICE_ACCOUNT = var.firebase_service_account
+
+      # Firebase Client Configuration (for /api/config)
+      FIREBASE_API_KEY             = var.firebase_api_key
+      FIREBASE_AUTH_DOMAIN         = var.firebase_auth_domain
+      FIREBASE_PROJECT_ID          = var.firebase_project_id
+      FIREBASE_MESSAGING_SENDER_ID = var.firebase_messaging_sender_id
+      FIREBASE_APP_ID              = var.firebase_app_id
+
+      # Asset Configuration
+      # Empty string allows URLs to start with /custom, /base etc. which matches CloudFront behaviors
+      ASSETS_BASE_URL      = "/"
+      CORS_ALLOWED_ORIGINS = join(",", var.api_cors_allowed_origins)
     }
   }
 
@@ -260,12 +307,18 @@ resource "aws_apigatewayv2_stage" "main" {
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway_logs.arn
     format = jsonencode({
-      requestId   = "$context.requestId"
-      ip          = "$context.identity.sourceIp"
-      requestTime = "$context.requestTime"
-      httpMethod  = "$context.httpMethod"
-      routeKey    = "$context.routeKey"
-      status      = "$context.status"
+      requestId          = "$context.requestId"
+      ip                 = "$context.identity.sourceIp"
+      requestTime        = "$context.requestTime"
+      httpMethod         = "$context.httpMethod"
+      routeKey           = "$context.routeKey"
+      status             = "$context.status"
+      responseLength     = "$context.responseLength"
+      integrationLatency = "$context.integrationLatency"
+      responseLatency    = "$context.responseLatency"
+      errorMessage       = "$context.error.message"
+      integrationError   = "$context.integrationErrorMessage"
+      userAgent          = "$context.identity.userAgent"
     })
   }
 

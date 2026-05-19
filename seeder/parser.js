@@ -96,7 +96,7 @@ class PokemonParser {
             try {
                 const content = await this.loader.loadFile(filepath);
                 // Matches [ID], [ID,Form], [ID,,Female], [ID,Form,Female]
-                const blocks = content.split(/\[([A-Z0-9_]+)(?:,([^,\]]*))?(?:,([^,\]]*))?\]/);
+                const blocks = content.split(/\[([A-Za-z0-9_]+)(?:,([^,\]]*))?(?:,([^,\]]*))?\]/);
 
                 for (let i = 1; i < blocks.length; i += 4) {
                     const name = blocks[i];
@@ -198,6 +198,11 @@ class PokemonParser {
                 }
             }
 
+            // Default to 'rare' if no habitat
+            if (!habitatKo || !data.habitat) {
+                habitatKo = '희귀';
+            }
+
             // Base Pokemon record
             const record = {
                 name: koreanName,
@@ -209,15 +214,15 @@ class PokemonParser {
                 pokedex: this.koreanPokedex[data.pokedex] || data.pokedex,
                 generation: data.generation,
                 habitat: habitatKo,
-                habitat_en: data.habitat?.toLowerCase() || null,
+                habitat_en: this.normalizeHabitatSlug(data.habitat),
                 height: data.height,
                 weight: data.weight,
                 base_hp: data.base_hp,
                 base_attack: data.base_attack,
                 base_defense: data.base_defense,
+                base_speed: data.base_speed,
                 base_sp_attack: data.base_sp_attack,
                 base_sp_defense: data.base_sp_defense,
-                base_speed: data.base_speed,
                 base_stat_total: data.base_stat_total,
                 image_name: name,
                 form_suffix: null,
@@ -299,6 +304,11 @@ class PokemonParser {
                         }
                     }
 
+                    // Default to 'rare' if no habitat
+                    if (!formHabitat || !merged.habitat) {
+                        formHabitat = 'rare';
+                    }
+
                     const formRecord = {
                         name: `${koreanName} (${formNameKor})`,
                         category: formCategory,
@@ -309,15 +319,15 @@ class PokemonParser {
                         pokedex: this.koreanPokedex[merged.pokedex] || merged.pokedex,
                         generation: merged.generation,
                         habitat: formHabitat,
-                        habitat_en: merged.habitat?.toLowerCase() || null,
+                        habitat_en: this.normalizeHabitatSlug(merged.habitat),
                         height: merged.height,
                         weight: merged.weight,
                         base_hp: merged.base_hp,
                         base_attack: merged.base_attack,
                         base_defense: merged.base_defense,
+                        base_speed: merged.base_speed,
                         base_sp_attack: merged.base_sp_attack,
                         base_sp_defense: merged.base_sp_defense,
-                        base_speed: merged.base_speed,
                         base_stat_total: merged.base_stat_total,
                         image_name: name,
                         form_suffix: `_${formNum}`,
@@ -421,13 +431,25 @@ class PokemonParser {
     }
 
     /**
+     * Normalize habitat to match folder naming convention
+     * Converts to lowercase and removes hyphens, apostrophes, and spaces
+     * Examples: 'WatersEdge' -> 'watersedge', 'RoughTerrain' -> 'roughterrain'
+     */
+    normalizeHabitatSlug(habitat) {
+        if (!habitat) return 'rare';
+        return habitat
+            .toLowerCase()
+            .replace(/[-\s']/g, '');
+    }
+
+    /**
      * Parse Pokemon info file (pokemon.txt)
      */
     async parsePokemonInfo(filepath) {
         const content = await this.loader.loadFile(filepath);
 
         // Split by [POKEMON_NAME]
-        const blocks = content.split(/\[([A-Z0-9_]+)\]/);
+        const blocks = content.split(/\[([A-Za-z0-9_]+)\]/);
 
         for (let i = 1; i < blocks.length; i += 2) {
             const name = blocks[i];
@@ -453,7 +475,7 @@ class PokemonParser {
                 const content = await this.loader.loadFile(filepath);
 
                 // Split by [POKEMON_NAME,form_number]
-                const blocks = content.split(/\[([A-Z0-9_]+),(\d+)\]/);
+                const blocks = content.split(/\[([A-Za-z0-9_]+),(\d+)\]/);
 
                 for (let i = 1; i < blocks.length; i += 3) {
                     const name = blocks[i];
@@ -509,9 +531,9 @@ class PokemonParser {
                         data.base_hp = stats[0];
                         data.base_attack = stats[1];
                         data.base_defense = stats[2];
-                        data.base_sp_attack = stats[3];
-                        data.base_sp_defense = stats[4];
-                        data.base_speed = stats[5];
+                        data.base_speed = stats[3];
+                        data.base_sp_attack = stats[4];
+                        data.base_sp_defense = stats[5];
                         data.base_stat_total = stats.reduce((a, b) => a + b, 0);
                     }
                     break;
@@ -820,13 +842,23 @@ class PokemonParser {
                 const baseName = data.base_name;
                 const formNum = data.form_number;
                 const stableId = `${baseName}_${formNum}`;
+                const formSuffix = `_${formNum}`;
 
                 if (!this.validStableIds.has(stableId)) continue;
 
                 for (const to of data.evolutions) {
+                    // Try to preserve form suffix for evolution
+                    // e.g. SANDSHREW_1 -> SANDSLASH -> Check if SANDSLASH_1 exists
+                    let targetStableId = to;
+                    const potentialTarget = `${to}${formSuffix}`;
+
+                    if (this.validStableIds.has(potentialTarget)) {
+                        targetStableId = potentialTarget;
+                    }
+
                     evolutions.push({
                         from_pokemon: stableId,
-                        to_pokemon: to
+                        to_pokemon: targetStableId
                     });
                 }
             }

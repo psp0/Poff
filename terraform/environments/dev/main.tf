@@ -1,9 +1,14 @@
-# Refactored modular structure for Pokehabit infrastructure
+# Refactored modular structure for Poff infrastructure
 # This uses the new separated modules for better maintainability
 
 # Get current AWS account and region info
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
+
+locals {
+  is_pr_env         = length(regexall("pr-", var.environment)) > 0
+  cloudfront_domain = local.is_pr_env ? "" : var.cloudfront_custom_domain_name
+}
 
 # 1. Network Module - VPC, NAT, Subnets
 module "network" {
@@ -44,6 +49,7 @@ module "database" {
   rds_backup_window           = var.rds_backup_window
   rds_maintenance_window      = var.rds_maintenance_window
   rds_skip_final_snapshot     = var.rds_skip_final_snapshot
+  availability_zone           = var.availability_zones[0]
 }
 
 # 3. Compute Module - Lambda & API Gateway
@@ -67,37 +73,48 @@ module "compute" {
   lambda_runtime            = var.lambda_runtime
   lambda_log_retention_days = var.lambda_log_retention_days
 
-  api_cors_allowed_origins   = var.api_cors_allowed_origins
+  api_cors_allowed_origins   = local.is_pr_env ? ["*"] : var.api_cors_allowed_origins
   api_throttling_burst_limit = var.api_throttling_burst_limit
   api_throttling_rate_limit  = var.api_throttling_rate_limit
 
   datadog_api_key              = var.datadog_api_key
+  datadog_site                 = var.datadog_site
   datadog_extension_version    = var.datadog_extension_version
   datadog_lambda_layer_version = var.datadog_lambda_layer_version
 
-  rds_secret_arn = module.database.rds_secret_arn
+
 
   firebase_service_account = base64decode(var.firebase_service_account)
+
+  firebase_api_key             = var.firebase_api_key
+  firebase_auth_domain         = var.firebase_auth_domain
+  firebase_project_id          = var.firebase_project_id
+  firebase_messaging_sender_id = var.firebase_messaging_sender_id
+  firebase_app_id              = var.firebase_app_id
 }
 
-# 4. Storage and CDN Module - S3 & CloudFront
+# 5. Storage and CDN Module - S3 & CloudFront
 module "storage_cdn" {
   source = "../../modules/storage-cdn"
 
   project_name                  = var.project_name
   environment                   = var.environment
+  base_environment              = "dev" # For sharing assets bucket
   aws_region                    = data.aws_region.current.id
   enable_cloudfront             = var.enable_cloudfront
-  cloudfront_custom_domain_name = var.cloudfront_custom_domain_name
-  cloudfront_certificate_arn    = var.cloudfront_custom_domain_name != "" && var.hosted_zone_domain_name != "" ? module.acm[0].cloudfront_certificate_arn : ""
+  cloudfront_custom_domain_name = local.cloudfront_domain
+  cloudfront_certificate_arn    = local.cloudfront_domain != "" && var.hosted_zone_domain_name != "" ? module.acm[0].cloudfront_certificate_arn : ""
   cloudfront_price_class        = var.cloudfront_price_class
 
   # API Gateway 도메인 전달 (프로토콜 제거)
   api_gateway_domain = replace(module.compute.api_gateway_endpoint, "/^https?://([^/]*).*/", "$1")
+
+  # WAF Web ACL ID 전달 (WAF 제거됨)
+  waf_web_acl_id = ""
 }
 
-# 5. DNS Module - Route53 & ACM (Optional - only if custom domains configured)
-# 5. ACM Module - Certificate Management (No Circular Dependency)
+# 6. DNS Module - Route53 & ACM (Optional - only if custom domains configured)
+# 6. ACM Module - Certificate Management (No Circular Dependency)
 module "acm" {
   count  = var.hosted_zone_domain_name != "" ? 1 : 0
   source = "../../modules/acm"
@@ -110,7 +127,7 @@ module "acm" {
   project_name                         = var.project_name
   environment                          = var.environment
   hosted_zone_domain_name              = var.hosted_zone_domain_name
-  cloudfront_custom_domain_name        = var.cloudfront_custom_domain_name
+  cloudfront_custom_domain_name        = local.cloudfront_domain
   cloudfront_subject_alternative_names = var.cloudfront_subject_alternative_names
 }
 
@@ -126,10 +143,10 @@ data "aws_route53_zone" "main" {
 # A record for CloudFront
 resource "aws_route53_record" "cloudfront" {
   provider = aws.infra
-  count    = var.cloudfront_custom_domain_name != "" && var.enable_cloudfront ? 1 : 0
+  count    = local.cloudfront_domain != "" && var.enable_cloudfront ? 1 : 0
 
   zone_id = data.aws_route53_zone.main[0].zone_id
-  name    = var.cloudfront_custom_domain_name
+  name    = local.cloudfront_domain
   type    = "A"
 
   alias {
@@ -142,10 +159,10 @@ resource "aws_route53_record" "cloudfront" {
 # AAAA record for CloudFront (IPv6)
 resource "aws_route53_record" "cloudfront_ipv6" {
   provider = aws.infra
-  count    = var.cloudfront_custom_domain_name != "" && var.enable_cloudfront ? 1 : 0
+  count    = local.cloudfront_domain != "" && var.enable_cloudfront ? 1 : 0
 
   zone_id = data.aws_route53_zone.main[0].zone_id
-  name    = var.cloudfront_custom_domain_name
+  name    = local.cloudfront_domain
   type    = "AAAA"
 
   alias {
@@ -162,8 +179,10 @@ module "monitoring" {
   # 모듈 전체를 조건부로 생성 (Datadog 안 쓸 거면 아예 로드하지 않음)
   count = var.enable_datadog_monitoring ? 1 : 0
 
-  project_name   = var.project_name
-  environment    = var.environment
-  aws_account_id = data.aws_caller_identity.current.account_id
-  # enable_datadog_monitoring 변수는 이제 내부에 전달할 필요가 없을 수도 있음
+  project_name    = var.project_name
+  environment     = var.environment
+  aws_account_id  = data.aws_caller_identity.current.account_id
+  aws_region      = data.aws_region.current.id
+  datadog_api_key = var.datadog_api_key
+  datadog_site    = var.datadog_site
 }

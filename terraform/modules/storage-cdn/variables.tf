@@ -42,3 +42,16 @@ variable "api_gateway_domain" {
   type        = string
   default     = ""
 }
+
+variable "waf_web_acl_id" {
+  description = "WAF Web ACL ID to associate with CloudFront"
+  type        = string
+  default     = ""
+}
+
+variable "base_environment" {
+  description = "Base environment name (e.g., 'dev') used for shared resources like assets, logs"
+  type        = string
+  default     = ""
+}
+

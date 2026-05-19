@@ -36,26 +36,35 @@ runs:
             # Create package directory
             mkdir -p "packages/$function_name"
             
+            # Create directory structure to match source
+            mkdir -p "packages/$function_name/functions/$function_name"
+            mkdir -p "packages/$function_name/shared"
+            
             # Copy function code
-            cp -r "$dir"* "packages/$function_name/"
+            cp -r "$dir"* "packages/$function_name/functions/$function_name/"
             
-            # Create node_modules directory and install shared as a local package
-            mkdir -p "packages/$function_name/node_modules"
-            
-            # Copy shared modules to the appropriate location
-            # Lambda requires shared code accessible via require paths
-            cp -r shared/*.js "packages/$function_name/"
-            cp -r shared/node_modules/* "packages/$function_name/node_modules/" 2>/dev/null || true
+            # Copy shared code
+            cp -r shared/*.js "packages/$function_name/shared/"
             
             # Install function-specific dependencies
-            cd "packages/$function_name"
-            
-            if [ -f "package.json" ]; then
+            if [ -f "$dir/package.json" ]; then
               echo "Installing function dependencies..."
+              # Copy package.json to root to install dependencies in root node_modules
+              cp "$dir/package.json" "packages/$function_name/"
+              cd "packages/$function_name"
               npm install --production --no-save
+              rm package.json
+              cd ../..
             fi
             
+            # Copy shared node_modules to root node_modules
+            # This allows require('module') to work from anywhere
+            # We do this AFTER npm install to prevent npm from pruning shared modules
+            mkdir -p "packages/$function_name/node_modules"
+            cp -r shared/node_modules/* "packages/$function_name/node_modules/" 2>/dev/null || true
+            
             # Create ZIP package
+            cd "packages/$function_name"
             zip -r "../${function_name}.zip" . \
               -x "*.test.js" "*.spec.js" "test/*" "tests/*" \
               -x "package-lock.json" "package.json"

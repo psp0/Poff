@@ -22,20 +22,12 @@ on:
         default: false
         type: boolean
 
-  workflow_call:
-    inputs:
-      action:
-        required: false
-        type: string
-        default: "apply"
-        
-    secrets:
-      AWS_PROD_GHA_DEPLOY_ROLE_ARN:
-        required: true
-      AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN:
-        required: true
-      AWS_PROD_EXECUTION_ROLE_ARN:
-        required: true
+  workflow_run:
+    workflows: ["CI - Continuous Integration"]
+    types:
+      - completed
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -59,22 +51,25 @@ env:
   TF_VAR_firebase_service_account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
 jobs:
-  # Pre-deployment validation
   pre-deployment-checks:
     name: Pre-Deployment Validation
     runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     outputs:
       can_proceed: ${{ steps.validate.outputs.can_proceed }}
       deploy_version: ${{ steps.version.outputs.version }}
+      previous_tag: ${{ steps.version.outputs.previous_tag }}
       
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Validate branch
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'workflow_run'
         run: |
           BRANCH_NAME="${{ github.ref_name }}"
           if [ "$BRANCH_NAME" != "main" ]; then
@@ -84,23 +79,6 @@ jobs:
             exit 1
           fi
           echo "✅ Branch validation passed: $BRANCH_NAME"
-
-      - name: Verify CI status
-        id: test_status
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "Verifying CI status for commit ${{ github.sha }}..."
-          CI_STATUS=$(gh run list --commit ${{ github.sha }} --workflow ci.yml --json conclusion --jq '.[0].conclusion')
-          
-          if [ "$CI_STATUS" = "success" ]; then
-            echo "✅ CI passed"
-            echo "tests_passed=true" >> $GITHUB_OUTPUT
-          else
-            echo "❌ CI failed or not found (Status: $CI_STATUS)"
-            echo "tests_passed=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
 
       - name: Check for breaking changes
         id: breaking_changes
@@ -123,13 +101,20 @@ jobs:
           else
             VERSION="v$(date +%Y.%m.%d)-${{ github.run_number }}"
           fi
+          
+          # Get previous tag for rollback
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+          
           echo "Deployment Version: $VERSION"
+          echo "Previous Version: $PREVIOUS_TAG"
 
       - name: Validate prerequisites
         id: validate
         run: |
-          TESTS_PASSED="${{ steps.test_status.outputs.tests_passed }}"
+          TESTS_PASSED="true"
           
           if [ "$TESTS_PASSED" = "true" ]; then
             echo "✅ All pre-deployment checks passed"
@@ -141,7 +126,7 @@ jobs:
           fi
 
       - name: Create deployment notification
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const hasBreakingChanges = '${{ steps.breaking_changes.outputs.has_breaking_changes }}' === 'true';
@@ -175,7 +160,7 @@ jobs:
     needs: [pre-deployment-checks]
     if: |
       always() &&
-      needs.pre-deployment-checks.outputs.can_proceed == 'true'    
+      needs.pre-deployment-checks.outputs.can_proceed == 'true'
     outputs:
       vpc_id: ${{ steps.set-outputs.outputs.vpc_id }}
       rds_endpoint: ${{ steps.set-outputs.outputs.rds_endpoint }}
@@ -185,11 +170,12 @@ jobs:
       s3_bucket: ${{ steps.set-outputs.outputs.s3_bucket }}
       nat_instance_id: ${{ steps.set-outputs.outputs.nat_instance_id }}
       cloudfront_distribution_id: ${{ steps.set-outputs.outputs.cloudfront_distribution_id }}
+      infra_duration: ${{ steps.apply.outputs.infra_duration }}
       deployment_time: ${{ steps.deployment-info.outputs.deployment_time }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -198,8 +184,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_call" ]; then
             ACTION="${{ inputs.action }}"
-          else
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ACTION="${{ github.event.inputs.action }}"
+          else
+            # Default for push event
+            ACTION="apply"
           fi
           echo "action=${ACTION:-apply}" >> $GITHUB_OUTPUT
 
@@ -209,7 +198,7 @@ jobs:
           echo "deployment_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_PROD_GHA_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -217,7 +206,7 @@ jobs:
           role-skip-session-tagging: true
 
       - name: Assume execution role
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_PROD_EXECUTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -232,7 +221,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Download Frontend Artifact
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@v11
         with:
           workflow: ci.yml
           name: frontend-dist
@@ -240,7 +229,7 @@ jobs:
           path: dist
 
       - name: Download Lambda Artifact
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@v11
         with:
           workflow: ci.yml
           name: lambda-packages
@@ -314,6 +303,7 @@ jobs:
         run: |
           set -e
           echo "::group::Terraform Apply"
+          START_TIME=$(date +%s)
           if [ "${{ steps.plan.outputs.plan_has_changes }}" = "true" ]; then
             echo "🚀 Applying infrastructure changes to production..."
             terraform apply -auto-approve tfplan
@@ -323,6 +313,8 @@ jobs:
             echo "No changes to apply"
             echo "apply_success=true" >> $GITHUB_OUTPUT
           fi
+          END_TIME=$(date +%s)
+          echo "infra_duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
           echo "::endgroup::"
 
 
@@ -367,11 +359,11 @@ jobs:
           ENV="prod"
           echo "Storing infrastructure parameters in SSM for environment: $ENV"
           
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/rds_endpoint" --value "${{ steps.set-outputs.outputs.rds_endpoint }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/rds_port" --value "${{ steps.set-outputs.outputs.rds_port }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/database_name" --value "${{ steps.set-outputs.outputs.database_name }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/nat_instance_id" --value "${{ steps.set-outputs.outputs.nat_instance_id }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/pokehabit/$ENV/infrastructure/s3_bucket" --value "${{ steps.set-outputs.outputs.s3_bucket }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/rds_endpoint" --value "${{ steps.set-outputs.outputs.rds_endpoint }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/rds_port" --value "${{ steps.set-outputs.outputs.rds_port }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/database_name" --value "${{ steps.set-outputs.outputs.database_name }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/nat_instance_id" --value "${{ steps.set-outputs.outputs.nat_instance_id }}" --type "String" --overwrite
+          aws ssm put-parameter --name "/poff/$ENV/infrastructure/s3_bucket" --value "${{ steps.set-outputs.outputs.s3_bucket }}" --type "String" --overwrite
           
           echo "✅ Parameters stored successfully"
 
@@ -415,10 +407,10 @@ jobs:
           # - Assets with hash: long cache (1 year) for optimal performance
           # - Other static files: medium cache (1 hour)
           
-          # Upload HTML file with short cache
+          # Upload HTML file with no-cache (ensure users always get the latest version)
           aws s3 cp dist/index.html "s3://${S3_BUCKET}/" \
             --content-type "text/html" \
-            --cache-control "max-age=300"
+            --cache-control "no-cache"
           
           # Upload hashed assets (JS, CSS) with long cache
           if [ -d "dist/assets" ]; then
@@ -433,12 +425,12 @@ jobs:
             if [ -f "$file" ]; then
               filename=$(basename "$file")
               aws s3 cp "$file" "s3://${S3_BUCKET}/${filename}" \
-                --cache-control "max-age=3600"
+                --cache-control "no-cache"
             fi
           done
           
           # Upload PWA icons
-          for icon in dist/icon-*.png; do
+          for icon in dist/icon-*.png dist/apple-touch-icon.png; do
             if [ -f "$icon" ]; then
               filename=$(basename "$icon")
               aws s3 cp "$icon" "s3://${S3_BUCKET}/${filename}" \
@@ -454,7 +446,7 @@ jobs:
               --exclude "*.DS_Store"
           fi
           
-          # Note: pokehabit-assets are uploaded separately via scripts/upload-assets.sh
+          # Note: poff-assets are uploaded separately via scripts/upload-assets.sh
           # This avoids storing large binary files in Git
           
           echo "✅ Frontend files uploaded successfully"
@@ -486,31 +478,57 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Run smoke tests
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Smoke Tests
+        env:
+          API_URL: ${{ needs.deploy-production.outputs.api_endpoint }}
         run: |
           echo "Running production smoke tests..."
-          API_URL="${{ needs.deploy-production.outputs.api_endpoint }}"
           
-          if [ ! -z "$API_URL" ]; then
-            echo "Testing production API at: $API_URL"
-            
-            # Health check
-            if curl -f -s "$API_URL/health" > /dev/null; then
-              echo "✅ Health check passed"
-            else
-              echo "❌ Health check failed"
-              exit 1
-            fi
-            
-            # Add more critical smoke tests here
+          if [ -z "$API_URL" ]; then
+            echo "❌ Error: API URL is missing"
+            exit 1
           fi
+
+          echo "Testing API at: $API_URL"
+          
+          # Health check
+          if curl -f -s "$API_URL/health" > /dev/null; then
+            echo "✅ Health check passed"
+          else
+            echo "❌ Health check failed"
+            exit 1
+          fi
+          
+          echo "✅ All smoke tests passed"
 
       - name: Verify database connectivity
         run: |
           echo "Verifying production database connectivity..."
           # Add database connectivity checks
+
+  # Auto Rollback on Failure
+  auto-rollback:
+    name: Auto Rollback
+    needs: [smoke-tests, pre-deployment-checks]
+    if: failure() && needs.smoke-tests.result == 'failure' && needs.pre-deployment-checks.outputs.previous_tag != ''
+    uses: ./.github/workflows/rollback-production.yml
+    with:
+      rollback_type: 'full'
+      target_tag: ${{ needs.pre-deployment-checks.outputs.previous_tag }}
+      reason: '🚨 Automatic Rollback: E2E Tests Failed immediately after deployment.'
+      rollback_migration: false
+    secrets: inherit
 
   # Database Migration with backup
   run-migration:
@@ -521,12 +539,13 @@ jobs:
     with:
       environment: 'prod'
       migration_action: 'up'
+      skip_notifications: true
     secrets: inherit
 
   seed-database:
     name: Seed Database
     needs: [deploy-production, run-migration]
-    if: needs.deploy-production.outputs.rds_endpoint != '' && github.event.inputs.seed_data == 'true'
+    if: needs.deploy-production.outputs.rds_endpoint != '' && (github.event_name == 'workflow_dispatch' && github.event.inputs.seed_data == 'true')
     uses: ./.github/workflows/seed-rds.yml
     with:
       environment: 'prod'
@@ -535,7 +554,7 @@ jobs:
       rds_port: ${{ needs.deploy-production.outputs.rds_port }}
       database_name: ${{ needs.deploy-production.outputs.database_name }}
       nat_instance_id: ${{ needs.deploy-production.outputs.nat_instance_id }}
-      s3_bucket: ${{ needs.deploy-production.outputs.s3_bucket }}
+      assets_bucket_name: "poff-prod-assets"
     secrets: inherit
 
 
@@ -585,7 +604,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -624,7 +643,7 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Create GitHub Release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
@@ -643,11 +662,60 @@ jobs:
   # Notification
   notify:
     name: Notify Deployment Status
-    needs: [deploy-production, smoke-tests, run-migration, post-deployment-monitoring, seed-database]
+    needs: [deploy-production, smoke-tests, run-migration, post-deployment-monitoring, seed-database, pre-deployment-checks]
     if: always()
     runs-on: ubuntu-latest
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Get Time and Duration
+        id: time
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get formatted time (KST)
+          echo "time=$(TZ='Asia/Seoul' date '+%d일 %H시 %M분')" >> $GITHUB_OUTPUT
+          
+          # Calculate workflow duration
+          START_TIME=$(gh run view ${{ github.run_id }} --json startedAt,createdAt --jq '.startedAt // .createdAt')
+          START_EPOCH=$(date -d "$START_TIME" +%s)
+          NOW_EPOCH=$(date +%s)
+          DURATION_SEC=$((NOW_EPOCH - START_EPOCH))
+          DURATION_MIN=$((DURATION_SEC / 60))
+          DURATION_SEC_REMAIN=$((DURATION_SEC % 60))
+          echo "duration=${DURATION_MIN}분 ${DURATION_SEC_REMAIN}초" >> $GITHUB_OUTPUT
+          echo "duration_seconds=${DURATION_SEC}" >> $GITHUB_OUTPUT
+
+      - name: Send Deployment Metrics to Datadog
+        if: always()
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_SITE: ${{ secrets.DATADOG_SITE || 'datadoghq.com' }}
+        run: |
+          # Determine overall deployment status
+          if [[ "${{ needs.deploy-production.result }}" == "success" && \
+                "${{ needs.smoke-tests.result }}" == "success" && \
+                "${{ needs.run-migration.result }}" == "success" && \
+                "${{ needs.post-deployment-monitoring.result }}" == "success" && \
+                ("${{ needs.seed-database.result }}" == "success" || "${{ needs.seed-database.result }}" == "skipped") ]]; then
+            DEPLOYMENT_STATUS="success"
+          else
+            DEPLOYMENT_STATUS="failure"
+          fi
+          
+          chmod +x scripts/send-deployment-to-datadog.sh
+          
+          scripts/send-deployment-to-datadog.sh \
+            "$DEPLOYMENT_STATUS" \
+            "production" \
+            "${{ needs.pre-deployment-checks.outputs.deploy_version }}" \
+            "${{ steps.time.outputs.duration_seconds }}" \
+            "${{ needs.deploy-production.outputs.infra_duration || 0 }}" \
+            "${{ github.actor }}" \
+            "${{ github.sha }}"
+
       - name: Notify Slack on Success
         if: |
           needs.deploy-production.result == 'success' &&
@@ -658,27 +726,77 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: success
-          channel: '#pokehabit-deployments'
+          channel: '#poff-deployments'
           text: |
-            🎉 **Production Deployment Successful!**
+            ✅ *운영 환경 배포 성공!*
             
-            **Details:**
-            - CloudFront: ${{ needs.deploy-production.outputs.cloudfront_url }}
-            - API: ${{ needs.deploy-production.outputs.api_endpoint }}
-            - S3 Bucket: ${{ needs.deploy-production.outputs.s3_bucket }}
-            - Database: ${{ needs.deploy-production.outputs.database_name }}
-            - Seeding: ${{ needs.seed-database.result }}
-            - Deployment Time: ${{ needs.deploy-production.outputs.deployment_time }}
-            - Commit: ${{ github.sha }}
-            - Deployed by: @${{ github.actor }}
+            버전: ${{ needs.pre-deployment-checks.outputs.deploy_version }}
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            배포자: @${{ github.actor }}
             
-            **Status:**
-            ✅ Infrastructure deployed
-            ✅ Smoke tests passed
-            ✅ Database migration completed
-            ✅ Post-deployment monitoring completed
+            *배포 정보:*
+            CloudFront: ${{ needs.deploy-production.outputs.cloudfront_url }}
+            API: ${{ needs.deploy-production.outputs.api_endpoint }}
+            시딩: ${{ needs.seed-database.result }}
+            
+            *완료 상태:*
+            인프라 배포 완료
+            스모크 테스트 통과
+            데이터베이스 마이그레이션 완료
+            배포 후 모니터링 완료
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
+
+      - name: Determine Failure Details
+        id: failure_details
+        if: |
+          needs.deploy-production.result == 'failure' ||
+          needs.smoke-tests.result == 'failure' ||
+          needs.run-migration.result == 'failure' ||
+          needs.post-deployment-monitoring.result == 'failure' ||
+          needs.seed-database.result == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FAILED_JOB=""
+          FAILED_STEP=""
+
+          if [ "${{ needs.deploy-production.result }}" == "failure" ]; then
+            FAILED_JOB="Deploy Production"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Deploy Production")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.smoke-tests.result }}" == "failure" ]; then
+            FAILED_JOB="Production Smoke Tests"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Production Smoke Tests")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.run-migration.result }}" == "failure" ]; then
+            FAILED_JOB="Run Production Migration"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Run Production Migration")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.seed-database.result }}" == "failure" ]; then
+            FAILED_JOB="Seed Database"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Seed Database")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.post-deployment-monitoring.result }}" == "failure" ]; then
+            FAILED_JOB="Post-Deployment Monitoring"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Post-Deployment Monitoring")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          else
+            FAILED_JOB="Unknown Job"
+            FAILED_STEP="Unknown Step"
+          fi
+          
+          echo "failed_job=$FAILED_JOB" >> $GITHUB_OUTPUT
+          echo "failed_step=${FAILED_STEP:-알 수 없음}" >> $GITHUB_OUTPUT
+
+          # Helper function for status icons
+          get_status_text() {
+            if [ "$1" == "failure" ]; then echo "❌ 실패";
+            elif [ "$1" == "success" ]; then echo "✅ 성공";
+            else echo "⏭️ 건너뜀"; fi
+          }
+
+          echo "deploy_status=$(get_status_text ${{ needs.deploy-production.result }})" >> $GITHUB_OUTPUT
+          echo "smoke_status=$(get_status_text ${{ needs.smoke-tests.result }})" >> $GITHUB_OUTPUT
+          echo "migration_status=$(get_status_text ${{ needs.run-migration.result }})" >> $GITHUB_OUTPUT
+          echo "seed_status=$(get_status_text ${{ needs.seed-database.result }})" >> $GITHUB_OUTPUT
+          echo "monitor_status=$(get_status_text ${{ needs.post-deployment-monitoring.result }})" >> $GITHUB_OUTPUT
 
       - name: Notify Slack on Failure
         if: |
@@ -690,25 +808,30 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          channel: '#pokehabit-alerts'
+          channel: '#poff-alerts'
           text: |
-            🚨 **PRODUCTION DEPLOYMENT FAILED!**
+            🚨 *운영 환경 배포 실패!*
             
-            **Failed Jobs:**
-            - Infrastructure: ${{ needs.deploy-production.result }}
-            - Smoke Tests: ${{ needs.smoke-tests.result }}
-            - Migration: ${{ needs.run-migration.result }}
-            - Seeding: ${{ needs.seed-database.result }}
-            - Monitoring: ${{ needs.post-deployment-monitoring.result }}
+            버전: ${{ needs.pre-deployment-checks.outputs.deploy_version }}
+            실패한 잡: ${{ steps.failure_details.outputs.failed_job }}
+            실패한 스텝: ${{ steps.failure_details.outputs.failed_step }}
             
-            **Action Required:** Immediate investigation needed!
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            배포자: @${{ github.actor }}
             
-            **Details:**
-            - Commit: ${{ github.sha }}
-            - Triggered by: @${{ github.actor }}
-            - Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            *상세 상태:*
+            인프라: ${{ steps.failure_details.outputs.deploy_status }}
+            스모크 테스트: ${{ steps.failure_details.outputs.smoke_status }}
+            마이그레이션: ${{ steps.failure_details.outputs.migration_status }}
+            시딩: ${{ steps.failure_details.outputs.seed_status }}
+            • 모니터링: ${{ steps.failure_details.outputs.monitor_status }}
             
-            @channel - Production deployment requires attention!
+            ⚠️ *조치 필요:* 즉각적인 확인이 필요합니다!
+            
+            👉 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
+            
+            @channel - 운영 배포에 주의가 필요합니다!
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}
 

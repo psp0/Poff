@@ -72,21 +72,6 @@ resource "aws_security_group" "nat" {
   description = "Security group for NAT instance"
   vpc_id      = aws_vpc.main.id
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 0
-    to_port     = 65535
-    protocol    = "tcp"
-    cidr_blocks = var.private_subnet_cidr_blocks
-    description = "Allow all TCP from Private Subnets"
-  }
-
   tags = merge(
     local.common_tags,
     {
@@ -99,19 +84,30 @@ resource "aws_security_group" "nat" {
   }
 }
 
+resource "aws_security_group_rule" "nat_egress" {
+  security_group_id = aws_security_group.nat.id
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+}
+
+resource "aws_security_group_rule" "nat_ingress_private" {
+  security_group_id = aws_security_group.nat.id
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = var.private_subnet_cidr_blocks
+  description       = "Allow all traffic from Private Subnets"
+}
+
 # Lambda Security Group (Moved from Database module to avoid circular dependency)
 resource "aws_security_group" "lambda" {
   name_prefix = "${var.project_name}-lambda-sg-"
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.main.id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound traffic"
-  }
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-lambda-sg"
@@ -120,6 +116,16 @@ resource "aws_security_group" "lambda" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+resource "aws_security_group_rule" "lambda_egress" {
+  security_group_id = aws_security_group.lambda.id
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "Allow all outbound traffic"
 }
 
 # IAM Role for SSM Session Manager
@@ -161,7 +167,7 @@ data "aws_ssm_parameter" "latest_amazon_linux_2" {
 
 # NAT Instance in each public subnet
 resource "aws_instance" "nat" {
-  count = length(aws_subnet.public)
+  count = 1
 
   ami                         = data.aws_ssm_parameter.latest_amazon_linux_2.value
   instance_type               = lookup(var.az_instance_type_map, aws_subnet.public[count.index].availability_zone)
@@ -271,4 +277,17 @@ resource "aws_db_subnet_group" "main" {
       Name = "${var.project_name}-db-subnet-group"
     }
   )
+}
+
+# Store NAT Instance ID in SSM Parameter Store for GitHub Actions
+resource "aws_ssm_parameter" "nat_instance_id" {
+  name        = "/${var.project_name}/${var.environment}/infrastructure/nat_instance_id"
+  type        = "String"
+  value       = length(aws_instance.nat) > 0 ? aws_instance.nat[0].id : ""
+  overwrite   = true
+  description = "NAT Instance ID for SSM Port Forwarding"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-nat-instance-id"
+  })
 }

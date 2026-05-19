@@ -1,11 +1,11 @@
 # Dev 환경의 기본 Provider
 provider "aws" {
   region  = var.aws_region
-  profile = "dev"
+  profile = "dev-exec-poff"
 
-  assume_role {
-    role_arn = "arn:aws:iam::604225987817:role/pokehabit-dev-execution-role"
-  }
+  # assume_role {
+  #   role_arn = "arn:aws:iam::604225987817:role/poff-dev-execution-role"
+  # }
 }
 
 # Terraform 버전 요구사항

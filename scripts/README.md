@@ -4,7 +4,7 @@
 
 ## upload-assets.sh
 
-로컬의 `pokehabit-assets` 디렉토리를 S3에 업로드하는 스크립트입니다.
+로컬의 `poff-assets` 디렉토리를 S3에 업로드하는 스크립트입니다.
 
 ### 왜 별도 스크립트를 사용하나요?
 
@@ -56,9 +56,9 @@
 
 ### 업로드되는 디렉토리
 
-- `pokehabit-assets/base/` → `s3://<bucket>/base/`
-- `pokehabit-assets/external/` → `s3://<bucket>/external/`
-- `pokehabit-assets/custom/` → `s3://<bucket>/custom/`
+- `poff-assets/base/` → `s3://<bucket>/base/`
+- `poff-assets/external/` → `s3://<bucket>/external/`
+- `poff-assets/custom/` → `s3://<bucket>/custom/`
 
 ### 주의사항
 
@@ -83,7 +83,7 @@
 
 ```bash
 # SSM 파라미터 확인
-aws ssm get-parameter --name "/pokehabit/dev/infrastructure/s3_bucket"
+aws ssm get-parameter --name "/poff/dev/infrastructure/s3_bucket"
 ```
 
 **문제**: `Error: Assets directory not found`
@@ -91,7 +91,7 @@ aws ssm get-parameter --name "/pokehabit/dev/infrastructure/s3_bucket"
 **해결**:
 프로젝트 루트에서 스크립트를 실행하세요:
 ```bash
-cd /path/to/pokehabit
+cd /path/to/poff
 ./scripts/upload-assets.sh dev
 ```
 

@@ -50,9 +50,29 @@ on:
       nat_instance_id:
         required: false
         type: string
-      s3_bucket:
+      assets_bucket_name:
         required: false
         type: string
+
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: false
+        description: 'AWS Deploy Role ARN'
+      AWS_EXECUTION_ROLE_ARN:
+        required: false
+        description: 'AWS Execution Role ARN'
+      AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN:
+        required: false
+        description: 'AWS Infra Cross Account Backend Role ARN'
+      HOLIDAY_API_KEY:
+        required: false
+        description: 'Holiday API Key'
+      SLACK_WEBHOOK_DEPLOY:
+        required: false
+        description: 'Slack Webhook for Deployments'
+      SLACK_WEBHOOK_ALERT:
+        required: false
+        description: 'Slack Webhook for Alerts'
 
 permissions:
   contents: read
@@ -69,10 +89,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -87,17 +107,17 @@ jobs:
           echo "env_upper=$ENV_UPPER" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN || secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-seed-rds
           role-skip-session-tagging: true
 
       - name: Assume Execution Role
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          role-to-assume: ${{ secrets.AWS_EXECUTION_ROLE_ARN || secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-execution-role
           role-chaining: true
@@ -112,6 +132,14 @@ jobs:
           else
             echo "available=false" >> $GITHUB_OUTPUT
           fi
+
+      # Setup Terraform only if we need to fetch infrastructure outputs
+      - name: Setup Terraform
+        if: steps.check-inputs.outputs.available == 'false'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Get infrastructure outputs (Terraform)
         id: infra-tf
@@ -143,14 +171,14 @@ jobs:
           NAT_INSTANCE_ID=$(terraform output -raw nat_instance_id 2>/dev/null || echo "")
           RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
           DATABASE_NAME=$(terraform output -raw database_name)
-          S3_BUCKET=$(terraform output -raw s3_bucket)
+          ASSETS_BUCKET_NAME="poff-${ENV}-assets"
           RDS_PORT=$(terraform output -raw rds_port)
           
           echo "nat_instance_id=$NAT_INSTANCE_ID" >> $GITHUB_OUTPUT
           echo "rds_endpoint=$RDS_ENDPOINT" >> $GITHUB_OUTPUT
           echo "rds_port=$RDS_PORT" >> $GITHUB_OUTPUT
           echo "database_name=$DATABASE_NAME" >> $GITHUB_OUTPUT
-          echo "s3_bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+          echo "assets_bucket_name=$ASSETS_BUCKET_NAME" >> $GITHUB_OUTPUT
 
       - name: Consolidate Infrastructure Outputs
         id: infra
@@ -161,14 +189,14 @@ jobs:
             echo "rds_endpoint=${{ inputs.rds_endpoint }}" >> $GITHUB_OUTPUT
             echo "rds_port=${{ inputs.rds_port }}" >> $GITHUB_OUTPUT
             echo "database_name=${{ inputs.database_name }}" >> $GITHUB_OUTPUT
-            echo "s3_bucket=${{ inputs.s3_bucket }}" >> $GITHUB_OUTPUT
+            echo "assets_bucket_name=${{ inputs.assets_bucket_name }}" >> $GITHUB_OUTPUT
           else
             echo "Using Terraform outputs..."
             echo "nat_instance_id=${{ steps.infra-tf.outputs.nat_instance_id }}" >> $GITHUB_OUTPUT
             echo "rds_endpoint=${{ steps.infra-tf.outputs.rds_endpoint }}" >> $GITHUB_OUTPUT
             echo "rds_port=${{ steps.infra-tf.outputs.rds_port }}" >> $GITHUB_OUTPUT
             echo "database_name=${{ steps.infra-tf.outputs.database_name }}" >> $GITHUB_OUTPUT
-            echo "s3_bucket=${{ steps.infra-tf.outputs.s3_bucket }}" >> $GITHUB_OUTPUT
+            echo "assets_bucket_name=${{ steps.infra-tf.outputs.assets_bucket_name }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Validate NAT Instance
@@ -191,23 +219,28 @@ jobs:
       - name: Wait for SSM tunnel to establish
         run: sleep 5
 
-      - name: Fetch Database Credentials from Secrets Manager
+      - name: Fetch Database Credentials from SSM
         id: db-creds
         run: |
           ENV="${{ steps.set-env.outputs.environment }}"
-          SECRET_ID="pokehabit/${ENV}/database/credentials"
+          PROJECT_NAME="poff"
           
-          echo "Fetching credentials from secret: $SECRET_ID"
+          USER_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/username"
+          PASS_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/password"
           
-          # Fetch credentials from AWS Secrets Manager
-          SECRET_JSON=$(aws secretsmanager get-secret-value \
-            --secret-id "$SECRET_ID" \
-            --query SecretString \
-            --output text)
+          echo "Fetching credentials from SSM Parameters..."
           
-          # Extract username and password
-          DB_USER=$(echo "$SECRET_JSON" | jq -r .username)
-          DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r .password)
+          # Fetch Username
+          if ! DB_USER=$(aws ssm get-parameter --name "$USER_PARAM" --with-decryption --query "Parameter.Value" --output text); then
+             echo "::error::Failed to fetch DB username from SSM"
+             exit 1
+          fi
+
+          # Fetch Password
+          if ! DB_PASSWORD=$(aws ssm get-parameter --name "$PASS_PARAM" --with-decryption --query "Parameter.Value" --output text); then
+             echo "::error::Failed to fetch DB password from SSM"
+             exit 1
+          fi
           
           # Set as masked output to prevent exposure in logs
           echo "::add-mask::$DB_USER"
@@ -229,12 +262,14 @@ jobs:
           DB_NAME: ${{ steps.infra.outputs.database_name }}
           DB_USER: ${{ steps.db-creds.outputs.db_user }}
           DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
-          S3_BUCKET_NAME: ${{ steps.infra.outputs.s3_bucket }}
+          S3_BUCKET_NAME: ${{ steps.infra.outputs.assets_bucket_name }}
           S3_BASE_PATH: ''
         run: |
+          set -o pipefail
           cd seeder
           echo "🌱 Seeding Pokemon Data..."
-          npm run seed:rds
+          npm run seed:rds 2>&1 | tee /tmp/step_output.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then exit ${PIPESTATUS[0]}; fi
 
       - name: Run Holiday Seeder
         if: inputs.seed_holidays == true || github.event.inputs.seed_holidays == 'true'
@@ -247,9 +282,11 @@ jobs:
           DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
           HOLIDAY_API_KEY: ${{ secrets.HOLIDAY_API_KEY }}
         run: |
+          set -o pipefail
           cd seeder
           echo "📅 Seeding Holiday Data..."
-          npm run seed:holidays:rds
+          npm run seed:holidays:rds 2>&1 | tee /tmp/step_output.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then exit ${PIPESTATUS[0]}; fi
       
       - name: Cleanup
         if: always()
@@ -258,8 +295,56 @@ jobs:
 
       - name: Notify on success
         if: success()
-        run: echo "✅ Database seeding completed successfully"
-      
+        continue-on-error: true
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#poff-deployments'
+          text: |
+            ✅ *데이터베이스 시딩 성공!*
+            
+            환경: ${{ steps.set-env.outputs.environment }}
+            커밋: ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
+
+      - name: Capture Failure Log
+        id: capture-log
+        if: failure()
+        run: |
+          echo "failure_log<<EOF" >> $GITHUB_OUTPUT
+          if [ -f /tmp/step_output.log ]; then
+            (grep -iC 5 "error" /tmp/step_output.log || tail -n 20 /tmp/step_output.log) | tail -n 20 >> $GITHUB_OUTPUT
+          else
+            echo "Log file not found" >> $GITHUB_OUTPUT
+          fi
+      - name: Determine Failure Details
+        id: failure_details
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("seed-database")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          echo "failed_step=${FAILED_STEP:-알 수 없음}" >> $GITHUB_OUTPUT
+
       - name: Notify on failure
         if: failure()
-        run: echo "❌ Database seeding failed"
+        continue-on-error: true
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#poff-alerts'
+          text: |
+            🚨 *데이터베이스 시딩 실패!*
+            
+            환경: ${{ steps.set-env.outputs.environment }}
+            커밋: ${{ github.sha }}
+            
+            *실패 로그 (마지막 20줄):*
+            ```
+            ${{ steps.capture-log.outputs.failure_log }}
+            ```
+            
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}

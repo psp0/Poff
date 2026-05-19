@@ -11,29 +11,6 @@ resource "aws_security_group" "rds" {
   description = "Security group for RDS instance"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [var.nat_security_group_id]
-    description     = "Allow MySQL access from NAT instances"
-  }
-
-  ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [var.lambda_security_group_id]
-    description     = "Allow MySQL access from Lambda functions"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-sg"
   })
@@ -41,6 +18,35 @@ resource "aws_security_group" "rds" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+resource "aws_security_group_rule" "rds_ingress_nat" {
+  security_group_id        = aws_security_group.rds.id
+  type                     = "ingress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = var.nat_security_group_id
+  description              = "Allow MySQL access from NAT instances"
+}
+
+resource "aws_security_group_rule" "rds_ingress_lambda" {
+  security_group_id        = aws_security_group.rds.id
+  type                     = "ingress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = var.lambda_security_group_id
+  description              = "Allow MySQL access from Lambda functions"
+}
+
+resource "aws_security_group_rule" "rds_egress" {
+  security_group_id = aws_security_group.rds.id
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
 }
 
 # Generate RDS admin password
@@ -74,6 +80,7 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
 
   multi_az            = var.rds_multi_az
+  availability_zone   = var.rds_multi_az ? null : var.availability_zone
   publicly_accessible = false
 
   backup_retention_period = var.rds_backup_retention_period
@@ -81,42 +88,101 @@ resource "aws_db_instance" "main" {
   maintenance_window      = var.rds_maintenance_window
 
   skip_final_snapshot = var.rds_skip_final_snapshot
+  apply_immediately   = true
+
+  enabled_cloudwatch_logs_exports = ["error", "slowquery"]
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds"
   })
 }
 
-# RDS Credentials in Parameter Store
-resource "aws_ssm_parameter" "rds_admin_username" {
-  name        = "/${var.project_name}/database/admin/username"
-  type        = "String"
-  value       = var.rds_admin_username
-  description = "Admin username for RDS instance"
+# CloudWatch Log Groups for RDS (pre-create to control retention)
+resource "aws_cloudwatch_log_group" "rds_error" {
+  name              = "/aws/rds/instance/${var.project_name}-rds/error"
+  retention_in_days = 30
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-rds-admin-username"
+    Name = "${var.project_name}-rds-error-logs"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "rds_slowquery" {
+  name              = "/aws/rds/instance/${var.project_name}-rds/slowquery"
+  retention_in_days = 30
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-slowquery-logs"
+  })
+}
+
+# RDS Credentials in Parameter Store (Updated to include environment)
+resource "aws_ssm_parameter" "rds_admin_username" {
+  name        = "/${var.project_name}/${var.environment}/database/admin/username"
+  type        = "String"
+  value       = var.rds_admin_username
+  description = "Admin username for RDS instance (${var.environment})"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-admin-username-${var.environment}"
   })
 }
 
 resource "aws_ssm_parameter" "rds_admin_password" {
-  name        = "/${var.project_name}/database/admin/password"
+  name        = "/${var.project_name}/${var.environment}/database/admin/password"
   type        = "SecureString"
   value       = random_password.rds_admin_password.result
-  description = "Admin password for RDS instance"
+  description = "Admin password for RDS instance (${var.environment})"
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-rds-admin-password"
+    Name = "${var.project_name}-rds-admin-password-${var.environment}"
   })
 }
 
 resource "aws_ssm_parameter" "rds_endpoint" {
-  name        = "/${var.project_name}/database/endpoint"
+  name        = "/${var.project_name}/${var.environment}/database/endpoint"
   type        = "String"
   value       = aws_db_instance.main.endpoint
-  description = "RDS endpoint"
+  description = "RDS endpoint (${var.environment})"
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-rds-endpoint"
+    Name = "${var.project_name}-rds-endpoint-${var.environment}"
+  })
+}
+
+# Environment-specific infrastructure parameters for GitHub Actions
+resource "aws_ssm_parameter" "rds_endpoint_env" {
+  name        = "/${var.project_name}/${var.environment}/infrastructure/rds_endpoint"
+  type        = "String"
+  value       = aws_db_instance.main.address
+  overwrite   = true
+  description = "RDS endpoint address for ${var.environment}"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-endpoint-${var.environment}"
+  })
+}
+
+resource "aws_ssm_parameter" "rds_port_env" {
+  name        = "/${var.project_name}/${var.environment}/infrastructure/rds_port"
+  type        = "String"
+  value       = tostring(aws_db_instance.main.port)
+  overwrite   = true
+  description = "RDS port for ${var.environment}"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-port-${var.environment}"
+  })
+}
+
+resource "aws_ssm_parameter" "database_name_env" {
+  name        = "/${var.project_name}/${var.environment}/infrastructure/database_name"
+  type        = "String"
+  value       = replace(var.project_name, "-", "_")
+  overwrite   = true
+  description = "Database name for ${var.environment}"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-database-name-${var.environment}"
   })
 }

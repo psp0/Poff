@@ -5,9 +5,6 @@
 const createResponse = (statusCode, body, headers = {}) => {
   const defaultHeaders = {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
     ...headers
   };
 
@@ -106,14 +103,7 @@ const serviceUnavailable = (message = 'Service unavailable') => {
   });
 };
 
-// CORS preflight 요청 처리
-const corsResponse = () => {
-  return createResponse(200, '', {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
-  });
-};
+
 
 // 페이지네이션 응답
 const paginated = (data, pagination, message = 'Success') => {
@@ -143,6 +133,6 @@ module.exports = {
   unprocessableEntity,
   internalServerError,
   serviceUnavailable,
-  corsResponse,
+
   paginated
 };

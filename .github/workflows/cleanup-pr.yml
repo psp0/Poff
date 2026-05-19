@@ -1,0 +1,19 @@
+name: Cleanup PR Environment
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
+jobs:
+  destroy-dev-pr:
+    name: Destroy Dev PR Resources
+    uses: ./.github/workflows/deploy-dev.yml
+    with:
+      action: destroy
+      env_suffix: pr-${{ github.event.pull_request.number }}
+    secrets: inherit

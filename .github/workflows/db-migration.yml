@@ -1,10 +1,6 @@
 name: Database Migration with db-migrate
 
 on:
-  push:
-    paths:
-      - 'migrations/**'
-    branches: [ develop, main ]
   workflow_dispatch:
     inputs:
       environment:
@@ -36,6 +32,25 @@ on:
         required: false
         default: 'up'
         type: string
+      skip_notifications:
+        description: 'Skip Slack notifications'
+        required: false
+        default: false
+        type: boolean
+
+    secrets:
+      AWS_DEPLOY_ROLE_ARN:
+        required: false
+        description: 'AWS Deploy Role ARN'
+      AWS_EXECUTION_ROLE_ARN:
+        required: false
+        description: 'AWS Execution Role ARN'
+      SLACK_WEBHOOK_DEPLOY:
+        required: false
+        description: 'Slack Webhook for Deployments'
+      SLACK_WEBHOOK_ALERT:
+        required: false
+        description: 'Slack Webhook for Alerts'
 
 permissions:
   contents: read
@@ -58,24 +73,27 @@ jobs:
         id: env
         run: |
           # Determine environment based on trigger
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENV="${{ github.event.inputs.environment }}"
-            ACTION="${{ github.event.inputs.migration_action }}"
-          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
-            ENV="${{ inputs.environment }}"
-            ACTION="${{ inputs.migration_action }}"
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            ENV="prod"
-            ACTION="up"
-          else
-            # Default to dev for develop branch
-            ENV="dev"
-            ACTION="up"
+          # Try to get inputs from context (works for workflow_dispatch and workflow_call)
+          ENV="${{ inputs.environment }}"
+          ACTION="${{ inputs.migration_action }}"
+
+          # If ENV is empty (e.g. push event), determine based on branch
+          if [ -z "$ENV" ]; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              ENV="prod"
+              ACTION="up"
+            else
+              # Fallback context (e.g. dynamic environments)
+              ENV="dev"
+              ACTION="up"
+            fi
           fi
           
           echo "environment=$ENV" >> $GITHUB_OUTPUT
           echo "migration_action=${ACTION:-up}" >> $GITHUB_OUTPUT
           echo "Environment: $ENV, Action: ${ACTION:-up}"
+          echo "Debug: github.event_name=${{ github.event_name }}"
+          echo "Debug: github.ref=${{ github.ref }}"
 
   migrate:
     name: Run Database Migration
@@ -85,10 +103,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -101,17 +119,17 @@ jobs:
           echo "env_upper=$ENV_UPPER" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN || secrets[format('AWS_{0}_GHA_DEPLOY_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-db-migration
           role-skip-session-tagging: true
 
       - name: Assume execution role
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
+          role-to-assume: ${{ secrets.AWS_EXECUTION_ROLE_ARN || secrets[format('AWS_{0}_EXECUTION_ROLE_ARN', steps.set-env.outputs.env_upper)] }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-actions-db-migration-exec
           role-chaining: true
@@ -121,27 +139,35 @@ jobs:
         id: infra
         run: |
           ENV="${{ needs.determine-environment.outputs.environment }}"
+          echo "Debug: Raw environment value: '${{ needs.determine-environment.outputs.environment }}'"
+          echo "Debug: ENV variable: '$ENV'"
+          
+          # Fallback to dev if ENV is empty
+          if [ -z "$ENV" ]; then
+            echo "Warning: Environment is empty, defaulting to 'dev'"
+            ENV="dev"
+          fi
+          
           echo "Fetching infrastructure details from SSM for environment: $ENV"
           
-          # Fetch all parameters at once
-          PARAMS=$(aws ssm get-parameters \
-            --names \
-              "/pokehabit/$ENV/infrastructure/nat_instance_id" \
-              "/pokehabit/$ENV/infrastructure/rds_endpoint" \
-              "/pokehabit/$ENV/infrastructure/rds_port" \
-              "/pokehabit/$ENV/infrastructure/database_name" \
-            --query "Parameters[*].{Name:Name,Value:Value}" \
-            --output json)
+          # Fetch parameters individually for better error handling
+          NAT_INSTANCE_ID=$(aws ssm get-parameter --name "/poff/$ENV/infrastructure/nat_instance_id" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          RDS_ENDPOINT=$(aws ssm get-parameter --name "/poff/$ENV/infrastructure/rds_endpoint" --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          RDS_PORT=$(aws ssm get-parameter --name "/poff/$ENV/infrastructure/rds_port" --query "Parameter.Value" --output text 2>/dev/null || echo "3306")
+          DATABASE_NAME=$(aws ssm get-parameter --name "/poff/$ENV/infrastructure/database_name" --query "Parameter.Value" --output text 2>/dev/null || echo "")
           
-          # Function to get value by name suffix
-          get_param() {
-            echo "$PARAMS" | jq -r --arg name "/pokehabit/$ENV/infrastructure/$1" '.[] | select(.Name == $name) | .Value'
-          }
+          echo "Debug: Retrieved NAT_INSTANCE_ID: '$NAT_INSTANCE_ID'"
+          echo "Debug: Retrieved RDS_ENDPOINT: '$RDS_ENDPOINT'"
           
-          NAT_INSTANCE_ID=$(get_param "nat_instance_id")
-          RDS_ENDPOINT=$(get_param "rds_endpoint")
-          RDS_PORT=$(get_param "rds_port")
-          DATABASE_NAME=$(get_param "database_name")
+          if [ -z "$NAT_INSTANCE_ID" ]; then
+            echo "::error::NAT_INSTANCE_ID is empty! Please check if '/poff/$ENV/infrastructure/nat_instance_id' exists in SSM Parameter Store."
+            exit 1
+          fi
+          
+          if [ -z "$RDS_ENDPOINT" ]; then
+            echo "::error::RDS_ENDPOINT is empty! Please check if '/poff/$ENV/infrastructure/rds_endpoint' exists in SSM Parameter Store."
+            exit 1
+          fi
           
           # Fallback for rds_port if not found (during transition)
           if [ -z "$RDS_PORT" ] || [ "$RDS_PORT" = "null" ]; then
@@ -156,6 +182,14 @@ jobs:
           
           echo "Using database: $DATABASE_NAME on $RDS_ENDPOINT:$RDS_PORT"
 
+      - name: Debug infrastructure outputs
+        run: |
+          echo "🔍 Debug: Checking infrastructure outputs before SSM tunnel setup"
+          echo "NAT Instance ID: '${{ steps.infra.outputs.nat_instance_id }}'"
+          echo "RDS Endpoint: '${{ steps.infra.outputs.rds_endpoint }}'"
+          echo "RDS Port: '${{ steps.infra.outputs.rds_port }}'"
+          echo "Database Name: '${{ steps.infra.outputs.database_name }}'"
+
       - name: Setup SSM Port Forwarding
         uses: ./.github/actions/setup-ssm-tunnel
         with:
@@ -163,23 +197,34 @@ jobs:
           rds-endpoint: ${{ steps.infra.outputs.rds_endpoint }}
           rds-port: ${{ steps.infra.outputs.rds_port }}       
 
-      - name: Fetch database credentials from Secrets Manager
+      - name: Fetch database credentials from SSM
         id: db-creds
         run: |
           ENV="${{ needs.determine-environment.outputs.environment }}"
-          SECRET_ID="pokehabit/${ENV}/database/credentials"
+          # Project name is fixed as 'poff' in Terraform variables
+          PROJECT_NAME="poff"
           
-          echo "Fetching credentials from secret: $SECRET_ID"
+          USER_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/username"
+          PASS_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/password"
           
-          # Fetch credentials from AWS Secrets Manager
-          SECRET_JSON=$(aws secretsmanager get-secret-value \
-            --secret-id "$SECRET_ID" \
-            --query SecretString \
-            --output text)
+          echo "Fetching credentials from SSM Parameters..."
+          echo "User Param: $USER_PARAM"
           
-          # Extract username and password
-          DB_USER=$(echo "$SECRET_JSON" | jq -r .username)
-          DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r .password)
+          # Fetch Username
+          if ! DB_USER=$(aws ssm get-parameter --name "$USER_PARAM" --with-decryption --query "Parameter.Value" --output text 2> /tmp/step_output.log); then
+             echo "::error::Failed to fetch DB username from SSM"
+             echo "Error details:"
+             cat /tmp/step_output.log
+             exit 1
+          fi
+
+          # Fetch Password
+          if ! DB_PASSWORD=$(aws ssm get-parameter --name "$PASS_PARAM" --with-decryption --query "Parameter.Value" --output text 2> /tmp/step_output.log); then
+             echo "::error::Failed to fetch DB password from SSM"
+             echo "Error details:"
+             cat /tmp/step_output.log
+             exit 1
+          fi
           
           # Set as masked output to prevent exposure in logs
           echo "::add-mask::$DB_USER"
@@ -188,6 +233,11 @@ jobs:
           echo "db_password=$DB_PASSWORD" >> $GITHUB_OUTPUT
 
       - name: Test database connectivity
+        id: test-connection
+        env:
+          DB_USER: ${{ steps.db-creds.outputs.db_user }}
+          DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
+          DB_NAME: ${{ steps.infra.outputs.database_name }}
         run: |
           # Install MySQL client for testing
           sudo apt-get update
@@ -195,34 +245,37 @@ jobs:
           
           # Test connection through SSM tunnel
           echo "Testing MySQL database connectivity through SSM Port Forwarding..."
-          mysql -h 127.0.0.1 -P 3307 -u "${{ steps.db-creds.outputs.db_user }}" -p"${{ steps.db-creds.outputs.db_password }}" \
-            -D "${{ steps.infra.outputs.database_name }}" \
-            -e "SELECT VERSION();" || {
+          # Use env vars to avoid shell interpolation issues with special chars in password
+          mysql -h 127.0.0.1 -P 3307 -u "$DB_USER" -p"$DB_PASSWORD" \
+            -D "$DB_NAME" \
+            -e "SELECT VERSION();" 2>&1 | tee /tmp/step_output.log || {
             echo "ERROR: Database connection failed!"
             echo "Endpoint: ${{ steps.infra.outputs.rds_endpoint }}:${{ steps.infra.outputs.rds_port }}"
-            echo "Database: ${{ steps.infra.outputs.database_name }}"
+            echo "Database: $DB_NAME"
             exit 1
           }
           echo "Database connection successful!"
 
       - name: Create db-migrate configuration
+        env:
+          DB_USER: ${{ steps.db-creds.outputs.db_user }}
+          DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
+          DB_NAME: ${{ steps.infra.outputs.database_name }}
+          DB_ENV: ${{ needs.determine-environment.outputs.environment }}
         run: |
           cd migrations
-          cat > database.json <<EOF
-          {
-            "${{ needs.determine-environment.outputs.environment }}": {
-              "driver": "mysql",
-              "host": "127.0.0.1",
-              "port": 3307,
-              "database": "${{ steps.infra.outputs.database_name }}",
-              "user": "${{ steps.db-creds.outputs.db_user }}",
-              "password": "${{ steps.db-creds.outputs.db_password }}",
-              "multipleStatements": true
-            }
-          }
-          EOF
+          
+          # Use jq to safely create JSON with proper escaping
+          jq -n \
+            --arg env "$DB_ENV" \
+            --arg db "$DB_NAME" \
+            --arg user "$DB_USER" \
+            --arg password "$DB_PASSWORD" \
+            '{($env): {driver: "mysql", host: "127.0.0.1", port: 3307, database: $db, user: $user, password: $password, multipleStatements: true}}' \
+            > database.json
+            
           echo "Database configuration created for MySQL"
-          echo "Database: ${{ steps.infra.outputs.database_name }}"
+          echo "Database: $DB_NAME"
 
       - name: Install migrations dependencies
         run: |
@@ -230,10 +283,12 @@ jobs:
           npm ci
 
       - name: Run db-migrate Migration
+        id: migration
         env:
           MIGRATION_ACTION: ${{ needs.determine-environment.outputs.migration_action }}
           DB_ENV: ${{ needs.determine-environment.outputs.environment }}
         run: |
+          set -o pipefail
           cd migrations
           echo "Running db-migrate through SSM Port Forwarding..."
           echo "Migration action: $MIGRATION_ACTION"
@@ -243,19 +298,19 @@ jobs:
           case "${MIGRATION_ACTION:-up}" in
             "up")
               echo "Running all pending migrations..."
-              npx db-migrate up -e $DB_ENV -m files
+              npx db-migrate up -e $DB_ENV -m files 2>&1 | tee /tmp/step_output.log
               ;;
             "down")
               echo "Rolling back last migration..."
-              npx db-migrate down -e $DB_ENV -m files
+              npx db-migrate down -e $DB_ENV -m files 2>&1 | tee /tmp/step_output.log
               ;;
             "reset")
               echo "WARNING: This will rollback all migrations!"
-              npx db-migrate reset -e $DB_ENV -m files
+              npx db-migrate reset -e $DB_ENV -m files 2>&1 | tee /tmp/step_output.log
               ;;
             "status")
               echo "Checking migration status..."
-              npx db-migrate status -e $DB_ENV -m files
+              npx db-migrate check -e $DB_ENV -m files 2>&1 | tee /tmp/step_output.log
               ;;
             *)
               echo "Unknown migration action: $MIGRATION_ACTION"
@@ -265,7 +320,7 @@ jobs:
           
           echo ""
           echo "Current migration status:"
-          npx db-migrate status -e $DB_ENV -m files
+          npx db-migrate check -e $DB_ENV -m files
           echo ""
           echo "Migration completed successfully!"
 
@@ -282,33 +337,85 @@ jobs:
           
           echo "Cleanup completed"
 
+
+      - name: Capture Failure Log
+        id: capture-log
+        if: failure() && inputs.skip_notifications != true
+        run: |
+          echo "failure_log<<EOF" >> $GITHUB_OUTPUT
+          if [ -f /tmp/step_output.log ]; then
+            (grep -iC 5 "error" /tmp/step_output.log || tail -n 20 /tmp/step_output.log) | tail -n 20 >> $GITHUB_OUTPUT
+          else
+            echo "Log file not found" >> $GITHUB_OUTPUT
+          fi
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Determine Failure Details
+        id: failure_details
+        if: failure() && inputs.skip_notifications != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Run Database Migration")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          echo "failed_step=${FAILED_STEP:-알 수 없음}" >> $GITHUB_OUTPUT
+
+      - name: Get Time and Duration
+        id: time
+        if: always() && inputs.skip_notifications != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "time=$(TZ='Asia/Seoul' date '+%d일 %H시 %M분')" >> $GITHUB_OUTPUT
+          
+          START_TIME=$(gh run view ${{ github.run_id }} --json startedAt,createdAt --jq '.startedAt // .createdAt')
+          START_EPOCH=$(date -d "$START_TIME" +%s)
+          NOW_EPOCH=$(date +%s)
+          DURATION_SEC=$((NOW_EPOCH - START_EPOCH))
+          DURATION_MIN=$((DURATION_SEC / 60))
+          DURATION_SEC_REMAIN=$((DURATION_SEC % 60))
+          echo "duration=${DURATION_MIN}분 ${DURATION_SEC_REMAIN}초" >> $GITHUB_OUTPUT
+
       - name: Notify Slack on Success
-        if: success()
+        if: success() && inputs.skip_notifications != true
         continue-on-error: true
         uses: 8398a7/action-slack@v3
         with:
           status: success
-          channel: '#pokehabit-deployments'
+          channel: '#poff-deployments'
           text: |
-            ✅ Database migration completed successfully!
-            Environment: ${{ needs.determine-environment.outputs.environment }}
-            Action: ${{ github.event.inputs.migration_action || 'up' }}
-            Commit: ${{ github.sha }}
+            ✅ *데이터베이스 마이그레이션 성공!*
+            
+            환경: ${{ needs.determine-environment.outputs.environment }}
+            작업: ${{ needs.determine-environment.outputs.migration_action }}
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            커밋: ${{ github.sha }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
       - name: Notify Slack on Failure
-        if: failure()
+        if: failure() && inputs.skip_notifications != true
         continue-on-error: true
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          channel: '#pokehabit-alerts'
+          channel: '#poff-alerts'
           text: |
-            ❌ Database migration failed!
-            Environment: ${{ needs.determine-environment.outputs.environment }}
-            Action: ${{ github.event.inputs.migration_action || 'up' }}
-            Commit: ${{ github.sha }}
-            Check the logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            🚨 *데이터베이스 마이그레이션 실패!*
+            
+            실패한 스텝: ${{ steps.failure_details.outputs.failed_step }}
+            
+            환경: ${{ needs.determine-environment.outputs.environment }}
+            작업: ${{ needs.determine-environment.outputs.migration_action }}
+            🕒 시각: ${{ steps.time.outputs.time }}
+            러너 소요 시간: ${{ steps.time.outputs.duration }}
+            커밋: ${{ github.sha }}
+            
+            *실패 로그 (마지막 20줄):*
+            ```
+            ${{ steps.capture-log.outputs.failure_log }}
+            ```
+            
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 확인하러 가기>
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_ALERT }}

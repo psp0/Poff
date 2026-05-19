@@ -116,6 +116,10 @@ function onModalClose() {
   }
 }
 
+// 전역 노출 (pwa.js 등에서 사용)
+window.onModalOpen = onModalOpen;
+window.onModalClose = onModalClose;
+
 // 로그인 화면 피카츄 스프라이트 초기화
 function initAuthPikachuSprite() {
   const authSprite = document.getElementById('auth-sprite');
@@ -171,10 +175,51 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuthPikachuSprite();
 });
 
+// Auth Card UI Update Helper
+function updateAuthCardUI(state) {
+  const logoutBtn = document.getElementById("logoutBtn"); // The card div itself
+  const title = document.getElementById("auth-card-title");
+  const desc = document.getElementById("auth-card-desc");
+  const icon = document.getElementById("auth-card-icon");
+
+  if (!logoutBtn || !title || !desc) return;
+
+  if (state === 'authenticated') {
+    title.textContent = "로그아웃";
+    desc.textContent = "계정에서 로그아웃";
+    // Optional: Change icon to logout icon
+    if (icon) {
+      icon.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>`;
+    }
+  } else {
+    // Guest or Unauthenticated -> "Login"
+    title.textContent = "로그인";
+    desc.textContent = "로그인하여 시작하기";
+    if (icon) {
+      icon.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+        </svg>`;
+    }
+  }
+}
+
 // Firebase Auth 상태 감지 및 백엔드 동기화
 function initializeFirebaseListener() {
   if (window.firebaseAuth) {
     console.log("Firebase Auth initialized, registering listener");
+
+    // Enable login button
+    if (googleLoginBtn) {
+      googleLoginBtn.disabled = false;
+      googleLoginBtn.style.opacity = "1";
+      googleLoginBtn.style.cursor = "pointer";
+    }
+
     window.firebaseAuth.onAuthStateChanged(async (user) => {
       if (user) {
         window.isGuestMode = false;
@@ -220,23 +265,40 @@ function initializeFirebaseListener() {
               contentDiv.style.display = "none";
               document.getElementById('terms-modal').style.display = 'flex';
               onModalOpen();
+              hideGlobalLoading(); // 약관 모달 표시 시 로딩 종료
             } else {
               // 기존 사용자는 바로 메인 화면 표시
               contentDiv.style.display = "flex";
               // 로그인 후 초기 데이터 로드
-              await loadUserPokemonIcons();
+              // await loadUserPokemonIcons(); // Lazy load on tab click
+              // 홈 화면 즐겨찾기 포켓몬 로드
+              loadHomeFavoritePokemon();
+              // 오늘 획득한 포켓몬 로드
+              loadTodayObtainedPokemon();
+
+              // 서식지 시스템 초기화
+              initHabitat();
 
               // Notify other modules with a slight delay to ensure listeners are ready
               setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('user-synced', { detail: { userId: currentUserId } }));
+                updateAuthCardUI('authenticated');
+                // 주간 검증 확인 (로그인 직후)
+                checkWeeklyVerificationStatus().then(() => {
+                  // 홈탭 미션 카드 및 주간 달성 바 초기화
+                  if (typeof initHomeTab === 'function') initHomeTab();
+                });
+                hideGlobalLoading(); // 로딩 종료
               }, 500);
             }
           } else {
             console.error("Sync failed: No data returned");
             authMessage.textContent = "사용자 동기화 실패";
+            hideGlobalLoading(); // 실패 시에도 로딩 종료
           }
         } catch (e) {
           console.error("Sync error:", e);
+          hideGlobalLoading(); // 에러 시에도 로딩 종료
         }
       } else {
         console.log("No user logged in");
@@ -251,39 +313,63 @@ function initializeFirebaseListener() {
 
           // Load Dummy Data
           loadUserPokemonIcons();
-          if (typeof loadExerciseData === 'function') loadExerciseData();
+          // 홈 화면 즐겨찾기 포켓몬 로드
+          loadHomeFavoritePokemon();
+          // 오늘 획득한 포켓몬 로드
+          loadTodayObtainedPokemon();
+
+          // Initialize habitat system for guest mode after DOM is ready
+          setTimeout(() => {
+            initHabitat();
+            // 홈탭 미션 카드 및 주간 달성 바 초기화
+            if (typeof initHomeTab === 'function') initHomeTab();
+          }, 100);
 
           // Setup UI for Guest
           const screenTimePreview = document.getElementById('screenTimePreview');
           if (screenTimePreview) {
             screenTimePreview.textContent = '📱 2시간 30분 (예시)';
-            screenTimePreview.style.color = '#4F46E5';
+            screenTimePreview.style.color = '#CD5C5C';
           }
 
           const logoutBtn = document.getElementById("logoutBtn");
           if (logoutBtn) {
-            logoutBtn.textContent = "로그인하여 시작하기";
-            logoutBtn.style.backgroundColor = "#667eea";
-            logoutBtn.style.color = "white";
+            updateAuthCardUI('guest');
           }
 
           showToast('체험 모드로 시작합니다.');
+          hideGlobalLoading(); // 게스트 모드 로딩 종료
         } else {
           // Explicit Auth Mode: Show Login
           window.authState = 'unauthenticated';
           authDiv.style.display = "flex";
           document.body.style.overflow = 'hidden';
           contentDiv.style.display = "none";
+          hideGlobalLoading(); // 로그인 화면 표시 시 로딩 종료
         }
       }
     });
   } else {
-    console.log("Waiting for Firebase Auth to initialize...");
+    // Max retries: 100 * 100ms = 10 seconds
+    if (!window.authInitAttempts) window.authInitAttempts = 0;
+    window.authInitAttempts++;
+
+    if (window.authInitAttempts > 100) {
+      console.error("Firebase Auth initialization timed out.");
+      if (authMessage) authMessage.textContent = "Firebase 초기화 실패. 체험 모드는 이용 가능합니다.";
+      window.authState = 'unauthenticated'; // Allow guest mode to proceed
+      hideGlobalLoading();
+      if (authDiv) authDiv.style.display = "flex";
+      return;
+    }
+
+    console.log(`Waiting for Firebase Auth to initialize... (${window.authInitAttempts})`);
     setTimeout(initializeFirebaseListener, 100);
   }
 }
 
 // Start listening
+showGlobalLoading('로딩 중...');
 initializeFirebaseListener();
 
 // 스프라이트 애니메이션 관련 데이터
@@ -378,8 +464,44 @@ function loadBackgroundWithFallback(backgroundUrl, fallbackUrls) {
 }
 
 // 포켓몬 데이터를 화면에 표시하는 함수
+// 설명글이 화면(모달)을 벗어나는지 확인하고 숨기는 함수
+function adjustDescriptionVisibility() {
+  // 레이아웃 계산을 위해 다음 프레임에 실행
+  requestAnimationFrame(() => {
+    const container = document.querySelector('.pokemon-detail-content');
+    const description = document.querySelector('.pokedex-description');
+
+    if (container && description) {
+      // 먼저 보이게 설정하여 높이를 측정할 수 있게 함
+      description.style.display = 'block';
+
+      const containerRect = container.getBoundingClientRect();
+      const descriptionRect = description.getBoundingClientRect();
+
+      // 설명글의 하단이 컨테이너 하단보다 아래에 있으면 (짤리면) 숨김
+      // 5px 정도의 여유를 둠
+      if (descriptionRect.bottom > containerRect.bottom + 5) {
+        description.style.display = 'none';
+      }
+    }
+  });
+}
+
+// 창 크기 변경 시에도 가시성 조정
+window.addEventListener('resize', adjustDescriptionVisibility);
+
+
+
+// 포켓몬 데이터를 화면에 표시하는 함수
 // 포켓몬 데이터를 화면에 표시하는 함수
 async function displayPokemon(pokemonStableId, isShiny = false) {
+  const flipper = document.getElementById('pokemonFlipper');
+  const descEl = document.getElementById('display-description');
+
+  // 1. 즉시 숨김 (이전 포켓몬 잔상 방지)
+  if (flipper) flipper.style.opacity = '0';
+  if (descEl) descEl.style.opacity = '0';
+
   // 플리퍼 정면 초기화 (애니메이션 포함)
   if (typeof resetFlipperToFront === 'function') {
     resetFlipperToFront();
@@ -397,7 +519,7 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
 
   // UI 텍스트 업데이트 (존재하는 경우)
   const nameEl = document.getElementById('display-name');
-  const descEl = document.getElementById('display-description');
+  // descEl already selected above
   const typesContainer = document.getElementById('display-types');
   const hashtagsContainer = document.getElementById('display-hashtags');
 
@@ -422,15 +544,15 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
       habitatTag.className = 'hashtag habitat';
 
       const habitatMap = {
-        'Grassland': '초원',
-        'Forest': '숲',
-        'Waters-edge': '물가',
-        'Sea': '바다',
-        'Cave': '동굴',
-        'Mountain': '산',
-        'Rough-terrain': '거친지형',
-        'Urban': '도시',
-        'Rare': '희귀'
+        'grassland': '초원',
+        'forest': '숲',
+        'watersedge': '물가',
+        'sea': '바다',
+        'cave': '동굴',
+        'mountain': '산',
+        'roughterrain': '거친지형',
+        'urban': '도시',
+        'rare': '희귀'
       };
 
       const habitatName = habitatMap[pokemonData.pokemon.habitat] || pokemonData.pokemon.habitat;
@@ -568,6 +690,9 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
           // 데이터 상태 업데이트 (메모리 상)
           pokemonData.is_favorite = isFav;
 
+          // 홈 화면 업데이트 (즐겨찾기 변경 사항 반영)
+          loadHomeFavoritePokemon();
+
         } else {
           throw new Error(result.error || '즐겨찾기 변경 실패');
         }
@@ -634,6 +759,7 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
 
         // 아이템 보유량 확인
         try {
+          showGlobalLoading('정보 확인 중...');
           const headers = await getAuthHeaders();
           const itemsResponse = await fetch('/api/user/items', { headers });
           if (itemsResponse.ok) {
@@ -644,6 +770,8 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
           }
         } catch (err) {
           console.error('Failed to fetch items:', err);
+        } finally {
+          hideGlobalLoading();
         }
 
         const safeName = escapeHtml(pokemonData.pokemon.name);
@@ -661,6 +789,7 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
 
         if (confirmed) {
           try {
+            showGlobalLoading('이로치 해제 중...');
             const headers = await getAuthHeaders();
             const response = await fetch('/api/pokemon/unlock-shiny', {
               method: 'POST',
@@ -674,16 +803,35 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
             const result = await response.json();
             if (result.success) {
               showToast(result.data.message);
-              // 이로치 화면으로 전환
-              displayPokemon(pokemonStableId, true);
-              // 아이콘 목록 갱신 (백그라운드)
+
+              // Refetch evolution data to update the shiny bar and shiny icons in the modal
+              let baseImageName = pokemonData.pokemon.image_name;
+              // Try to find base_image_name from userPokemonList if available for consistency
+              if (typeof userPokemonList !== 'undefined' && Array.isArray(userPokemonList)) {
+                const found = userPokemonList.find(p => p.display_stable_id === pokemonStableId || p.pokemon_stable_id === pokemonStableId);
+                if (found && found.base_image_name) {
+                  baseImageName = found.base_image_name;
+                }
+              }
+
+              // Call showIconGroupDetail to refresh the entire modal context (evolution tree, shiny bar, and main display)
+              // This is more robust than just calling displayPokemon
+              await showIconGroupDetail(baseImageName, pokemonStableId, true, navigationContext || 'collection');
+
+              // Background updates
               loadUserPokemonIcons();
+              if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+              if (window.sleepTracker && typeof window.sleepTracker.loadSleepStatus === 'function') {
+                window.sleepTracker.loadSleepStatus();
+              }
             } else {
               showToast(result.error || '이로치 해제 실패');
             }
           } catch (err) {
             console.error(err);
             showToast('오류가 발생했습니다.');
+          } finally {
+            hideGlobalLoading();
           }
         }
       }
@@ -725,12 +873,21 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
     }
   }
 
-  // 스프라이트 설정
+  // 스프라이트 설정 (비동기 로드 대기)
   const frontSpeed = pokemonData.pokemon.front_animation_speed !== undefined ? pokemonData.pokemon.front_animation_speed : 2;
   const backSpeed = pokemonData.pokemon.back_animation_speed !== undefined ? pokemonData.pokemon.back_animation_speed : 2;
 
-  setupSprite('sprite-front', pokemonData.front_image, frontSpeed);
-  setupSprite('sprite-back', pokemonData.back_image, backSpeed);
+  await Promise.all([
+    setupSprite('sprite-front', pokemonData.front_image, frontSpeed),
+    setupSprite('sprite-back', pokemonData.back_image, backSpeed)
+  ]);
+
+  // 2. 이미지 로드 완료 후 표시
+  // requestAnimationFrame을 사용하여 DOM 업데이트 후 스타일 적용 보장
+  requestAnimationFrame(() => {
+    if (flipper) flipper.style.opacity = '1';
+    if (descEl) descEl.style.opacity = '1';
+  });
 
   // 울음소리 재생
   if (pokemonData.cry_sound && isCrySoundEnabled) {
@@ -741,37 +898,45 @@ async function displayPokemon(pokemonStableId, isShiny = false) {
     });
   }
 
+  // 설명글 가시성 조정
+  adjustDescriptionVisibility();
+
   console.log(`포켓몬 표시 완료: ${pokemonData.pokemon.name} (${pokemonStableId})`);
 }
 
 // 로그인 함수
 // 구글 로그인 함수
+// 구글 로그인 함수
 if (googleLoginBtn) {
-  googleLoginBtn.addEventListener("click", async () => {
-    try {
-      // Firebase가 초기화되었는지 확인
-      if (!window.firebaseAuth || !window.googleProvider || !window.signInWithPopup) {
-        authMessage.textContent = "잠시 후 다시 시도해주세요...";
-        console.log("Firebase not ready yet, waiting...");
-        // Firebase 초기화 대기 (최대 3초)
-        let attempts = 0;
-        while ((!window.firebaseAuth || !window.googleProvider || !window.signInWithPopup) && attempts < 30) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          attempts++;
-        }
-        if (!window.firebaseAuth || !window.googleProvider || !window.signInWithPopup) {
-          authMessage.textContent = "Firebase 초기화 실패. 페이지를 새로고침 해주세요.";
-          return;
-        }
-      }
+  // 초기 상태: 비활성화 (Firebase 로드 대기)
+  googleLoginBtn.disabled = true;
+  googleLoginBtn.style.opacity = "0.5";
+  googleLoginBtn.style.cursor = "wait";
 
-      authMessage.textContent = "Google 로그인 중...";
-      await window.signInWithPopup(window.firebaseAuth, window.googleProvider);
-      // onAuthStateChanged에서 처리됨
-    } catch (error) {
-      console.error("Google Login Error:", error);
-      authMessage.textContent = "로그인 실패: " + error.message;
+  googleLoginBtn.addEventListener("click", () => {
+    // 중요: iOS PWA 팝업 차단을 방지하기 위해 비동기(await) 없이 즉시 호출해야 함
+    if (!window.firebaseAuth || !window.googleProvider || !window.signInWithPopup) {
+      console.warn("Firebase Auth not ready yet");
+      return;
     }
+
+    // authMessage.textContent = "Google 로그인 팝업을 띄우는 중..."; // iOS 팝업 차단 방지를 위해 DOM 업데이트 제거
+
+    // 즉시 실행 (Promise 체이닝 사용)
+    window.signInWithPopup(window.firebaseAuth, window.googleProvider)
+      .then((result) => {
+        console.log("Popup login success:", result.user.uid);
+        authMessage.textContent = "로그인 성공!";
+        // onAuthStateChanged에서 처리됨
+      })
+      .catch((error) => {
+        console.error("Google Login Error:", error);
+        authMessage.textContent = "로그인 실패: " + error.message;
+
+        if (error.code === 'auth/popup-blocked') {
+          authMessage.textContent = "팝업 차단을 허용하거나 로그인 버튼을 한번 더 눌러주세요.";
+        }
+      });
   });
 }
 
@@ -793,31 +958,27 @@ if (guestLoginBtn) {
 
       // 실제 API를 통해 게스트 유저 데이터 로드
       await loadUserPokemonIcons();
+      await loadHomeFavoritePokemon();
 
-      // 운동 데이터 로드 (ExerciseManager가 초기화되어 있다면)
-      if (typeof loadExerciseData === 'function') {
-        await loadExerciseData();
-      }
+
 
       // 스크린타임 더미 데이터 설정 (UI상)
       const screenTimePreview = document.getElementById('screenTimePreview');
       if (screenTimePreview) {
         screenTimePreview.textContent = '📱 2시간 30분 (예시)';
-        screenTimePreview.style.color = '#4F46E5';
+        screenTimePreview.style.color = '#CD5C5C';
       }
 
       // 로그아웃 버튼을 로그인 버튼으로 변경
       const logoutBtn = document.getElementById("logoutBtn");
       if (logoutBtn) {
-        logoutBtn.textContent = "로그인하여 시작하기";
-        logoutBtn.style.backgroundColor = "#667eea";
-        logoutBtn.style.color = "white";
+        updateAuthCardUI('guest');
       }
 
       // 게스트 모드 UI 설정 (저장 버튼들 비활성화)
       setupGuestModeUI();
 
-      showToast('체험 모드로 시작합니다. 데이터 저장은 로그인 후 가능합니다.');
+      showToast('체험 모드로 시작합니다.');
     } catch (error) {
       console.error("Guest login error:", error);
       showToast('체험 모드 시작 중 오류가 발생했습니다.');
@@ -844,6 +1005,10 @@ logoutBtn.addEventListener("click", async () => {
     await window.firebaseSignOut(window.firebaseAuth);
     currentUserId = null;
     window.authState = 'unauthenticated';
+
+    // 탭 상태 및 데이터 초기화 (로그아웃 시)
+    resetTabState();
+
     authMessage.textContent = "로그아웃 되었습니다.";
     // UI 변경은 onAuthStateChanged에서 처리됨
   } catch (e) {
@@ -897,24 +1062,54 @@ async function showPokemonDetail(pokemonStableId, formSuffix, isShiny = false) {
 }
 
 
-// 아이콘 컬렉션 새로고침 버튼
-const refreshIconsBtn = document.getElementById('refreshIconsBtn');
-if (refreshIconsBtn) {
-  refreshIconsBtn.addEventListener('click', async () => {
-    await loadUserPokemonIcons();
+// 도감 검색 기능
+const iconSearchContainer = document.getElementById('iconSearchContainer');
+const iconSearchInput = document.getElementById('iconSearchInput');
+const iconSearchBtn = document.getElementById('iconSearchBtn');
+
+if (iconSearchBtn && iconSearchInput) {
+  iconSearchBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isActive = iconSearchContainer.classList.toggle('active');
+    if (isActive) {
+      iconSearchInput.focus();
+    } else {
+      // 닫을 때 검색어 초기화
+      if (currentFilter.searchQuery) {
+        currentFilter.searchQuery = '';
+        iconSearchInput.value = '';
+        updateUserPokemonIconsUI();
+      }
+    }
+  });
+
+  iconSearchInput.addEventListener('input', (e) => {
+    currentFilter.searchQuery = e.target.value;
+    updateUserPokemonIconsUI(); // 클라이언트 측 필터링만 수행
+  });
+
+  iconSearchInput.addEventListener('click', (e) => {
+    e.stopPropagation();
   });
 }
 
 // 네비게이션 중 중복 호출 방지 플래그
 let isNavigating = false;
 
+// 네비게이션 컨텍스트 (어디서 열렸는지)
+let navigationContext = null; // 'today', 'collection', 'sleep', null
+let todayPokemonList = []; // 오늘 획득한 포켓몬 목록
+let sleepPokemonList = []; // 수면 탭의 포켓몬 목록
+
 // 포켓몬 네비게이션 함수
 async function navigatePokemon(direction) {
   console.log('=== navigatePokemon called ===');
   console.log('userPokemonList length:', userPokemonList?.length);
+  console.log('todayPokemonList length:', todayPokemonList?.length);
+  console.log('navigationContext:', navigationContext);
   console.log('currentDisplayStableId:', currentDisplayStableId);
 
-  if (!userPokemonList || userPokemonList.length === 0 || !currentDisplayStableId) return;
+  if (!currentDisplayStableId) return;
 
   // 중복 호출 방지
   if (isNavigating) {
@@ -922,9 +1117,45 @@ async function navigatePokemon(direction) {
     return;
   }
 
+  // 컨텍스트에 따라 네비게이션 목록 결정
+  let navigationList;
+  if (navigationContext === 'today') {
+    // 오늘 획득한 포켓몬 목록 사용 (display_stable_id 필드 매핑)
+    navigationList = (todayPokemonList || []).map(pokemon => ({
+      ...pokemon,
+      display_stable_id: pokemon.pokemon_stable_id || pokemon.display_stable_id
+    }));
+    console.log('Using today pokemon list for navigation');
+  } else if (navigationContext === 'sleep') {
+    // 수면 탭 포켓몬 목록 사용 (display_stable_id 필드 매핑)
+    navigationList = (sleepPokemonList || []).map(pokemon => ({
+      ...pokemon,
+      display_stable_id: pokemon.stable_id || pokemon.display_stable_id,
+      base_image_name: pokemon.image_name,
+      is_shiny: false  // 수면 탭에서는 항상 일반형으로 표시
+    }));
+    console.log('Using sleep pokemon list for navigation');
+  } else {
+    // 도감 컬렉션 목록 사용 (필터 적용)
+    if (!userPokemonList || userPokemonList.length === 0) {
+      console.log('userPokemonList is empty');
+      return;
+    }
+    navigationList = typeof getFilteredPokemonList === 'function'
+      ? getFilteredPokemonList(userPokemonList)
+      : userPokemonList;
+  }
+
+  console.log('navigationList length:', navigationList.length, 'context:', navigationContext);
+
+  if (navigationList.length === 0) {
+    console.log('No pokemon in filtered list');
+    return;
+  }
+
   // display_stable_id와 is_shiny로 정확한 현재 위치 찾기
   // shiny 아이콘이 없어서 일반 아이콘으로 표시되더라도, is_shiny 상태가 다르면 다른 항목으로 취급
-  const currentIndex = userPokemonList.findIndex(icon =>
+  const currentIndex = navigationList.findIndex(icon =>
     icon.display_stable_id === currentDisplayStableId &&
     Boolean(icon.is_shiny) === currentDisplayIsShiny
   );
@@ -933,16 +1164,16 @@ async function navigatePokemon(direction) {
   if (currentIndex === -1) {
     console.warn('Current pokemon not found in list:', currentDisplayStableId, 'is_shiny:', currentDisplayIsShiny);
     // 리스트 내용 확인
-    console.log('userPokemonList IDs:', userPokemonList.map(p => ({ id: p.display_stable_id, shiny: p.is_shiny })));
+    console.log('navigationList IDs:', navigationList.map(p => ({ id: p.display_stable_id, shiny: p.is_shiny })));
     return;
   }
 
   let nextIndex = currentIndex + direction;
-  if (nextIndex < 0) nextIndex = userPokemonList.length - 1;
-  if (nextIndex >= userPokemonList.length) nextIndex = 0;
+  if (nextIndex < 0) nextIndex = navigationList.length - 1;
+  if (nextIndex >= navigationList.length) nextIndex = 0;
 
-  const nextPokemon = userPokemonList[nextIndex];
-  const currentPokemon = userPokemonList[currentIndex];
+  const nextPokemon = navigationList[nextIndex];
+  const currentPokemon = navigationList[currentIndex];
 
   console.log('currentPokemon:', currentPokemon.display_stable_id, currentPokemon.base_image_name);
   console.log('nextPokemon:', nextPokemon.display_stable_id, nextPokemon.base_image_name);
@@ -990,16 +1221,16 @@ if (nextBtn) {
   });
 }
 
-// 사용자 포켓몬 아이콘 컬렉션 불러오기 함수
-// 사용자 포켓몬 아이콘 컬렉션 불러오기 함수
-async function loadUserPokemonIcons() {
+let lastLoadedIconApiEndpoint = null;
+
+// 사용자 포켓몬 아이콘 컬렉션 불러오기 함수 (데이터 로드 담당)
+async function loadUserPokemonIcons(forceFetch = false) {
   const grid = document.getElementById('iconCollectionGrid');
   if (!grid) return;
 
   const contentSection = grid.parentElement;
   let statusMsg = contentSection.querySelector('.icon-status-message');
 
-  // 상태 메시지 요소가 없으면 생성
   if (!statusMsg) {
     statusMsg = document.createElement('div');
     statusMsg.className = 'icon-status-message';
@@ -1007,155 +1238,162 @@ async function loadUserPokemonIcons() {
   }
 
   try {
-    // 로그인 체크 (인증 상태 기반)
+    // 로그인 체크
     if (!currentUserId && !window.isGuest()) {
+      if (window.authState === 'loading') return;
       statusMsg.textContent = '로그인이 필요합니다.';
       statusMsg.style.display = 'block';
       grid.style.display = 'none';
       return;
     }
 
-    // 세대별 정렬 모드인지 확인
+    // API 엔드포인트 결정
     const isGenerationSort = currentFilter.sort === 'generation';
-
-    let icons = [];
-    // API 호출 (인증 상태에 따라 결정)
     const apiBase = window.isGuest() ? '/api/guest' : '/api/collection';
-    // 정렬 옵션에 따라 API 엔드포인트 결정
-    const apiEndpoint = isGenerationSort
-      ? `${apiBase}/all-pokemon`
-      : `${apiBase}/icons`;
+    const apiEndpoint = isGenerationSort ? `${apiBase}/all-pokemon` : `${apiBase}/icons`;
 
-    const headers = await getAuthHeaders();
-    const response = await fetch(apiEndpoint, { headers });
+    // 데이터 패치 여부 결정 (강제 새로고침이거나, 데이터가 없거나, 엔드포인트가 바뀐 경우)
+    if (forceFetch || !window.isPokedexLoaded || apiEndpoint !== lastLoadedIconApiEndpoint) {
+      console.log('Fetching pokedex icons from:', apiEndpoint);
+      const headers = await getAuthHeaders();
+      const response = await fetch(apiEndpoint, { headers });
 
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+      const result = await response.json();
+      userPokemonList = result.data || [];
+      window.isPokedexLoaded = true;
+      lastLoadedIconApiEndpoint = apiEndpoint;
     }
 
-    const result = await response.json();
-    icons = result.data;
-
-    userPokemonList = icons; // 리스트 저장 (네비게이션용 - 전체 목록)
-
-    if (!icons || icons.length === 0) {
-      statusMsg.textContent = '아직 보유한 포켓몬이 없습니다.';
-      statusMsg.style.display = 'block';
-      grid.style.display = 'none';
-      return;
-    }
-
-    // 표시할 아이콘 목록 (이제 displayIcons는 icons와 동일)
-    let displayIcons = icons;
-
-    // 필터 적용
-    const filteredIcons = typeof getFilteredPokemonList === 'function'
-      ? getFilteredPokemonList(displayIcons)
-      : displayIcons;
-
-    // 필터 결과가 없는 경우
-    if (filteredIcons.length === 0) {
-      statusMsg.innerHTML = `
-        <div class="no-filter-results">
-          <div class="no-filter-results-icon">🔍</div>
-          <div class="no-filter-results-text">필터 조건에 맞는 포켓몬이 없습니다.<br>필터를 변경해보세요.</div>
-        </div>
-      `;
-      statusMsg.style.display = 'block';
-      grid.style.display = 'none';
-      return;
-    }
-
-    // 데이터가 있으면 상태 메시지 숨기고 그리드 표시
-    statusMsg.style.display = 'none';
-    grid.style.display = 'grid';
-
-    // 포켓몬 카드 생성 함수
-    const createPokemonCard = (icon, hideProgressBar = false) => {
-      // 퍼센트 계산
-      const normalPercent = icon.completion_percentage || 0;
-      const shinyPercent = icon.total_count > 0 ? (icon.shiny_owned_count / icon.total_count * 100) : 0;
-
-      // 100% 완료 시 아이콘 추가 (세대별 정렬에서는 숨김)
-      let completeIcon = '';
-      if (!hideProgressBar) {
-        if (normalPercent >= 100 && shinyPercent >= 100) {
-          // 둘 다 100%: MASTERBALL 표시
-          completeIcon = `<div class="progress-complete-icon visible">
-             <img src="${IMAGE_URLS.MASTERBALL}" alt="완료">
-           </div>`;
-        } else if (normalPercent >= 100) {
-          // Green만 100%: POKEBALL 표시
-          completeIcon = `<div class="progress-complete-icon visible">
-             <img src="${IMAGE_URLS.POKEBALL}" alt="완료">
-           </div>`;
-        } else {
-          // 둘 다 100% 아님: 빈 상태
-          completeIcon = `<div class="progress-complete-icon">
-             <img src="" alt="">
-           </div>`;
-        }
-      }
-
-      // 즐겨찾기 아이콘 (showFavoriteIcon 설정에 따라 표시)
-      let favoriteIconHtml = '';
-      if (icon.is_favorite && currentFilter.showFavoriteIcon !== false) {
-        favoriteIconHtml = `<div class="favorite-icon-overlay">
-          <img src="${ASSETS_BASE_URL}/custom/img/ui/favorite.png" alt="Favorite">
-        </div>`;
-      }
-
-      // Progress bar HTML (세대별 정렬에서는 숨김)
-      const progressBarHtml = hideProgressBar ? '' : `
-          <div class="collection-progress-bg">
-            <div class="collection-progress-fill" style="--collection-progress-width: ${normalPercent}%;"></div>
-          </div>
-          <div class="shiny-progress-bg">
-            <div class="shiny-progress-fill" style="--shiny-progress-width: ${shinyPercent}%;"></div>
-          </div>`;
-
-      return `
-        <div class="pokemon-card pokemon-icon${hideProgressBar ? ' no-progress' : ''}" role="button" tabindex="0" 
-             aria-label="${icon.base_image_name} 아이콘" 
-             onclick="showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})" 
-             onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny})">
-          ${completeIcon}
-          ${favoriteIconHtml}
-          <div class="pokemon-sprite" data-src="${icon.icon_url}"></div>
-          ${progressBarHtml}
-        </div>
-      `;
-    };
-
-    // 세대별 정렬 모드: 세대 구분선 포함 렌더링
-    let gridContent = '';
-    if (isGenerationSort) {
-      let currentGeneration = null;
-      filteredIcons.forEach(icon => {
-        const generation = icon.generation || 1;
-        if (generation !== currentGeneration) {
-          currentGeneration = generation;
-          gridContent += `<div class="generation-divider"><span>${generation}</span></div>`;
-        }
-        gridContent += createPokemonCard(icon, true); // 세대별 정렬에서는 progress bar 숨김
-      });
-    } else {
-      gridContent = filteredIcons.map(icon => createPokemonCard(icon, false)).join('');
-    }
-
-    grid.innerHTML = gridContent;
-
-    // 포켓몬 스프라이트 설정
-    grid.querySelectorAll('.pokemon-sprite').forEach(sprite => {
-      setupPokemonSprite(sprite);
-    });
+    // UI 업데이트 호출
+    updateUserPokemonIconsUI();
 
   } catch (err) {
-    console.error("Unexpected error in loadUserPokemonIcons:", err);
+    console.error("Error in loadUserPokemonIcons:", err);
     statusMsg.textContent = '오류가 발생했습니다.';
     statusMsg.style.display = 'block';
     grid.style.display = 'none';
   }
+}
+
+// 사용자 포켓몬 아이콘 UI 업데이트 함수 (렌더링 담당)
+function updateUserPokemonIconsUI() {
+  const grid = document.getElementById('iconCollectionGrid');
+  if (!grid) return;
+
+  const contentSection = grid.parentElement;
+  let statusMsg = contentSection.querySelector('.icon-status-message');
+  if (!statusMsg) {
+    statusMsg = document.createElement('div');
+    statusMsg.className = 'icon-status-message';
+    contentSection.insertBefore(statusMsg, grid);
+  }
+
+  const icons = userPokemonList || [];
+  const isGenerationSort = currentFilter.sort === 'generation';
+
+  if (!icons || icons.length === 0) {
+    statusMsg.textContent = '아직 보유한 포켓몬이 없습니다.';
+    statusMsg.style.display = 'block';
+    grid.style.display = 'none';
+    return;
+  }
+
+  // 필터 적용 (검색 필터 포함)
+  const filteredIcons = typeof getFilteredPokemonList === 'function'
+    ? getFilteredPokemonList(icons)
+    : icons;
+
+  // 필터 결과가 없는 경우
+  if (filteredIcons.length === 0) {
+    statusMsg.innerHTML = `
+      <div class="no-filter-results">
+        <div class="no-filter-results-icon">🔍</div>
+        <div class="no-filter-results-text">필터 조건에 맞는 포켓몬이 없습니다.<br>필터를 변경해보세요.</div>
+      </div>
+    `;
+    statusMsg.style.display = 'block';
+    grid.style.display = 'none';
+    return;
+  }
+
+  // 데이터가 있으면 상태 메시지 숨기고 그리드 표시
+  statusMsg.style.display = 'none';
+  grid.style.display = 'grid';
+
+  // 포켓몬 카드 생성 함수
+  const createPokemonCard = (icon, hideProgressBar = false) => {
+    const normalPercent = icon.completion_percentage || 0;
+    const shinyPercent = icon.total_count > 0 ? (icon.shiny_owned_count / icon.total_count * 100) : 0;
+
+    // 둘 다 100%이고 favorite이 아닐 때만 몬스터볼 아이콘 표시
+    let completeIcon = '';
+    if (!hideProgressBar && normalPercent >= 100 && shinyPercent >= 100 && !icon.is_favorite) {
+      completeIcon = `<div class="progress-complete-icon visible"><img src="${IMAGE_URLS.POKEBALL}" alt="완료"></div>`;
+    }
+
+    let favoriteIconHtml = '';
+    if (icon.is_favorite) {
+      favoriteIconHtml = `<div class="favorite-icon-overlay"><img src="${ASSETS_BASE_URL}/custom/img/ui/favorite.png" alt="Favorite"></div>`;
+    }
+
+    // 프로그레스 바 HTML 생성 (100% 완료된 것은 숨김)
+    let progressBarHtml = '';
+    if (!hideProgressBar) {
+      const showNormalBar = normalPercent < 100;
+      const showShinyBar = shinyPercent < 100;
+
+      if (showNormalBar) {
+        progressBarHtml += `
+      <div class="collection-progress-bg">
+        <div class="collection-progress-fill" style="--collection-progress-width: ${normalPercent}%;"></div>
+      </div>`;
+      }
+
+      if (showShinyBar) {
+        progressBarHtml += `
+      <div class="shiny-progress-bg">
+        <div class="shiny-progress-fill" style="--shiny-progress-width: ${shinyPercent}%;"></div>
+      </div>`;
+      }
+    }
+
+    return `
+      <div class="pokemon-card pokemon-icon${hideProgressBar ? ' no-progress' : ''}" role="button" tabindex="0"
+           aria-label="${icon.name || icon.base_image_name} 아이콘"
+           onclick="showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny}, 'collection')"
+           onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${icon.base_image_name}', '${icon.display_stable_id}', ${icon.is_shiny}, 'collection')">
+        ${completeIcon}
+        ${favoriteIconHtml}
+        <div class="pokemon-sprite" data-src="${icon.icon_url}"></div>
+        ${progressBarHtml}
+      </div>
+    `;
+  };
+
+  // 렌더링
+  let gridContent = '';
+  if (isGenerationSort) {
+    let currentGeneration = null;
+    filteredIcons.forEach(icon => {
+      const generation = icon.generation || 1;
+      if (generation !== currentGeneration) {
+        currentGeneration = generation;
+        gridContent += `<div class="generation-divider"><span>${generation}</span></div>`;
+      }
+      gridContent += createPokemonCard(icon, true);
+    });
+  } else {
+    gridContent = filteredIcons.map(icon => createPokemonCard(icon, false)).join('');
+  }
+
+  grid.innerHTML = gridContent;
+
+  // 스프라이트 지연 로드 설정
+  grid.querySelectorAll('.pokemon-sprite').forEach(sprite => {
+    setupPokemonSprite(sprite);
+  });
 }
 
 // 진화 트리 스켈레톤 렌더링
@@ -1197,10 +1435,33 @@ function hideLoadingState() {
   }
 }
 
+// 글로벌 로딩 오버레이 표시
+function showGlobalLoading(message = '잠시만 기다려주세요...') {
+  const overlay = document.getElementById('global-loading-overlay');
+  const msgEl = overlay.querySelector('.loading-message');
+  if (overlay && msgEl) {
+    msgEl.textContent = message;
+    overlay.classList.add('visible');
+  }
+}
+
+// 글로벌 로딩 오버레이 숨김
+function hideGlobalLoading() {
+  const overlay = document.getElementById('global-loading-overlay');
+  if (overlay) {
+    overlay.classList.remove('visible');
+  }
+}
+
 // 아이콘 그룹 상세 보기 - 진화도 다이어그램 표시
 // 아이콘 그룹 상세 보기 - 진화도 다이어그램 표시
-async function showIconGroupDetail(baseImageName, specificId = null, isShiny = false) {
-  console.log("Icon group clicked:", baseImageName, "specificId:", specificId);
+async function showIconGroupDetail(baseImageName, specificId = null, isShiny = false, context = 'collection') {
+  console.log("Icon group clicked:", baseImageName, "specificId:", specificId, "context:", context);
+
+  // 네비게이션 컨텍스트 설정
+  if (!isNavigating) {
+    navigationContext = context;
+  }
 
   // 현재 포켓몬 ID와 shiny 상태 설정 (네비게이션용)
   // 네비게이션 중일 때는 이미 navigatePokemon에서 설정했으므로 건너뜀
@@ -1225,7 +1486,7 @@ async function showIconGroupDetail(baseImageName, specificId = null, isShiny = f
     // 모달 열기
     const evolutionModal = document.getElementById('evolution-modal');
     if (evolutionModal) {
-      evolutionModal.style.display = 'block';
+      evolutionModal.style.display = 'flex';
       document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
       onModalOpen();
       // 모달 열릴 때 플리퍼 정면 초기화
@@ -1350,14 +1611,52 @@ function getTypeClass(typeName) {
   return typeMap[typeName] || 'normal';
 }
 
+// 타입 영문명을 한글로 변환하는 헬퍼 함수
+function getKoreanType(typeEng) {
+  const map = {
+    'grass': '풀',
+    'poison': '독',
+    'fire': '불꽃',
+    'water': '물',
+    'bug': '벌레',
+    'normal': '노말',
+    'flying': '비행',
+    'electric': '전기',
+    'ground': '땅',
+    'fairy': '페어리',
+    'fighting': '격투',
+    'psychic': '에스퍼',
+    'rock': '바위',
+    'steel': '강철',
+    'ice': '얼음',
+    'ghost': '고스트',
+    'dragon': '드래곤',
+    'dark': '악'
+  };
+  return map[typeEng] || typeEng;
+}
+
 // 진화도 다이어그램 렌더링
 function renderEvolutionDiagram(data) {
   const { evolution_tree, completion } = data;
 
   // 진행 바
   const progressBar = document.getElementById('evolution-progress-bar');
+  const progressPercentage = document.getElementById('evolution-progress-percentage');
   progressBar.style.width = `${completion.completion_percentage}%`;
   progressBar.className = `progress-bar ${completion.is_complete ? 'complete' : ''}`;
+  if (progressPercentage) {
+    progressPercentage.textContent = `${Math.round(completion.completion_percentage)}%`;
+  }
+
+  // 이로치 진행 바
+  const shinyBar = document.getElementById('evolution-shiny-bar');
+  const shinyPercentage = document.getElementById('evolution-shiny-percentage');
+  if (shinyBar && shinyPercentage) {
+    const shinyPercent = completion.total_count > 0 ? (completion.shiny_owned_count / completion.total_count * 100) : 0;
+    shinyBar.style.width = `${shinyPercent}%`;
+    shinyPercentage.textContent = `${Math.round(shinyPercent)}%`;
+  }
 
   // 진화 다이어그램 렌더링
   const diagramDiv = document.getElementById('evolution-diagram');
@@ -1416,6 +1715,35 @@ function renderEvolutionDiagram(data) {
       // 폼 위치 추적
       const formKey = `${imageName}${form.form_suffix || ''}`;
       formIndexMap.set(formKey, { levelIndex, formIndex });
+
+      // 이로치 아이콘 (보유 시)
+      if (form.is_shiny_owned) {
+        const shinyIcon = document.createElement('div');
+        shinyIcon.className = 'shiny-icon';
+        shinyIcon.textContent = '✨';
+
+        shinyIcon.style.position = 'absolute';
+
+        shinyIcon.style.width = '1.25rem';
+        shinyIcon.style.height = '1.25rem';
+        shinyIcon.style.display = 'flex';
+        shinyIcon.style.alignItems = 'center';
+        shinyIcon.style.justifyContent = 'center';
+        shinyIcon.style.top = '-0.125rem'; // Slightly adjusted position
+        shinyIcon.style.right = '-0.125rem';
+        shinyIcon.style.zIndex = '10';
+        shinyIcon.style.color = '#F59E0B'; // Gold color
+        shinyIcon.style.fontSize = '0.875rem'; // 카드 크기에 맞춰 사이즈 조정
+        shinyIcon.style.cursor = 'pointer';
+        shinyIcon.title = '이로치 보기';
+
+        shinyIcon.onclick = (e) => {
+          e.stopPropagation();
+          showPokemonDetail(form.stable_id, '', true);
+        };
+
+        pokemonDiv.appendChild(shinyIcon);
+      }
 
       // 클릭 이벤트 및 상태 처리
       if (form.is_owned) {
@@ -1582,14 +1910,247 @@ function renderEvolutionDiagram(data) {
 
 }
 
+// 홈 화면용 포켓몬 표시 함수
+async function displayHomePokemon(pokemonStableId, isShiny = false) {
+  console.log('displayHomePokemon called:', pokemonStableId, isShiny);
+  const container = document.getElementById('home-pokemon-container');
+  const flipper = document.getElementById('home-pokemon-flipper');
+
+  if (!container || !flipper) {
+    console.error('Home pokemon container or flipper not found');
+    return;
+  }
+
+  // 1. 즉시 숨김 (잔상 방지)
+  flipper.style.opacity = '0';
+
+  // 플리퍼 정면 초기화
+  flipper.style.transform = 'translate(-50%, -50%) rotateY(0deg)';
+
+  const pokemonData = await fetchPokemonData(pokemonStableId, isShiny);
+
+  if (!pokemonData) {
+    console.warn('No pokemon data found for home display');
+    container.style.display = 'none';
+    return;
+  }
+
+  console.log('Home pokemon data loaded:', pokemonData.pokemon.name);
+
+  // 컨테이너 표시
+  container.style.display = 'flex';
+
+
+  // 배경 이미지 설정
+  const background = document.getElementById('home-background');
+  if (background && pokemonData.background_image) {
+    const validBackgroundUrl = await loadBackgroundWithFallback(
+      pokemonData.background_image,
+      pokemonData.fallback_backgrounds
+    );
+    if (validBackgroundUrl) {
+      background.style.setProperty('--background-image', `url("${validBackgroundUrl}")`);
+    }
+  }
+
+  // 스프라이트 설정
+  const frontSpeed = pokemonData.pokemon.front_animation_speed !== undefined ? pokemonData.pokemon.front_animation_speed : 2;
+  const backSpeed = pokemonData.pokemon.back_animation_speed !== undefined ? pokemonData.pokemon.back_animation_speed : 2;
+
+  console.log('Setting up home sprites...');
+  await Promise.all([
+    setupSprite('home-sprite-front', pokemonData.front_image, frontSpeed),
+    setupSprite('home-sprite-back', pokemonData.back_image, backSpeed)
+  ]);
+  console.log('Home sprites setup complete');
+
+  // 이미지 로드 완료 후 표시
+  requestAnimationFrame(() => {
+    flipper.style.opacity = '1';
+  });
+
+}
+
+// 홈 화면 즐겨찾기 목록 및 인덱스
+let homeFavorites = [];
+let currentHomeIndex = 0;
+
+// 홈 화면 포켓몬 네비게이션
+async function navigateHomePokemon(direction) {
+  if (!homeFavorites || homeFavorites.length <= 1) return;
+
+  currentHomeIndex += direction;
+
+  // 순환 처리
+  if (currentHomeIndex < 0) currentHomeIndex = homeFavorites.length - 1;
+  if (currentHomeIndex >= homeFavorites.length) currentHomeIndex = 0;
+
+  const nextPokemon = homeFavorites[currentHomeIndex];
+  await displayHomePokemon(nextPokemon.pokemon_stable_id, nextPokemon.is_shiny);
+}
+
+// 홈 화면에 최근 즐겨찾기 포켓몬 로드
+async function loadHomeFavoritePokemon() {
+  console.log('loadHomeFavoritePokemon called');
+  // 게스트 모드일 때도 로드해야 함
+  if (!currentUserId && !window.isGuest()) {
+    console.log('No current user and not guest, skipping home favorite load');
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    // API 엔드포인트 변경 (게스트 모드 지원)
+    const apiBase = window.isGuest() ? '/api/guest' : '/api/collection';
+    const response = await fetch(`${apiBase}/favorites`, { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      homeFavorites = result.data || [];
+      console.log('Favorites loaded for home:', homeFavorites.length);
+
+      const container = document.getElementById('home-pokemon-container');
+      const prevBtn = document.getElementById('home-prev-btn');
+      const nextBtn = document.getElementById('home-next-btn');
+
+      if (homeFavorites.length > 0) {
+        // 인덱스 초기화 (항상 가장 최근 것부터, 혹은 유지하고 싶다면 로직 추가 가능)
+        currentHomeIndex = 0;
+        const topFav = homeFavorites[0];
+        console.log('Top favorite:', topFav);
+
+        await displayHomePokemon(topFav.pokemon_stable_id, topFav.is_shiny);
+
+        // 네비게이션 버튼 표시 여부 (2개 이상일 때만 표시)
+        if (homeFavorites.length > 1) {
+          if (prevBtn) {
+            prevBtn.style.display = 'flex';
+            // 리스너 중복 방지를 위해 새로 복제
+            const newPrevBtn = prevBtn.cloneNode(true);
+            prevBtn.parentNode.replaceChild(newPrevBtn, prevBtn);
+            newPrevBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              navigateHomePokemon(-1);
+            });
+          }
+          if (nextBtn) {
+            nextBtn.style.display = 'flex';
+            const newNextBtn = nextBtn.cloneNode(true);
+            nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
+            newNextBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              navigateHomePokemon(1);
+            });
+          }
+        } else {
+          if (prevBtn) prevBtn.style.display = 'none';
+          if (nextBtn) nextBtn.style.display = 'none';
+        }
+
+      } else {
+        // 즐겨찾기가 없으면 숨김
+        console.log('No favorites found, hiding home container');
+        if (container) container.style.display = 'none';
+      }
+    } else {
+      console.error('Failed to fetch favorites:', response.status);
+    }
+  } catch (err) {
+    console.error('Failed to load home favorite pokemon:', err);
+  }
+}
+
+// 오늘 획득한 포켓몬 로드 (새벽 4시 ~ 다음 새벽 4시)
+async function loadTodayObtainedPokemon() {
+  console.log('loadTodayObtainedPokemon called');
+
+  if (!currentUserId && !window.isGuest()) {
+    console.log('No current user and not guest, skipping today obtained load');
+    return;
+  }
+
+  const section = document.getElementById('todayPokemonSection');
+  const scrollContainer = document.getElementById('todayPokemonScroll');
+  const countBadge = document.getElementById('todayPokemonCount');
+
+  if (!section || !scrollContainer) {
+    console.error('Today pokemon section elements not found');
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    const apiBase = window.isGuest() ? '/api/guest' : '/api/collection';
+    const response = await fetch(`${apiBase}/today`, { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      const todayPokemon = result.data || [];
+      console.log('Today obtained pokemon loaded:', todayPokemon.length);
+
+      // 전역 변수에 저장 (네비게이션용)
+      todayPokemonList = todayPokemon;
+
+      if (todayPokemon.length > 0) {
+        section.style.display = 'block';
+        countBadge.textContent = todayPokemon.length;
+
+        // 포켓몬 아이콘 카드 렌더링
+        scrollContainer.innerHTML = todayPokemon.map(pokemon => `
+          <div class="pokemon-card pokemon-icon${pokemon.is_shiny ? ' shiny' : ''}" 
+               role="button" 
+               tabindex="0"
+               aria-label="${pokemon.name} 아이콘"
+               onclick="showIconGroupDetail('${pokemon.base_image_name}', '${pokemon.pokemon_stable_id}', ${pokemon.is_shiny}, 'today')"
+               onkeypress="if(event.key === 'Enter' || event.key === ' ') showIconGroupDetail('${pokemon.base_image_name}', '${pokemon.pokemon_stable_id}', ${pokemon.is_shiny}, 'today')">
+            <div class="pokemon-sprite" data-src="${pokemon.icon_url}"></div>
+          </div>
+        `).join('');
+
+        // 포켓몬 스프라이트 설정
+        scrollContainer.querySelectorAll('.pokemon-sprite').forEach(sprite => {
+          setupPokemonSprite(sprite);
+        });
+
+      } else {
+        // 오늘 획득한 포켓몬이 없으면 섹션 숨김
+        section.style.display = 'none';
+      }
+    } else {
+      console.error('Failed to fetch today obtained pokemon:', response.status);
+      section.style.display = 'none';
+    }
+  } catch (err) {
+    console.error('Failed to load today obtained pokemon:', err);
+    section.style.display = 'none';
+  }
+}
+
+// 디버깅용 전역 노출
+window.loadTodayObtainedPokemon = loadTodayObtainedPokemon;
+
+// 디버깅용 전역 노출
+window.loadHomeFavoritePokemon = loadHomeFavoritePokemon;
+
+// 페이지 로드 시에도 시도 (이미 로그인 되어 있는 경우 대비)
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.isAuthenticated && window.isAuthenticated()) {
+    loadHomeFavoritePokemon();
+    loadTodayObtainedPokemon();
+  }
+});
+
 // 초기화: 페이지 로드 시 세션 확인 및 auth 상태 변경 처리
 function setLoggedInUI(user) {
   authMessage.textContent = user?.email ? `${user.email}로 로그인됨` : "로그인 상태";
   authDiv.style.display = "none";
   contentDiv.style.display = "flex";
 
-  // 로그인 상태일 때 자시안 표시
-  showSpecificPokemon("ZACIAN", "", "자시안");
+  // 홈 화면에 즐겨찾기 포켓몬 로드
+  loadHomeFavoritePokemon();
+
+  // 오늘 획득한 포켓몬 로드
+  loadTodayObtainedPokemon();
 
   // 주간 날짜 범위 계산
   updateWeekRanges();
@@ -1631,6 +2192,11 @@ if (evolutionClose && evolutionModal) {
   evolutionClose.addEventListener("click", () => {
     evolutionModal.style.display = "none";
     document.body.style.overflow = ''; // 배경 스크롤 복원
+
+    // 도감 설명 등 콘텐츠 초기화 (잔상 방지)
+    const descEl = document.getElementById('display-description');
+    if (descEl) descEl.textContent = '';
+
     onModalClose();
   });
 }
@@ -1688,109 +2254,109 @@ if (favoriteBtn) {
 
 // PNG 이미지 로드하여 프레임 수 계산 및 애니메이션 설정
 function setupSprite(spriteId, imageUrl, animationSpeed = 2) {
-  const sprite = document.getElementById(spriteId);
+  return new Promise((resolve) => {
+    const sprite = document.getElementById(spriteId);
 
-  if (!sprite) return;
+    if (!sprite) {
+      resolve();
+      return;
+    }
 
-  // imageUrl이 null이거나 비어있으면 스프라이트를 숨기고 종료
-  if (!imageUrl) {
-    sprite.style.display = 'none';
-    console.log(`✗ ${spriteId}: 이미지 URL이 없습니다.`);
-    return;
-  }
+    // imageUrl이 null이거나 비어있으면 스프라이트를 숨기고 종료
+    if (!imageUrl) {
+      sprite.style.display = 'none';
+      console.log(`✗ ${spriteId}: 이미지 URL이 없습니다.`);
+      resolve();
+      return;
+    }
 
-  // 유효한 URL인 경우 스프라이트 표시
-  sprite.style.display = '';
+    // 유효한 URL인 경우 스프라이트 표시
+    sprite.style.display = '';
 
-  const img = new Image();
-  img.onload = () => {
-    const height = img.naturalHeight;
-    const width = img.naturalWidth;
+    const img = new Image();
+    img.onload = () => {
+      const height = img.naturalHeight;
+      const width = img.naturalWidth;
 
-    // 프레임 수 계산: 가로 / 세로
-    const frames = Math.max(1, Math.round(width / height));  // 최소 1프레임 보장
+      // 프레임 수 계산: 가로 / 세로
+      const frames = Math.max(1, Math.round(width / height));  // 최소 1프레임 보장
 
-    // pokemon-flipper의 크기를 이미지 한 프레임 크기로 설정
-    // const flipper = document.getElementById('pokemonFlipper');
-    // if (flipper) {
-    //   flipper.style.width = height + 'px';
-    //   flipper.style.height = height + 'px';
-    // }
+      // 1프레임 이미지는 애니메이션 없이 정적 표시
+      if (frames === 1) {
+        sprite.style.width = height + 'px';
+        sprite.style.height = height + 'px';
+        sprite.style.backgroundSize = `auto ${height}px`;
+        sprite.style.backgroundImage = `url("${imageUrl}")`;
+        sprite.style.backgroundPosition = '0 0';
+        sprite.style.opacity = '1'; // 이미지 로드 완료 후 표시
 
-    // 1프레임 이미지는 애니메이션 없이 정적 표시
-    if (frames === 1) {
+        console.log(`✓ ${spriteId}: 정적 이미지 (${width}×${height}px)`);
+        resolve();
+        return;
+      }
+
+      // Pokemon Essentials / RPG Maker 방식의 속도 계산 로직 적용
+      const ANIMATION_FRAME_DELAY = 90;
+      const SPRITE_SPEED = animationSpeed;
+
+      let timePerFrame = ((SPRITE_SPEED / 2) * ANIMATION_FRAME_DELAY) / 1000;
+
+      // 프레임 수에 비례한 duration 계산 (프레임당 일정 시간)
+      const duration = frames * timePerFrame;
+
+      // 스프라이트 데이터 저장
+      spriteData[spriteId] = {
+        frames: frames,
+        width: width,
+        height: height,
+        duration: duration,
+        timePerFrame: timePerFrame,
+        frameSize: height
+      };
+
+      // CSS 동적 생성
+      const styleId = `sprite-style-${spriteId}`;
+      let styleEl = document.getElementById(styleId);
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        document.head.appendChild(styleEl);
+      }
+
+      const animName = `sprite-anim-dynamic-${spriteId}`;
+      styleEl.textContent = `
+          @keyframes ${animName} {
+            from { background-position: 0 0; }
+            to { background-position: -${width}px 0; }
+          }
+        `;
+
+      // 스프라이트 크기를 이미지 세로 크기에 맞춰 설정
       sprite.style.width = height + 'px';
       sprite.style.height = height + 'px';
       sprite.style.backgroundSize = `auto ${height}px`;
       sprite.style.backgroundImage = `url("${imageUrl}")`;
-      sprite.style.backgroundPosition = '0 0';
-      sprite.style.opacity = '1'; // 이미지 로드 완료 후 표시
+      sprite.style.animation = `${animName} ${duration}s steps(${frames}) infinite`;
 
-      console.log(`✓ ${spriteId}: 정적 이미지 (${width}×${height}px)`);
-      return;
-    }
+      // Add transition class and trigger reflow
+      sprite.classList.add('pokemon-sprite-image');
+      requestAnimationFrame(() => {
+        sprite.classList.add('loaded');
+        sprite.style.opacity = '1'; // 이미지 로드 완료 후 표시
+      });
 
-    // Pokemon Essentials / RPG Maker 방식의 속도 계산 로직 적용
-    // 공식: ((speed / 2) * delay) / 1000
-    // speed: 애니메이션 속도 (Normal = 2, Fast = 1)
-    // delay: 프레임 딜레이 (기본값 90, 빠르게 하려면 60, 30 등으로 감소)
-    const ANIMATION_FRAME_DELAY = 90; // 60 -> 0.06s/frame (약 16fps)
-    const SPRITE_SPEED = animationSpeed; // 전달받은 속도 사용 (기본값 2)
-
-    let timePerFrame = ((SPRITE_SPEED / 2) * ANIMATION_FRAME_DELAY) / 1000;
-
-    // 프레임 수에 비례한 duration 계산 (프레임당 일정 시간)
-    const duration = frames * timePerFrame;
-
-    // 스프라이트 데이터 저장
-    spriteData[spriteId] = {
-      frames: frames,
-      width: width,
-      height: height,
-      duration: duration,
-      timePerFrame: timePerFrame,
-      frameSize: height
+      console.log(`✓ ${spriteId}: ${frames}프레임 애니메이션 설정 완료`);
+      resolve();
     };
 
-    // CSS 동적 생성
-    const styleId = `sprite-style-${spriteId}`;
-    let styleEl = document.getElementById(styleId);
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = styleId;
-      document.head.appendChild(styleEl);
-    }
+    img.onerror = () => {
+      console.error(`Error loading image for ${spriteId}: ${imageUrl}`);
+      // 에러 발생 시에도 resolve하여 진행이 멈추지 않게 함
+      resolve();
+    };
 
-    const animName = `sprite-anim-dynamic-${spriteId}`;
-    styleEl.textContent = `
-        @keyframes ${animName} {
-          from { background-position: 0 0; }
-          to { background-position: -${width}px 0; }
-        }
-      `;
-
-    // 스프라이트 크기를 이미지 세로 크기에 맞춰 설정 (배틀필드와 동일)
-    sprite.style.width = height + 'px';
-    sprite.style.height = height + 'px';
-    sprite.style.backgroundSize = `auto ${height}px`;
-    sprite.style.backgroundImage = `url("${imageUrl}")`;
-    sprite.style.animation = `${animName} ${duration}s steps(${frames}) infinite`;
-
-    // Add transition class and trigger reflow
-    sprite.classList.add('pokemon-sprite-image');
-    requestAnimationFrame(() => {
-      sprite.classList.add('loaded');
-      sprite.style.opacity = '1'; // 이미지 로드 완료 후 표시
-    });
-
-    console.log(`✓ ${spriteId}: ${frames} 프레임, ${width}×${height}px, ${duration.toFixed(1)}초 (프레임당 ${timePerFrame}초)`);
-  };
-
-  img.onerror = () => {
-    console.error(`이미지 로드 실패: ${imageUrl}`);
-  };
-
-  img.src = imageUrl;
+    img.src = imageUrl;
+  });
 }
 
 // 포켓몬 스프라이트 설정 함수
@@ -2021,19 +2587,11 @@ function initTouchEvents() {
     const touch = Array.from(e.touches).find(t => t.identifier === touchIdentifier);
     if (!touch) return;
 
-    // 쓰로틀링: 16ms(60fps) 간격으로만 처리
-    const now = Date.now();
-    if (now - lastTouchTime < 16) return;
-    lastTouchTime = now;
-
     const deltaX = touch.clientX - startX;
-    const rotationChange = deltaX * 0.5;
+    const rotationChange = deltaX * 1.5; // 마우스 이벤트와 동일한 민감도
 
-    // requestAnimationFrame으로 부드러운 렌더링
-    requestAnimationFrame(() => {
-      currentRotation += rotationChange;
-      flipper.style.transform = `translate(-50%, -50%) rotateY(${currentRotation}deg)`;
-    });
+    currentRotation += rotationChange;
+    flipper.style.transform = `translate(-50%, -50%) rotateY(${currentRotation}deg)`;
 
     startX = touch.clientX;
 
@@ -2093,7 +2651,20 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // 내 포켓몬 아이콘 표시 (기존 테스트 아이콘 로직은 loadUserPokemonIcons 함수로 이동됨)
-  loadUserPokemonIcons();
+  // loadUserPokemonIcons(); // Lazy load via tab click
+
+  // Pokedex 탭 클릭 시 아이콘 로드 (Lazy Loading) - initTabNavigation에서 처리됨
+  // 중복 리스너 제거됨
+
+
+  // 새로고침 버튼 로직 (강제 리로드)
+  const refreshIconsBtn = document.getElementById('refreshIconsBtn');
+  if (refreshIconsBtn) {
+    refreshIconsBtn.addEventListener('click', () => {
+      window.isPokedexLoaded = false; // 플래그 초기화
+      loadUserPokemonIcons();
+    });
+  }
 });
 
 // ==========================================
@@ -2138,6 +2709,10 @@ window.addEventListener('click', (e) => {
   if (e.target === evolutionModal) {
     evolutionModal.style.display = 'none';
     document.body.style.overflow = ''; // 배경 스크롤 복원
+
+    const descEl = document.getElementById('display-description');
+    if (descEl) descEl.textContent = '';
+
     onModalClose();
   }
   if (e.target === detailModal) {
@@ -2145,11 +2720,68 @@ window.addEventListener('click', (e) => {
   }
 });
 
+// Infinite Scroll State
+let eggSearchPage = 1;
+let eggSearchLoading = false;
+let eggSearchHasMore = true;
+let eggSearchObserver = null;
+
 async function openEggModal() {
-  eggModal.style.display = 'block';
+  eggModal.style.display = 'flex';
   document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
   onModalOpen();
   await loadUserEggs();
+
+  // Reset infinite scroll state
+  eggSearchPage = 1;
+  eggSearchHasMore = true;
+  eggSearchLoading = false;
+
+  // Clear previous results
+  const resultsContainer = document.getElementById('egg-search-results');
+  if (resultsContainer) resultsContainer.innerHTML = '';
+
+  await searchEggs(); // 열 때 초기 리스트 로드
+}
+
+// 전역 함수로 노출 (HTML onclick에서 사용)
+window.openEggModal = openEggModal;
+
+// 부화기 로딩 상태 렌더링 (스켈레톤 UI)
+function renderLoadingIncubators() {
+  const containers = [
+    document.getElementById('incubator-slots'),
+    document.getElementById('incubator-slots-modal')
+  ];
+
+  containers.forEach(container => {
+    if (!container) return;
+    container.innerHTML = '';
+
+    for (let i = 0; i < 3; i++) {
+      const slotDiv = document.createElement('div');
+      slotDiv.className = 'incubator-slot empty'; // 레이아웃 유지를 위해 클래스 사용
+
+      // 알 이미지 스켈레톤
+      const imgSkeleton = document.createElement('div');
+      imgSkeleton.className = 'skeleton';
+      imgSkeleton.style.width = '60px';
+      imgSkeleton.style.height = '60px';
+      imgSkeleton.style.borderRadius = '50%';
+      imgSkeleton.style.marginBottom = '10px';
+
+      // 텍스트 스켈레톤
+      const textSkeleton = document.createElement('div');
+      textSkeleton.className = 'skeleton';
+      textSkeleton.style.width = '80px';
+      textSkeleton.style.height = '14px';
+      textSkeleton.style.borderRadius = '4px';
+
+      slotDiv.appendChild(imgSkeleton);
+      slotDiv.appendChild(textSkeleton);
+      container.appendChild(slotDiv);
+    }
+  });
 }
 
 // 사용자 알 목록 및 부적 개수 로드
@@ -2160,6 +2792,8 @@ async function loadUserEggs() {
       renderIncubators([], 0);
       return;
     }
+
+    renderLoadingIncubators(); // 로딩 UI 표시
 
     // 실제 API 호출
     try {
@@ -2310,7 +2944,7 @@ if (eggSearchInput) {
   });
 }
 
-async function searchEggs() {
+async function searchEggs(isAppend = false) {
   const searchInput = document.getElementById('egg-search-input');
   const resultsContainer = document.getElementById('egg-search-results');
 
@@ -2320,15 +2954,24 @@ async function searchEggs() {
   }
 
   const query = searchInput.value.trim();
-  if (!query) return;
 
-  resultsContainer.innerHTML = '<div style="padding:10px; text-align:center;">🥚 알을 찾는 중...</div>';
+  // Prevent duplicate loads
+  if (eggSearchLoading) return;
+  if (isAppend && !eggSearchHasMore) return;
+
+  eggSearchLoading = true;
+
+  // If new search (not append), clear container and show loading
+  if (!isAppend) {
+    resultsContainer.innerHTML = `<div style="padding:10px; text-align:center;">${query ? '🥚 알을 찾는 중...' : '🥚 목록을 불러오는 중...'}</div>`;
+    eggSearchPage = 1; // Reset page on new search
+    eggSearchHasMore = true;
+  }
 
   try {
-    // 실제 API 호출
     const headers = await getAuthHeaders();
-    // 보안: userId는 백엔드에서 인증 토큰으로부터 추출 (클라이언트에서 전달하지 않음)
-    const response = await fetch(`/api/eggs/search?query=${encodeURIComponent(query)}`, { headers });
+    // Pass page and limit
+    const response = await fetch(`/api/eggs/search?query=${encodeURIComponent(query)}&page=${eggSearchPage}&limit=20`, { headers });
 
     if (!response.ok) {
       throw new Error(`API Error: ${response.status}`);
@@ -2337,39 +2980,74 @@ async function searchEggs() {
     const result = await response.json();
 
     if (result.success) {
-      renderEggSearchResults(result.data, resultsContainer);
+      const newItems = result.data;
+
+      // If we got fewer items than limit, we reached the end
+      if (newItems.length < 20) {
+        eggSearchHasMore = false;
+      } else {
+        eggSearchHasMore = true;
+      }
+
+      if (newItems.length > 0) {
+        eggSearchPage++; // Prepare for next page
+      }
+
+      renderEggSearchResults(newItems, resultsContainer, isAppend);
     } else {
       throw new Error(result.error);
     }
 
   } catch (err) {
     console.error(err);
-    resultsContainer.innerHTML = '<div style="padding:10px; color:red; text-align:center;">오류가 발생했습니다.</div>';
+    if (!isAppend) {
+      resultsContainer.innerHTML = '<div style="padding:10px; color:red; text-align:center;">오류가 발생했습니다.</div>';
+    }
+  } finally {
+    eggSearchLoading = false;
   }
 }
 
-function renderEggSearchResults(results, container) {
+function renderEggSearchResults(results, container, isAppend) {
   const resultsContainer = container || document.getElementById('egg-search-results');
-  if (!resultsContainer) {
-    console.error('Egg search results container not found');
+  if (!resultsContainer) return;
+
+  // If not appending (new search), clear previous content
+  if (!isAppend) {
+    resultsContainer.innerHTML = '';
+  }
+
+  if (results.length === 0 && !isAppend) {
+    const searchInput = document.getElementById('egg-search-input');
+    const query = searchInput ? searchInput.value.trim() : '';
+
+    if (query) {
+      resultsContainer.innerHTML = `
+        <div style="padding:10px; text-align:center; color:#718096;">
+          <div>검색 결과가 없습니다.</div>
+          <small>포켓몬 이름을 정확히 입력해주세요.</small>
+          <div style="margin-top: 15px; font-size: 0.85em; color: #a0aec0; background: rgba(0,0,0,0.03); padding: 8px; border-radius: 8px;">
+            💡 <strong>전설/환상/울트라비스트/패러독스</strong> 등<br>
+            희귀한 포켓몬은 특별한 이벤트를 통해서만 만날 수 있어요!
+          </div>
+        </div>`;
+    } else {
+      resultsContainer.innerHTML = '<div style="padding:10px; text-align:center; color:#718096;">획득 가능한 새로운 알이 없습니다.<br><small>이미 모든 종류를 수집하셨나요? 😎</small></div>';
+    }
     return;
   }
 
-  resultsContainer.innerHTML = '';
-  if (results.length === 0) {
-    resultsContainer.innerHTML = '<div style="padding:10px; text-align:center; color:#718096;">검색 결과가 없습니다.<br><small>포켓몬 이름을 정확히 입력해주세요.</small></div>';
-    return;
-  }
+  // Remove existing sentinel if any
+  const existingSentinel = document.getElementById('egg-search-sentinel');
+  if (existingSentinel) existingSentinel.remove();
 
   results.forEach(pokemon => {
     const item = document.createElement('div');
     item.className = 'egg-result-item';
 
-    // 이미 보유했거나 알이 있는 경우 체크
     const isDisabled = pokemon.has_pokemon || pokemon.has_egg;
     const statusText = pokemon.has_pokemon ? '보유중' : (pokemon.has_egg ? '알 보유중' : '');
 
-    // 아이콘은 pokemon-sprite로 렌더링
     item.innerHTML = `
       <div class="pokemon-sprite ${isDisabled ? 'grayscale' : ''}" data-src="${getPokemonImageUrl(pokemon.image_name, '', 'icon')}" data-fallback-image="${pokemon.image_name}" data-fallback-suffix=""></div>
       <div class="egg-result-info">
@@ -2380,20 +3058,16 @@ function renderEggSearchResults(results, container) {
       <button class="acquire-btn ${isDisabled ? 'disabled' : ''}" ${isDisabled ? 'disabled' : ''}>${isDisabled ? '획득불가' : '선택'}</button>
     `;
 
-    // 버튼에 직접 이벤트 리스너 추가 (비활성화된 경우 제외)
     const btn = item.querySelector('.acquire-btn');
     if (btn && !isDisabled) {
       btn.addEventListener('click', (e) => {
-        e.stopPropagation(); // 부모 요소로의 이벤트 전파 방지
-        console.log('알 선택 버튼 클릭됨:', pokemon.name);
+        e.stopPropagation();
         confirmAcquireEgg(pokemon);
       });
     }
 
-    // 아이템 전체 클릭 시에도 동작하도록 (비활성화된 경우 제외)
     if (!isDisabled) {
       item.addEventListener('click', () => {
-        console.log('알 아이템 클릭됨:', pokemon.name);
         confirmAcquireEgg(pokemon);
       });
     } else {
@@ -2404,10 +3078,38 @@ function renderEggSearchResults(results, container) {
     resultsContainer.appendChild(item);
   });
 
-  // 모든 pokemon-sprite에 애니메이션 적용
+  // 애니메이션 적용
   resultsContainer.querySelectorAll('.pokemon-sprite').forEach(sprite => {
+    // 이미 애니메이션이 적용된 경우(appending 시) 제외하고 싶지만, 
+    // setupPokemonSprite 내부에서 체크하거나 그냥 다시 호출해도 무방함.
     setupPokemonSprite(sprite);
   });
+
+  // Add sentinel for infinite scroll if there are more items
+  if (eggSearchHasMore) {
+    const sentinel = document.createElement('div');
+    sentinel.id = 'egg-search-sentinel';
+    sentinel.style.height = '20px';
+    sentinel.style.width = '100%';
+    resultsContainer.appendChild(sentinel);
+
+    setupInfiniteScrollObserver(sentinel);
+  }
+}
+
+function setupInfiniteScrollObserver(sentinel) {
+  if (eggSearchObserver) {
+    eggSearchObserver.disconnect();
+  }
+
+  eggSearchObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && eggSearchHasMore && !eggSearchLoading) {
+      // 검색어가 있으면 검색어 유지, 없으면 빈 문자열 (searchEggs 내부에서 input value 참조함)
+      searchEggs(true);
+    }
+  }, { threshold: 0.5 });
+
+  eggSearchObserver.observe(sentinel);
 }
 
 // 커스텀 확인 모달 로직
@@ -2512,7 +3214,7 @@ async function acquireEgg(pokemon) {
   }
 }
 
-function showToast(message) {
+function showToast(message, duration = 2500) {
   const toast = document.createElement('div');
   toast.textContent = message;
   Object.assign(toast.style, {
@@ -2524,7 +3226,7 @@ function showToast(message) {
     color: 'white',
     padding: '12px 24px',
     borderRadius: '30px',
-    zIndex: '3000',
+    zIndex: '10000',
     fontSize: '14px',
     fontWeight: 'bold',
     boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
@@ -2540,8 +3242,10 @@ function showToast(message) {
   setTimeout(() => {
     toast.style.opacity = '0';
     setTimeout(() => toast.remove(), 300);
-  }, 2500);
+  }, duration);
 }
+// 전역 노출 (pwa.js 등 다른 스크립트에서 사용 가능하도록)
+window.showToast = showToast;
 
 
 
@@ -2630,10 +3334,10 @@ async function handleHatch(egg) {
         }
       }
 
-      // 홈 탭으로 자동 이동
-      const homeTabItem = document.querySelector('.tab-item[data-tab="home"]');
-      if (homeTabItem) {
-        homeTabItem.click();
+      // 도감 탭으로 자동 이동 (새 포켓몬 확인)
+      const pokedexTabItem = document.querySelector('.tab-item[data-tab="pokedex"]');
+      if (pokedexTabItem) {
+        pokedexTabItem.click();
       }
     } else {
       throw new Error(result.error || '부화 실패');
@@ -2718,7 +3422,7 @@ window.showIconGroupDetail = showIconGroupDetail;
 function openInfoModal() {
   const modal = document.getElementById('info-modal');
   if (modal) {
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
     document.body.classList.add('modal-open');
     onModalOpen();
     // 기본 탭으로 초기화
@@ -2784,14 +3488,22 @@ function initInfoModalListeners() {
     });
   });
 
-  // 아코디언 헤더 클릭 이벤트
-  document.querySelectorAll('.accordion-header').forEach(header => {
-    header.addEventListener('click', () => {
+  // 아코디언 헤더 클릭 이벤트 (이벤트 위임 사용 - Debugging Added)
+  document.addEventListener('click', (e) => {
+    // console.log('Click detected on:', e.target);
+    const header = e.target.closest('.accordion-header');
+    if (header) {
+      console.log('Accordion Header Clicked!');
       const accordionItem = header.closest('.accordion-item');
       if (accordionItem) {
-        toggleAccordion(accordionItem);
+        console.log('Toggling item:', accordionItem.dataset.tier);
+        try {
+          toggleAccordion(accordionItem);
+        } catch (err) {
+          console.error('Toggle failed:', err);
+        }
       }
-    });
+    }
   });
 }
 
@@ -2860,7 +3572,7 @@ function showConfirmModal(title, message, onOpen = null) {
       resolve(false);
     });
 
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
     onModalOpen();
 
     // 모달이 열린 후 onOpen 콜백 실행
@@ -2886,6 +3598,7 @@ async function fetchUserItems() {
 // 실제 진화 API 호출
 async function executeEvolution(currentId, targetId, cost, baseImageName) {
   try {
+    showGlobalLoading('진화 중...'); // 로딩 시작
     const headers = await getAuthHeaders();
     const response = await fetch('/api/pokemon/evolve', {
       method: 'POST',
@@ -2911,16 +3624,32 @@ async function executeEvolution(currentId, targetId, cost, baseImageName) {
     await showIconGroupDetail(baseImageName, targetId);
     // 아이콘 목록도 갱신
     loadUserPokemonIcons();
+    // 오늘의 포켓몬 및 수면 상태 갱신
+    if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+    if (window.sleepTracker && typeof window.sleepTracker.loadSleepStatus === 'function') {
+      await window.sleepTracker.loadSleepStatus();
+    }
 
   } catch (e) {
     showToast(e.message);
+  } finally {
+    hideGlobalLoading(); // 로딩 종료
   }
 }
 
 // 포켓몬 진화 처리 (UI 호출용)
 async function handleEvolutionClick(currentStableId, targetStableId, targetName, cost, baseImageName) {
-  const items = await fetchUserItems();
-  const candyCount = items['Rare Candy']?.quantity || 0;
+  let candyCount = 0;
+
+  try {
+    showGlobalLoading('정보 확인 중...');
+    const items = await fetchUserItems();
+    candyCount = items['Rare Candy']?.quantity || 0;
+  } catch (e) {
+    console.error('Failed to fetch items:', e);
+  } finally {
+    hideGlobalLoading();
+  }
 
   if (candyCount < cost) {
     showToast(`이상한 사탕이 부족합니다..!\n보유: ${candyCount}개 / 필요: ${cost}개`);
@@ -2944,13 +3673,21 @@ async function handleEvolutionClick(currentStableId, targetStableId, targetName,
 
 // 폼 해제 처리 (UI 호출용)
 async function handleFormUnlockClick(targetStableId, targetName, baseImageName, isRarePokemon = false) {
-  const items = await fetchUserItems();
   const itemName = isRarePokemon ? 'Awakening Charm' : 'Mystic Charm';
   const itemNameKo = isRarePokemon ? '각성의 부적' : '신비의 부적';
   const itemImage = isRarePokemon ? IMAGE_URLS.AWAKENING_CHARM : IMAGE_URLS.MYSTIC_CHARM;
-
-  const charmCount = items[itemName]?.quantity || 0;
   const cost = 1;
+  let charmCount = 0;
+
+  try {
+    showGlobalLoading('정보 확인 중...');
+    const items = await fetchUserItems();
+    charmCount = items[itemName]?.quantity || 0;
+  } catch (e) {
+    console.error('Failed to fetch items:', e);
+  } finally {
+    hideGlobalLoading();
+  }
 
   if (charmCount < cost) {
     showToast(`${itemNameKo}이 부족합니다...!`);
@@ -2969,6 +3706,7 @@ async function handleFormUnlockClick(targetStableId, targetName, baseImageName, 
 
   if (confirmed) {
     try {
+      showGlobalLoading('폼 해제 중...'); // 로딩 시작
       const headers = await getAuthHeaders();
       const response = await fetch('/api/pokemon/unlock-form', {
         method: 'POST',
@@ -2989,9 +3727,16 @@ async function handleFormUnlockClick(targetStableId, targetName, baseImageName, 
       showToast(`${result.data.message}`);
       await showIconGroupDetail(baseImageName, targetStableId);
       loadUserPokemonIcons();
+      // 오늘의 포켓몬 및 수면 상태 갱신
+      if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+      if (window.sleepTracker && typeof window.sleepTracker.loadSleepStatus === 'function') {
+        await window.sleepTracker.loadSleepStatus();
+      }
 
     } catch (e) {
       showToast(e.message);
+    } finally {
+      hideGlobalLoading(); // 로딩 종료
     }
   }
 }
@@ -3040,7 +3785,7 @@ window.checkTermsStatus = function () {
   if (submitBtn) {
     if (allChecked) {
       submitBtn.disabled = false;
-      submitBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+      submitBtn.style.background = 'linear-gradient(135deg, #CD5C5C 0%, #B04040 100%)';
       submitBtn.style.color = 'white';
       submitBtn.style.cursor = 'pointer';
       submitBtn.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
@@ -3079,7 +3824,31 @@ async function handleTermsRefusal() {
   }
 }
 
-// 약관 동의 완료 처리 - 초기 스크린타임 입력 모달로 이동
+// 초기 스크린타임 코드 입력 헬퍼 함수들
+function getInitialScreenTimeCodeValue() {
+  const digits = [];
+  for (let i = 1; i <= 4; i++) {
+    const digit = document.getElementById(`initialScreenTimeDigit${i}`);
+    if (digit && digit.value) {
+      digits.push(digit.value);
+    }
+  }
+  return digits.length > 0 ? parseInt(digits.join('')) : NaN;
+}
+
+function clearInitialScreenTimeCodeInputs() {
+  for (let i = 1; i <= 4; i++) {
+    const digit = document.getElementById(`initialScreenTimeDigit${i}`);
+    if (digit) {
+      digit.value = '';
+    }
+  }
+  const checkbox = document.getElementById('initialIsOver10Hours');
+  if (checkbox) checkbox.checked = false;
+  updateInitialTimePreview();
+}
+
+// 초기 스크린타임 입력 모달 표시
 async function completeTermsAgreement() {
   try {
     // 약관 모달 숨기기
@@ -3102,23 +3871,49 @@ function showInitialScreenTimeModal() {
     modal.style.display = 'flex';
     // onModalOpen 호출 안함: terms-modal에서 연속으로 열리므로 이미 열린 상태
     // 입력 필드 초기화
-    document.getElementById('initialScreenTimeHours').value = '';
-    document.getElementById('initialScreenTimeMinutes').value = '';
-    document.getElementById('initialTimePreview').textContent = '-';
-    document.getElementById('initial-screentime-submit-btn').disabled = true;
+    clearInitialScreenTimeCodeInputs();
   }
 }
 
 // 초기 스크린타임 저장 및 완료 (입력 시)
 async function submitInitialScreenTime() {
-  const hoursInput = document.getElementById('initialScreenTimeHours');
-  const minutesInput = document.getElementById('initialScreenTimeMinutes');
+  const code = getInitialScreenTimeCodeValue();
+  if (isNaN(code)) {
+    showToast('스크린타임을 입력해주세요.');
+    return;
+  }
 
-  const hours = parseInt(hoursInput.value) || 0;
-  const minutes = parseInt(minutesInput.value) || 0;
+  const codeStr = code.toString();
+  let hours, minutes;
+  const isOver10HoursChecked = document.getElementById('initialIsOver10Hours')?.checked || false;
+
+  if (codeStr.length === 4) {
+    hours = parseInt(codeStr.substring(0, 2));
+    minutes = parseInt(codeStr.substring(2, 4));
+  } else if (codeStr.length === 3) {
+    if (isOver10HoursChecked) {
+      hours = parseInt(codeStr.substring(0, 2));
+      minutes = parseInt(codeStr.substring(2, 3));
+    } else {
+      hours = parseInt(codeStr.substring(0, 1));
+      minutes = parseInt(codeStr.substring(1, 3));
+    }
+  } else if (codeStr.length === 2 || codeStr.length === 1) {
+    hours = 0;
+    minutes = code;
+  } else {
+    showToast('올바른 스크린타임을 입력해주세요.');
+    return;
+  }
+
+  if (minutes >= 60 || hours >= 24) {
+    showToast('올바른 시간을 입력해주세요. (분은 59 이하, 시간은 23 이하)');
+    return;
+  }
+
   const totalMinutes = hours * 60 + minutes;
 
-  if (totalMinutes <= 0 || totalMinutes > 1440) {
+  if (totalMinutes <= 0) {
     showToast('올바른 스크린타임을 입력해주세요.');
     return;
   }
@@ -3154,30 +3949,121 @@ async function submitInitialScreenTime() {
 
 // 초기 스크린타임 입력 시간 미리보기 업데이트
 function updateInitialTimePreview() {
-  const hoursInput = document.getElementById('initialScreenTimeHours');
-  const minutesInput = document.getElementById('initialScreenTimeMinutes');
   const preview = document.getElementById('initialTimePreview');
   const submitBtn = document.getElementById('initial-screentime-submit-btn');
+  if (!preview || !submitBtn) return;
 
-  const hours = parseInt(hoursInput.value) || 0;
-  const minutes = parseInt(minutesInput.value) || 0;
-  const totalMinutes = hours * 60 + minutes;
+  const code = getInitialScreenTimeCodeValue();
+  if (isNaN(code)) {
+    preview.textContent = '-';
+    submitBtn.disabled = true;
+    return;
+  }
 
-  if (hours > 0 || minutes > 0) {
-    let previewText = '';
-    if (hours > 0) previewText += `${hours}시간 `;
-    if (minutes > 0) previewText += `${minutes}분`;
-    preview.textContent = previewText.trim() || '-';
+  const codeStr = code.toString();
+  let hours, minutes;
+  const isOver10HoursChecked = document.getElementById('initialIsOver10Hours')?.checked || false;
 
-    // 유효한 입력이면 버튼 활성화
-    if (totalMinutes > 0 && totalMinutes <= 1440) {
-      submitBtn.disabled = false;
+  if (codeStr.length === 4) {
+    hours = parseInt(codeStr.substring(0, 2));
+    minutes = parseInt(codeStr.substring(2, 4));
+  } else if (codeStr.length === 3) {
+    if (isOver10HoursChecked) {
+      hours = parseInt(codeStr.substring(0, 2));
+      minutes = parseInt(codeStr.substring(2, 3));
     } else {
-      submitBtn.disabled = true;
+      hours = parseInt(codeStr.substring(0, 1));
+      minutes = parseInt(codeStr.substring(1, 3));
     }
+  } else if (codeStr.length === 2 || codeStr.length === 1) {
+    hours = 0;
+    minutes = code;
   } else {
     preview.textContent = '-';
     submitBtn.disabled = true;
+    return;
+  }
+
+  if (minutes >= 60) {
+    preview.textContent = '⚠️ 분은 59 이하여야 합니다';
+    preview.style.color = '#EF4444';
+    submitBtn.disabled = true;
+  } else if (hours >= 24) {
+    preview.textContent = '⚠️ 24시간을 넘을 수 없습니다';
+    preview.style.color = '#EF4444';
+    submitBtn.disabled = true;
+  } else {
+    const totalMinutes = hours * 60 + minutes;
+    if (totalMinutes > 0) {
+      preview.textContent = `📱 ${hours}시간 ${minutes}분`;
+      preview.style.color = '#CD5C5C';
+      submitBtn.disabled = false;
+    } else {
+      preview.textContent = '-';
+      submitBtn.disabled = true;
+    }
+  }
+}
+
+function setupInitialScreenTimeCodeInputs() {
+  const digitInputs = [];
+  for (let i = 1; i <= 4; i++) {
+    const input = document.getElementById(`initialScreenTimeDigit${i}`);
+    if (input) {
+      digitInputs.push(input);
+    }
+  }
+
+  digitInputs.forEach((input, index) => {
+    input.addEventListener('input', (e) => {
+      const value = e.target.value;
+      if (!/^\d*$/.test(value)) {
+        e.target.value = value.replace(/\D/g, '');
+        return;
+      }
+      if (value && index < digitInputs.length - 1) {
+        digitInputs[index + 1].focus();
+      }
+      updateInitialTimePreview();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace') {
+        if (!e.target.value && index > 0) {
+          digitInputs[index - 1].focus();
+          digitInputs[index - 1].value = '';
+        }
+        setTimeout(() => updateInitialTimePreview(), 0);
+      }
+      if (e.key === 'ArrowLeft' && index > 0) {
+        e.preventDefault();
+        digitInputs[index - 1].focus();
+      }
+      if (e.key === 'ArrowRight' && index < digitInputs.length - 1) {
+        e.preventDefault();
+        digitInputs[index + 1].focus();
+      }
+    });
+
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+      for (let i = 0; i < pastedData.length && (index + i) < digitInputs.length; i++) {
+        digitInputs[index + i].value = pastedData[i];
+      }
+      const nextIndex = Math.min(index + pastedData.length, digitInputs.length - 1);
+      digitInputs[nextIndex].focus();
+      updateInitialTimePreview();
+    });
+
+    input.addEventListener('focus', () => {
+      input.select();
+    });
+  });
+
+  const isOver10HoursCheckbox = document.getElementById('initialIsOver10Hours');
+  if (isOver10HoursCheckbox) {
+    isOver10HoursCheckbox.addEventListener('change', updateInitialTimePreview);
   }
 }
 
@@ -3217,19 +4103,8 @@ if (document.getElementById('starter-modal-close-btn')) {
 
 // 초기 스크린타임 입력 모달 이벤트 리스너
 document.addEventListener('DOMContentLoaded', () => {
-  // 시간/분 입력 필드 이벤트
-  const hoursInput = document.getElementById('initialScreenTimeHours');
-  const minutesInput = document.getElementById('initialScreenTimeMinutes');
-
-  if (hoursInput) {
-    hoursInput.addEventListener('input', updateInitialTimePreview);
-    hoursInput.addEventListener('focus', () => hoursInput.select());
-  }
-
-  if (minutesInput) {
-    minutesInput.addEventListener('input', updateInitialTimePreview);
-    minutesInput.addEventListener('focus', () => minutesInput.select());
-  }
+  // 4자리 코드 입력 설정
+  setupInitialScreenTimeCodeInputs();
 
   // 제출 버튼
   const submitBtn = document.getElementById('initial-screentime-submit-btn');
@@ -3296,11 +4171,7 @@ async function loadStarterPokemon() {
     });
 
     sortedData.forEach(pokemon => {
-      const type1 = pokemon.type1;
-      const type2 = pokemon.type2;
-      const typeText = type2 ? `${type1}/${type2} 타입` : `${type1} 타입`;
-      const typeClass = getTypeClass(type1);
-      const generationText = `${pokemon.generation}세대`;
+      const typeClass = getTypeClass(pokemon.type1);
 
       const itemDiv = document.createElement('div');
       itemDiv.className = 'starter-pokemon-item';
@@ -3311,8 +4182,7 @@ async function loadStarterPokemon() {
           </div>
         </div>
         <div class="starter-pokemon-info">
-          <div class="starter-pokemon-name">${pokemon.name}</div>
-          <div class="starter-pokemon-type">${generationText} ${typeText}</div>
+          <div class="starter-pokemon-name">${pokemon.name}</div>     
         </div>
       `;
 
@@ -3350,949 +4220,6 @@ document.addEventListener('DOMContentLoaded', () => {
     observer.observe(starterModal, { attributes: true });
   }
 });
-// ... (Existing code from index.js) ...
-
-// ==========================================
-// 운동 관리 기능 (Moved from indexplus.js)
-// ==========================================
-
-// 운동 데이터 상태 관리
-let muscleGroups = [];
-let userExercises = [];
-let weeklyProgress = [];
-
-// API Base URL (Defined at top of file)
-// const API_BASE_URL = '/api';
-
-// API 호출 헬퍼
-async function fetchAPI(endpoint, options = {}) {
-  if (window.isGuest()) {
-    // Guest Mode: POST/PUT/DELETE는 차단
-    if (options.method === 'POST' || options.method === 'PUT' || options.method === 'DELETE') {
-      throw new Error('체험 모드에서는 저장할 수 없습니다.');
-    }
-
-    // Guest Mode: GET 요청은 /api/guest 엔드포인트로 리다이렉트
-    const guestEndpoint = `/api/guest${endpoint}`;
-    const url = new URL(guestEndpoint, window.location.origin);
-    const defaultHeaders = { 'Content-Type': 'application/json' };
-
-    const response = await fetch(url, { ...options, headers: { ...defaultHeaders, ...options.headers } });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API Error: ${response.status}`);
-    }
-    const result = await response.json();
-    return result.data || result;
-  }
-
-  const userId = window.getCurrentUserId ? window.getCurrentUserId() : null;
-  if (!userId && endpoint !== '/muscle-groups') throw new Error('로그인이 필요합니다.');
-
-  const url = new URL(`${API_BASE_URL}${endpoint}`, window.location.origin);
-
-  // userId injection removed as we use Bearer token now
-
-  const defaultHeaders = { 'Content-Type': 'application/json' };
-  const authHeaders = await getAuthHeaders();
-
-  const response = await fetch(url, { ...options, headers: { ...defaultHeaders, ...authHeaders, ...options.headers } });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `API Error: ${response.status}`);
-  }
-  const result = await response.json();
-  return result.data || result;
-}
-
-// 운동 관련 함수들
-async function loadMuscleGroups() {
-  try {
-    console.log('Fetching muscle groups from:', `${API_BASE_URL}/muscle-groups`);
-    const response = await fetch(`${API_BASE_URL}/muscle-groups`);
-    if (!response.ok) throw new Error(`Failed to load muscle groups: ${response.status} ${response.statusText}`);
-    const result = await response.json();
-    muscleGroups = result.data || [];
-    console.log('근육부위 목록 로드 완료:', muscleGroups.length, '개');
-    return muscleGroups;
-  } catch (error) {
-    console.error('근육부위 목록 로드 실패:', error);
-    throw error;
-  }
-}
-
-async function loadUserExercises() {
-  try {
-    const data = await fetchAPI('/exercises');
-    userExercises = data || [];
-    console.log('사용자 운동 목록 로드 완료:', userExercises);
-    return userExercises;
-  } catch (error) {
-    console.error('사용자 운동 목록 로드 실패:', error);
-    throw error;
-  }
-}
-
-async function loadWeeklyProgress(weekOffset = 0) {
-  try {
-    const endpoint = weekOffset ? `/weekly-stats?weekOffset=${weekOffset}` : '/weekly-stats';
-    const data = await fetchAPI(endpoint);
-    weeklyProgress = data.muscleGroups || [];
-    console.log('주간 운동 진행률 로드 완료:', weeklyProgress);
-    return weeklyProgress;
-  } catch (error) {
-    console.error('주간 운동 진행률 로드 실패:', error);
-    throw error;
-  }
-}
-
-async function createExerciseAPI(muscleGroupId, exerciseName, weightKg, reps, intensityType = 'reps', rpe = null) {
-  if (!muscleGroupId || !exerciseName || !weightKg) throw new Error('필수 필드를 입력해주세요.');
-  if (weightKg <= 0) throw new Error('중량은 0보다 커야 합니다.');
-  if (intensityType === 'reps' && (!reps || reps <= 0)) throw new Error('횟수는 0보다 커야 합니다.');
-  if (intensityType === 'rpe' && (!rpe || rpe <= 0 || rpe > 10)) throw new Error('RPE는 0에서 10 사이여야 합니다.');
-
-  const body = { muscleGroupId, exerciseName: exerciseName.trim(), weightKg: parseFloat(weightKg), intensityType };
-  if (intensityType === 'reps') body.reps = parseInt(reps);
-  else body.rpe = parseFloat(rpe);
-
-  const data = await fetchAPI('/exercises', { method: 'POST', body: JSON.stringify(body) });
-  console.log('운동 등록 완료:', data);
-  await loadUserExercises();
-  return data;
-}
-
-async function logExerciseSessionAPI(exerciseId, setsCompleted, sessionDate = null, notes = null) {
-  if (!exerciseId || !setsCompleted) throw new Error('운동과 세트수를 입력해주세요.');
-  if (setsCompleted <= 0) throw new Error('세트수는 0보다 커야 합니다.');
-
-  const data = await fetchAPI('/sessions', {
-    method: 'POST',
-    body: JSON.stringify({
-      exerciseId,
-      setsCompleted: parseInt(setsCompleted),
-      sessionDate: sessionDate || new Date().toISOString().split('T')[0],
-      notes
-    })
-  });
-  console.log('운동 세션 기록 완료:', data);
-  await loadWeeklyProgress();
-  return data;
-}
-
-async function updateExerciseAPI(exerciseId, updates) {
-  const apiUpdates = {};
-  if (updates.exercise_name) apiUpdates.exerciseName = updates.exercise_name;
-  if (updates.weight_kg) apiUpdates.weightKg = updates.weight_kg;
-  if (updates.reps) apiUpdates.reps = updates.reps;
-  if (updates.intensity_type) apiUpdates.intensityType = updates.intensity_type;
-  if (updates.rpe) apiUpdates.rpe = updates.rpe;
-
-  await fetchAPI(`/exercises/${exerciseId}`, { method: 'PUT', body: JSON.stringify(apiUpdates) });
-  console.log('운동 수정 완료:', exerciseId);
-  await loadUserExercises();
-}
-
-async function deleteExerciseAPI(exerciseId) {
-  await fetchAPI(`/exercises/${exerciseId}`, { method: 'DELETE' });
-  console.log('운동 삭제 완료:', exerciseId);
-  await loadUserExercises();
-  await loadWeeklyProgress();
-}
-
-function getWeeklyStats() {
-  if (!weeklyProgress.length) return { totalMuscleGroups: 0, mevAchieved: 0, mavAchieved: 0, needsMotivation: 0 };
-  return {
-    totalMuscleGroups: weeklyProgress.length,
-    mevAchieved: weeklyProgress.filter(p => p.current_sets >= p.mev_sets).length,
-    mavAchieved: weeklyProgress.filter(p => p.current_sets >= p.mav_sets).length,
-    needsMotivation: weeklyProgress.filter(p => p.current_sets < p.mev_sets).length
-  };
-}
-
-// 푸시 알림 및 운동 관리자 초기화 함수 (Modified to focus on Exercise)
-async function initializeManagers() {
-  try {
-    // 근육부위 목록은 로그인 후에만 로드
-    // 운동 데이터 로드
-    const userId = window.getCurrentUserId ? window.getCurrentUserId() : null;
-    if (userId) {
-      await loadExerciseData();
-    }
-
-    // user-synced 이벤트 리스너 등록
-    window.addEventListener('user-synced', async (e) => {
-      console.log('User synced event received in index.js (Exercise Manager)');
-      await loadExerciseData();
-    });
-
-  } catch (error) {
-    console.error('매니저 초기화 실패:', error);
-  }
-}
-
-async function loadExerciseData() {
-  try {
-    await loadMuscleGroups();
-  } catch (error) {
-    console.error('근육부위 목록 로드 실패:', error);
-  }
-
-  try {
-    await loadUserExercises();
-  } catch (error) {
-    console.error('사용자 운동 목록 로드 실패:', error);
-  }
-
-  try {
-    await loadWeeklyProgress();
-  } catch (error) {
-    console.error('주간 진행률 로드 실패:', error);
-  }
-
-  // UI 업데이트
-  updateExerciseUI();
-  updateWeeklyProgressDashboard();
-}
-
-// 운동 관리 UI 업데이트 함수
-async function updateExerciseUI() {
-  try {
-    // 근육부위 드롭다운 업데이트
-    const muscleGroupSelect = document.getElementById('muscle-group-select');
-    if (muscleGroupSelect) {
-      muscleGroupSelect.innerHTML = '<option value="">근육부위를 선택하세요</option>';
-      console.log('Updating muscle group select with', muscleGroups.length, 'groups');
-      muscleGroups.forEach(group => {
-        const option = document.createElement('option');
-        option.value = group.id;
-        option.textContent = group.name_ko;
-        muscleGroupSelect.appendChild(option);
-      });
-    }
-
-    // 운동 목록 업데이트
-    updateUserExercisesList();
-
-    // 운동 선택 드롭다운 업데이트
-    updateExerciseSelectOptions();
-
-    // 오늘 날짜 설정
-    const sessionDateInput = document.getElementById('session-date-input');
-    if (sessionDateInput) {
-      sessionDateInput.value = new Date().toISOString().split('T')[0];
-    }
-
-  } catch (error) {
-    console.error('운동 UI 업데이트 실패:', error);
-  }
-}
-
-// 사용자 운동 목록 업데이트
-function updateUserExercisesList() {
-  const listContainer = document.getElementById('user-exercises-list');
-  const countBadge = document.getElementById('exercise-count-badge');
-
-  // 운동 개수 배지 업데이트
-  if (countBadge) {
-    countBadge.textContent = `${userExercises.length}개`;
-  }
-
-  if (!listContainer) return;
-
-  if (userExercises.length === 0) {
-    listContainer.innerHTML = `
-      <div class="exercise-list-empty">
-        <div class="exercise-list-empty-icon">🏋️</div>
-        <div class="exercise-list-empty-text">등록된 운동이 없습니다.<br>운동을 추가해보세요!</div>
-      </div>
-    `;
-    return;
-  }
-
-  const exercisesByMuscleGroup = {};
-  userExercises.forEach(exercise => {
-    if (!exercisesByMuscleGroup[exercise.muscle_group_name_ko]) {
-      exercisesByMuscleGroup[exercise.muscle_group_name_ko] = [];
-    }
-    exercisesByMuscleGroup[exercise.muscle_group_name_ko].push(exercise);
-  });
-
-  let html = '';
-  Object.keys(exercisesByMuscleGroup).forEach(muscleGroupName => {
-    html += `
-      <div class="exercise-group">
-        <div class="exercise-group-header">
-          <span class="exercise-group-name">${muscleGroupName}</span>
-          <span class="exercise-group-count">${exercisesByMuscleGroup[muscleGroupName].length}개</span>
-        </div>
-        <div class="exercise-list">
-    `;
-
-    exercisesByMuscleGroup[muscleGroupName].forEach(exercise => {
-      // intensity_type이 'rpe'이거나, rpe 값이 있으면 RPE로 표시
-      const isRpe = exercise.intensity_type === 'rpe' || (exercise.rpe && !exercise.reps);
-      const intensityDisplay = isRpe
-        ? `RPE ${exercise.rpe || '-'}`
-        : `${exercise.reps || '-'}회`;
-      html += `
-        <div class="exercise-item">
-          <div class="exercise-info">
-            <div class="exercise-name">${exercise.exercise_name}</div>
-            <div class="exercise-details">${exercise.weight_kg}kg × ${intensityDisplay}</div>
-          </div>
-          <div class="exercise-actions">
-            <button class="exercise-action-btn edit" onclick="editExercise('${exercise.id}')" title="수정">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
-            <button class="exercise-action-btn delete" onclick="deleteExercise('${exercise.id}')" title="삭제">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      `;
-    });
-
-    html += `
-        </div>
-      </div>
-    `;
-  });
-
-  listContainer.innerHTML = html;
-}
-
-// 운동 선택 드롭다운 업데이트
-function updateExerciseSelectOptions() {
-  const exerciseSelect = document.getElementById('session-exercise-select');
-  if (!exerciseSelect) return;
-
-  exerciseSelect.innerHTML = '<option value="">운동을 선택하세요</option>';
-
-  const exercisesByMuscleGroup = {};
-  userExercises.forEach(exercise => {
-    if (!exercisesByMuscleGroup[exercise.muscle_group_name_ko]) {
-      exercisesByMuscleGroup[exercise.muscle_group_name_ko] = [];
-    }
-    exercisesByMuscleGroup[exercise.muscle_group_name_ko].push(exercise);
-  });
-
-  Object.keys(exercisesByMuscleGroup).forEach(muscleGroupName => {
-    const optgroup = document.createElement('optgroup');
-    optgroup.label = muscleGroupName;
-
-    exercisesByMuscleGroup[muscleGroupName].forEach(exercise => {
-      const option = document.createElement('option');
-      option.value = exercise.id;
-      // intensity_type이 'rpe'이거나, rpe 값이 있으면 RPE로 표시
-      const isRpe = exercise.intensity_type === 'rpe' || (exercise.rpe && !exercise.reps);
-      const intensityDisplay = isRpe
-        ? `RPE ${exercise.rpe || '-'}`
-        : `${exercise.reps || '-'}회`;
-      option.textContent = `${exercise.exercise_name} (${exercise.weight_kg}kg × ${intensityDisplay})`;
-      optgroup.appendChild(option);
-    });
-
-    exerciseSelect.appendChild(optgroup);
-  });
-}
-
-// 운동 관리 이벤트 리스너 설정
-function setupExerciseEventListeners() {
-  // 새 운동 등록 모달 열기/닫기
-  const addExerciseModal = document.getElementById('add-exercise-modal');
-  const openAddExerciseModalBtn = document.getElementById('open-add-exercise-modal');
-  const addExerciseModalClose = document.getElementById('add-exercise-modal-close');
-  const addExerciseModalCancel = document.getElementById('add-exercise-modal-cancel');
-
-  if (openAddExerciseModalBtn) {
-    openAddExerciseModalBtn.addEventListener('click', () => {
-      addExerciseModal.style.display = 'block';
-      document.body.classList.add('modal-open');
-      onModalOpen();
-    });
-  }
-
-  if (addExerciseModalClose) {
-    addExerciseModalClose.addEventListener('click', () => {
-      addExerciseModal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-      onModalClose();
-    });
-  }
-
-  if (addExerciseModalCancel) {
-    addExerciseModalCancel.addEventListener('click', () => {
-      addExerciseModal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-      onModalClose();
-    });
-  }
-
-  // 모달 외부 클릭 시 닫기
-  if (addExerciseModal) {
-    addExerciseModal.addEventListener('click', (e) => {
-      if (e.target === addExerciseModal) {
-        addExerciseModal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-        onModalClose();
-      }
-    });
-  }
-
-  // 등록된 운동 목록 모달 열기/닫기
-  const exerciseListModal = document.getElementById('exercise-list-modal');
-  const openExerciseListModalBtn = document.getElementById('open-exercise-list-modal');
-  const exerciseListModalClose = document.getElementById('exercise-list-modal-close');
-
-  if (openExerciseListModalBtn) {
-    openExerciseListModalBtn.addEventListener('click', () => {
-      exerciseListModal.style.display = 'block';
-      document.body.classList.add('modal-open');
-      onModalOpen();
-    });
-  }
-
-  if (exerciseListModalClose) {
-    exerciseListModalClose.addEventListener('click', () => {
-      exerciseListModal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-      onModalClose();
-    });
-  }
-
-  // 운동 목록 모달 외부 클릭 시 닫기
-  if (exerciseListModal) {
-    exerciseListModal.addEventListener('click', (e) => {
-      if (e.target === exerciseListModal) {
-        exerciseListModal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-        onModalClose();
-      }
-    });
-  }
-
-  // 운동 등록 버튼
-  const addExerciseBtn = document.getElementById('add-exercise-btn');
-  if (addExerciseBtn) {
-    addExerciseBtn.addEventListener('click', async () => {
-      try {
-        const muscleGroupId = document.getElementById('muscle-group-select').value;
-        const exerciseName = document.getElementById('exercise-name-input').value;
-        const weight = document.getElementById('exercise-weight-input').value;
-        const intensityType = document.querySelector('input[name="intensity-type"]:checked').value;
-        const repsInput = document.getElementById('exercise-reps-input').value;
-
-        let reps = null;
-        let rpe = null;
-
-        if (intensityType === 'reps') {
-          if (parseInt(repsInput) >= 100) {
-            showExerciseMessage('횟수는 100회 미만으로 설정해주세요.', 'error', 'exercise-form-result');
-            return;
-          }
-          reps = repsInput;
-        } else {
-          rpe = repsInput;
-        }
-
-        await createExerciseAPI(muscleGroupId, exerciseName, weight, reps, intensityType, rpe);
-
-        // 폼 초기화
-        document.getElementById('muscle-group-select').value = '';
-        document.getElementById('exercise-name-input').value = '';
-        document.getElementById('exercise-weight-input').value = '';
-        document.getElementById('exercise-reps-input').value = '';
-        // Reset type to reps
-        document.getElementById('type-reps').checked = true;
-        document.getElementById('exercise-reps-input').placeholder = '10';
-        document.getElementById('exercise-reps-input').step = '1';
-        document.getElementById('exercise-intensity-label').textContent = '횟수';
-        const helperText = document.getElementById('rpe-helper-text');
-        if (helperText) {
-          helperText.style.display = 'none';
-          helperText.classList.remove('visible');
-        }
-
-        // UI 업데이트
-        updateUserExercisesList();
-        updateExerciseSelectOptions();
-
-        // 모달 닫기
-        if (addExerciseModal) {
-          addExerciseModal.style.display = 'none';
-        }
-
-        showExerciseMessage('운동이 등록되었습니다!', 'success', 'exercise-form-result');
-
-      } catch (error) {
-        console.error('운동 등록 실패:', error);
-        showExerciseMessage('운동 등록에 실패했습니다: ' + error.message, 'error', 'exercise-form-result');
-      }
-    });
-  }
-
-  // 세션 기록 버튼
-  const logSessionBtn = document.getElementById('log-session-btn');
-  if (logSessionBtn) {
-    logSessionBtn.addEventListener('click', async () => {
-      try {
-        const exerciseId = document.getElementById('session-exercise-select').value;
-        const sets = document.getElementById('session-sets-input').value;
-        const date = document.getElementById('session-date-input').value;
-        const notes = document.getElementById('session-notes-input').value;
-
-        await logExerciseSessionAPI(exerciseId, sets, date, notes);
-
-        // 폼 초기화
-        document.getElementById('session-exercise-select').value = '';
-        document.getElementById('session-sets-input').value = '';
-        document.getElementById('session-notes-input').value = '';
-
-        // 대시보드 업데이트
-        updateWeeklyProgressDashboard();
-
-        showExerciseMessage('운동 세션이 기록되었습니다!', 'success', 'session-form-result');
-
-      } catch (error) {
-        console.error('세션 기록 실패:', error);
-        showExerciseMessage('세션 기록에 실패했습니다: ' + error.message, 'error', 'session-form-result');
-      }
-    });
-  }
-
-  // 세트수 입력 시 한 자리 숫자 입력하면 자동으로 키패드 내림
-  const sessionSetsInput = document.getElementById('session-sets-input');
-  if (sessionSetsInput) {
-    sessionSetsInput.addEventListener('input', (e) => {
-      const value = e.target.value;
-      // 숫자가 1자리 입력되면 blur하여 키패드 내림
-      if (value.length === 1 && /^\d$/.test(value)) {
-        e.target.blur();
-      }
-    });
-  }
-
-  // 새로고침 버튼
-  const refreshExercisesBtn = document.getElementById('refresh-exercises-btn');
-  if (refreshExercisesBtn) {
-    refreshExercisesBtn.addEventListener('click', async () => {
-      refreshExercisesBtn.classList.add('refreshing');
-      try {
-        await loadExerciseData();
-        showExerciseMessage('운동 목록이 새로고침되었습니다.', 'info', 'exercise-form-result');
-      } finally {
-        setTimeout(() => {
-          refreshExercisesBtn.classList.remove('refreshing');
-        }, 300);
-      }
-    });
-  }
-
-  // 진행률 새로고침 버튼
-  const refreshProgressBtn = document.getElementById('refresh-progress-btn');
-  if (refreshProgressBtn) {
-    refreshProgressBtn.addEventListener('click', async () => {
-      try {
-        refreshProgressBtn.classList.add('refreshing');
-        await loadWeeklyProgress();
-        updateWeeklyProgressDashboard();
-      } catch (error) {
-        console.error('진행률 새로고침 실패:', error);
-      } finally {
-        setTimeout(() => {
-          refreshProgressBtn.classList.remove('refreshing');
-        }, 300);
-      }
-    });
-  }
-  // Intensity Type Toggle (Segmented Control)
-  const intensityRadios = document.querySelectorAll('input[name="intensity-type"]');
-  const repsInput = document.getElementById('exercise-reps-input');
-  const helperText = document.getElementById('rpe-helper-text');
-
-  if (intensityRadios.length > 0 && repsInput) {
-    intensityRadios.forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        if (e.target.value === 'rpe') {
-          repsInput.placeholder = '8'; // RPE example
-          repsInput.step = '0.5';
-          document.getElementById('exercise-intensity-label').textContent = 'RPE';
-          if (helperText) {
-            helperText.style.display = 'block';
-            helperText.classList.add('visible');
-          }
-        } else {
-          repsInput.placeholder = '10';
-          repsInput.step = '1';
-          document.getElementById('exercise-intensity-label').textContent = '횟수';
-          if (helperText) {
-            helperText.style.display = 'none';
-            helperText.classList.remove('visible');
-          }
-        }
-      });
-    });
-  }
-
-  // 운동 수정 모달 이벤트 리스너
-  const exerciseEditModal = document.getElementById('exercise-edit-modal');
-  const exerciseEditClose = document.getElementById('exercise-edit-close');
-  const exerciseEditCancel = document.getElementById('exercise-edit-cancel-btn');
-  const exerciseEditSave = document.getElementById('exercise-edit-save-btn');
-
-  if (exerciseEditClose) {
-    exerciseEditClose.addEventListener('click', () => {
-      exerciseEditModal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-      onModalClose();
-    });
-  }
-
-  if (exerciseEditCancel) {
-    exerciseEditCancel.addEventListener('click', () => {
-      exerciseEditModal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-      onModalClose();
-    });
-  }
-
-  if (exerciseEditSave) {
-    exerciseEditSave.addEventListener('click', saveExerciseEdit);
-  }
-
-  // 운동 삭제 모달 이벤트 리스너
-  const exerciseDeleteModal = document.getElementById('exercise-delete-modal');
-  const exerciseDeleteCancel = document.getElementById('exercise-delete-cancel-btn');
-  const exerciseDeleteConfirm = document.getElementById('exercise-delete-confirm-btn');
-
-  if (exerciseDeleteCancel) {
-    exerciseDeleteCancel.addEventListener('click', () => {
-      exerciseDeleteModal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-      onModalClose();
-    });
-  }
-
-  if (exerciseDeleteConfirm) {
-    exerciseDeleteConfirm.addEventListener('click', confirmExerciseDelete);
-  }
-
-  // 모달 외부 클릭 시 닫기
-  if (exerciseEditModal) {
-    exerciseEditModal.addEventListener('click', (e) => {
-      if (e.target === exerciseEditModal) {
-        exerciseEditModal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-        onModalClose();
-      }
-    });
-  }
-
-  if (exerciseDeleteModal) {
-    exerciseDeleteModal.addEventListener('click', (e) => {
-      if (e.target === exerciseDeleteModal) {
-        exerciseDeleteModal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-        onModalClose();
-      }
-    });
-  }
-}
-
-// 운동 관련 메시지 표시 함수
-function showExerciseMessage(message, type = 'info', elementId = 'exercise-form-result') {
-  const messageElement = document.getElementById(elementId);
-  if (messageElement) {
-    messageElement.textContent = message;
-    messageElement.className = `result-message result-${type}`;
-    messageElement.style.display = 'block';
-
-    // 3초 후 자동 숨김
-    setTimeout(() => {
-      messageElement.style.display = 'none';
-    }, 3000);
-  }
-}
-
-// 운동 수정 함수 (전역) - 모달 기반 UI
-function editExercise(exerciseId) {
-  try {
-    const exercise = userExercises.find(e => e.id === exerciseId);
-    if (!exercise) {
-      throw new Error('운동을 찾을 수 없습니다.');
-    }
-
-    // 모달에 데이터 채우기
-    document.getElementById('edit-exercise-name').value = exercise.exercise_name;
-    document.getElementById('edit-exercise-weight').value = exercise.weight_kg;
-    document.getElementById('edit-exercise-id').value = exerciseId;
-
-    // intensity_type이 'rpe'이거나, rpe 값이 있으면 RPE로 판단
-    const isRpe = exercise.intensity_type === 'rpe' || (exercise.rpe && !exercise.reps);
-    const intensityType = isRpe ? 'rpe' : 'reps';
-    document.getElementById('edit-exercise-intensity-type').value = intensityType;
-
-    const intensityLabel = document.getElementById('edit-exercise-intensity-label');
-    const repsInput = document.getElementById('edit-exercise-reps');
-
-    if (intensityType === 'rpe') {
-      intensityLabel.textContent = 'RPE (1-10)';
-      repsInput.value = exercise.rpe || '';
-      repsInput.placeholder = 'RPE';
-    } else {
-      intensityLabel.textContent = '횟수';
-      repsInput.value = exercise.reps || '';
-      repsInput.placeholder = '횟수';
-    }
-
-    // 모달 표시
-    document.getElementById('exercise-edit-modal').style.display = 'block';
-    document.body.classList.add('modal-open');
-    onModalOpen();
-
-  } catch (error) {
-    console.error('운동 수정 모달 열기 실패:', error);
-    showExerciseMessage('운동을 찾을 수 없습니다: ' + error.message, 'error', 'exercise-form-result');
-  }
-}
-
-// 운동 수정 저장 처리
-async function saveExerciseEdit() {
-  try {
-    const exerciseId = document.getElementById('edit-exercise-id').value;
-    const intensityType = document.getElementById('edit-exercise-intensity-type').value;
-
-    const newName = document.getElementById('edit-exercise-name').value.trim();
-    const newWeight = parseFloat(document.getElementById('edit-exercise-weight').value);
-    const newRepsValue = document.getElementById('edit-exercise-reps').value;
-
-    if (!newName) {
-      showExerciseMessage('운동 이름을 입력해주세요.', 'error', 'exercise-form-result');
-      return;
-    }
-
-    if (isNaN(newWeight) || newWeight <= 0) {
-      showExerciseMessage('올바른 중량을 입력해주세요.', 'error', 'exercise-form-result');
-      return;
-    }
-
-    const updates = {
-      exercise_name: newName,
-      weight_kg: newWeight
-    };
-
-    if (intensityType === 'rpe') {
-      const rpe = parseFloat(newRepsValue);
-      if (isNaN(rpe) || rpe < 0 || rpe > 10) {
-        showExerciseMessage('RPE는 0~10 사이여야 합니다.', 'error', 'exercise-form-result');
-        return;
-      }
-      updates.rpe = rpe;
-    } else {
-      const reps = parseInt(newRepsValue);
-      if (isNaN(reps) || reps <= 0) {
-        showExerciseMessage('올바른 횟수를 입력해주세요.', 'error', 'exercise-form-result');
-        return;
-      }
-      if (reps >= 100) {
-        showExerciseMessage('횟수는 100회 미만으로 설정해주세요.', 'error', 'exercise-form-result');
-        return;
-      }
-      updates.reps = reps;
-    }
-
-    await updateExerciseAPI(exerciseId, updates);
-    updateUserExercisesList();
-    updateExerciseSelectOptions();
-
-    // 모달 닫기
-    document.getElementById('exercise-edit-modal').style.display = 'none';
-    document.body.classList.remove('modal-open');
-    onModalClose();
-    showExerciseMessage('운동이 수정되었습니다!', 'success', 'exercise-form-result');
-
-  } catch (error) {
-    console.error('운동 수정 실패:', error);
-    showExerciseMessage('운동 수정에 실패했습니다: ' + error.message, 'error', 'exercise-form-result');
-  }
-}
-
-// 운동 삭제 함수 (전역) - 모달 기반 UI
-function deleteExercise(exerciseId) {
-  try {
-    const exercise = userExercises.find(e => e.id === exerciseId);
-    if (!exercise) {
-      throw new Error('운동을 찾을 수 없습니다.');
-    }
-
-    // 모달에 데이터 채우기
-    document.getElementById('delete-exercise-id').value = exerciseId;
-    document.getElementById('exercise-delete-message').innerHTML =
-      `<strong>${exercise.exercise_name}</strong> 운동을 삭제하시겠습니까?<br><small style="color: #a0aec0;">이 작업은 되돌릴 수 없습니다.</small>`;
-
-    // 모달 표시
-    document.getElementById('exercise-delete-modal').style.display = 'block';
-    document.body.classList.add('modal-open');
-    onModalOpen();
-
-  } catch (error) {
-    console.error('운동 삭제 모달 열기 실패:', error);
-    showExerciseMessage('운동을 찾을 수 없습니다: ' + error.message, 'error', 'exercise-form-result');
-  }
-}
-
-// 운동 삭제 확인 처리
-async function confirmExerciseDelete() {
-  try {
-    const exerciseId = document.getElementById('delete-exercise-id').value;
-
-    await deleteExerciseAPI(exerciseId);
-    updateUserExercisesList();
-    updateExerciseSelectOptions();
-    updateWeeklyProgressDashboard();
-
-    // 모달 닫기
-    document.getElementById('exercise-delete-modal').style.display = 'none';
-    document.body.classList.remove('modal-open');
-    onModalClose();
-    showExerciseMessage('운동이 삭제되었습니다.', 'info', 'exercise-form-result');
-
-  } catch (error) {
-    console.error('운동 삭제 실패:', error);
-    document.getElementById('exercise-delete-modal').style.display = 'none';
-    document.body.classList.remove('modal-open');
-    onModalClose();
-    showExerciseMessage('운동 삭제에 실패했습니다: ' + error.message, 'error', 'exercise-form-result');
-  }
-}
-
-// 주간 운동 진행률 대시보드 업데이트
-async function updateWeeklyProgressDashboard() {
-  try {
-    // 근육부위별 진행률 상세 업데이트
-    const detailsContainer = document.getElementById('weekly-progress-details');
-
-    if (detailsContainer) {
-      if (weeklyProgress.length === 0) {
-        detailsContainer.innerHTML = '<p style="text-align: center; color: #666; margin: 20px 0;">운동을 등록하고 세션을 기록해보세요!</p>';
-        return;
-      }
-
-      let html = '';
-      weeklyProgress.forEach(progress => {
-        // Find muscle group details to get full stats if missing
-        const muscleGroup = muscleGroups.find(mg => mg.id === progress.muscle_group_id) || {};
-
-        // API returns total_sets, not current_sets
-        const current = parseInt(progress.total_sets) || parseInt(progress.current_sets) || 0;
-        const mv = parseInt(progress.mv_sets !== undefined ? progress.mv_sets : (muscleGroup.mv_sets || 0));
-        const mev = parseInt(progress.mev_sets !== undefined ? progress.mev_sets : (muscleGroup.mev_sets || 0));
-        // Fallback logic: try mav_min_sets, then mav_sets, then default
-        const mav_min = parseInt(progress.mav_min_sets !== undefined ? progress.mav_min_sets :
-          (muscleGroup.mav_min_sets !== undefined ? muscleGroup.mav_min_sets :
-            (progress.mav_sets || muscleGroup.mav_sets || 10)));
-
-        const mav_max = parseInt(progress.mav_max_sets !== undefined ? progress.mav_max_sets :
-          (muscleGroup.mav_max_sets !== undefined ? muscleGroup.mav_max_sets :
-            (mav_min + 4)));
-
-        const mrv = parseInt(progress.mrv_sets !== undefined ? progress.mrv_sets : (muscleGroup.mrv_sets || 20));
-
-        let statusText = '';
-        let statusClass = '';
-        let statusBadgeClass = '';
-        let message = '';
-        let messageColor = '';
-
-        if (current <= mv) {
-          statusText = '근손실';
-          statusClass = 'status-loss';
-          statusBadgeClass = 'badge-loss';
-          message = `💪 MV(${mv}세트) 이하입니다. ${mv + 1}세트 이상 해야 근손실을 방지할 수 있어요!`;
-          messageColor = '#718096';
-        } else if (current <= mev) {
-          statusText = '근유지';
-          statusClass = 'status-maintenance';
-          statusBadgeClass = 'badge-maintenance';
-          message = `🔥 MV(${mv}) 달성! MEV(${mev}세트)까지 ${mev - current}세트 남았어요.`;
-          messageColor = '#d69e2e';
-        } else if (current <= mav_min) {
-          statusText = '근자극';
-          statusClass = 'status-stimulation';
-          statusBadgeClass = 'badge-stimulation';
-          message = `✨ MEV(${mev}) 달성! MAV(${mav_min}~${mav_max}세트)까지 ${mav_min - current}세트 남았어요.`;
-          messageColor = '#38a169';
-        } else if (current <= mav_max) {
-          statusText = '최적근성장';
-          statusClass = 'status-optimal';
-          statusBadgeClass = 'badge-optimal';
-          message = `🏆 완벽해요! MAV(${mav_min}~${mav_max}세트) 최적의 근성장 구간입니다.`;
-          messageColor = '#805ad5';
-        } else if (current <= mrv) {
-          statusText = '한계근성장';
-          statusClass = 'status-limit';
-          statusBadgeClass = 'badge-limit';
-          message = `⚠️ MAV 초과! MRV(${mrv}세트)까지 ${mrv - current}세트 남았어요. 주의하세요.`;
-          messageColor = '#dd6b20';
-        } else {
-          statusText = '과잉';
-          statusClass = 'status-excess';
-          statusBadgeClass = 'badge-excess';
-          message = `🚫 MRV(${mrv}세트) 초과! 오버트레이닝 위험, 휴식이 필요합니다.`;
-          messageColor = '#e53e3e';
-        }
-
-        // Progress bar percentage relative to MRV (capped at 100%)
-        // Using MRV as the 100% mark for the bar gives a good visual indication of "full capacity"
-        const progressPercentage = mrv > 0 ? Math.min((current / mrv) * 100, 100) : 0;
-
-        html += `
-          <div class="muscle-progress-card">
-            <div class="muscle-progress-header">
-              <div class="muscle-progress-name">${progress.muscle_group_name_ko}</div>
-              <div class="muscle-progress-status ${statusBadgeClass}">${statusText}</div>
-            </div>
-            
-            <div class="progress-bar-container">
-              <div class="progress-bar ${statusClass}" style="width: ${progressPercentage}%"></div>
-            </div>
-            
-            <div class="progress-details">
-              <span>현재: ${current}세트</span>
-              <span>MAV: ${mav_min}~${mav_max} / MRV: ${mrv}</span>
-            </div>
-            
-            <div style="margin-top: 8px; font-size: 12px; color: ${messageColor}; font-weight: 500;">
-              ${message}
-            </div>
-          </div>
-        `;
-      });
-
-      detailsContainer.innerHTML = html;
-    }
-
-  } catch (error) {
-    console.error('주간 진행률 대시보드 업데이트 실패:', error);
-  }
-}
-
-// Initialize Exercise Logic
-document.addEventListener('DOMContentLoaded', () => {
-  initializeManagers();
-  setupExerciseEventListeners();
-  initPokemonFilter(); // 포켓몬 필터 초기화
-});
-
-// Expose functions globally for HTML event handlers
-window.editExercise = editExercise;
-window.deleteExercise = deleteExercise;
-
 // ==========================================
 // 포켓몬 필터 시스템
 // ==========================================
@@ -4301,11 +4228,14 @@ window.deleteExercise = deleteExercise;
 const FILTER_STORAGE_KEY = 'pokemonCollectionFilter';
 let currentFilter = {
   favoritesOnly: false,
-  showFavoriteIcon: true, // 즐겨찾기 아이콘 표시 여부
+  legendaryOnly: false, // 전설만 보기
+  mythicalOnly: false, // 환상만 보기
   completion: 'all', // 'all', 'complete', 'incomplete'
   types: [], // 복수 타입 선택 가능 ([] = 전체)
+  habitats: [], // 복수 서식지 선택 가능 ([] = 전체)
   generations: [], // 복수 세대 선택 가능 ([] = 전체)
-  sort: 'default' // 'default', 'progress-high', 'progress-low', 'generation'
+  sort: 'default', // 'default', 'progress-high', 'progress-low', 'generation'
+  searchQuery: '' // 검색어
 };
 
 // 필터 설정 불러오기
@@ -4340,7 +4270,8 @@ function initPokemonFilter() {
   const filterApply = document.getElementById('filter-apply-btn');
   const filterReset = document.getElementById('filter-reset-btn');
   const favoritesToggle = document.getElementById('filter-favorites-toggle');
-  const showFavoriteIconToggle = document.getElementById('filter-show-favorite-icon');
+  const legendaryToggle = document.getElementById('filter-legendary-toggle');
+  const mythicalToggle = document.getElementById('filter-mythical-toggle');
 
   if (!filterBtn || !filterModal) return;
 
@@ -4376,10 +4307,17 @@ function initPokemonFilter() {
     });
   }
 
-  // 즐겨찾기 아이콘 표시 토글
-  if (showFavoriteIconToggle) {
-    showFavoriteIconToggle.addEventListener('click', () => {
-      showFavoriteIconToggle.classList.toggle('active');
+  // 전설 토글
+  if (legendaryToggle) {
+    legendaryToggle.addEventListener('click', () => {
+      legendaryToggle.classList.toggle('active');
+    });
+  }
+
+  // 환상 토글
+  if (mythicalToggle) {
+    mythicalToggle.addEventListener('click', () => {
+      mythicalToggle.classList.toggle('active');
     });
   }
 
@@ -4442,6 +4380,22 @@ function initPokemonFilter() {
             filterModal.querySelector('.filter-chip[data-filter="generation"][data-value="all"]')?.classList.add('active');
           }
         }
+      } else if (filterType === 'habitat') {
+        // 서식지는 다중 선택 가능
+        if (value === 'all') {
+          filterModal.querySelectorAll('.filter-chip[data-filter="habitat"]').forEach(c => {
+            c.classList.remove('active');
+          });
+          chip.classList.add('active');
+        } else {
+          filterModal.querySelector('.filter-chip[data-filter="habitat"][data-value="all"]')?.classList.remove('active');
+          chip.classList.toggle('active');
+
+          const anyHabitatSelected = filterModal.querySelectorAll('.filter-chip[data-filter="habitat"].active:not([data-value="all"])').length > 0;
+          if (!anyHabitatSelected) {
+            filterModal.querySelector('.filter-chip[data-filter="habitat"][data-value="all"]')?.classList.add('active');
+          }
+        }
       } else {
         // 다른 필터들은 단일 선택
         filterModal.querySelectorAll(`.filter-chip[data-filter="${filterType}"]`).forEach(c => {
@@ -4476,7 +4430,7 @@ function openFilterModal() {
   // 현재 필터 상태를 UI에 반영
   syncFilterUI();
 
-  filterModal.style.display = 'block';
+  filterModal.style.display = 'flex';
   document.body.classList.add('modal-open');
   onModalOpen();
 }
@@ -4484,6 +4438,8 @@ function openFilterModal() {
 // 필터 UI 동기화
 function syncFilterUI() {
   const favoritesToggle = document.getElementById('filter-favorites-toggle');
+  const legendaryToggle = document.getElementById('filter-legendary-toggle');
+  const mythicalToggle = document.getElementById('filter-mythical-toggle');
   const showFavoriteIconToggle = document.getElementById('filter-show-favorite-icon');
 
   // 즐겨찾기 토글
@@ -4495,12 +4451,21 @@ function syncFilterUI() {
     }
   }
 
-  // 즐겨찾기 아이콘 표시 토글
-  if (showFavoriteIconToggle) {
-    if (currentFilter.showFavoriteIcon !== false) {
-      showFavoriteIconToggle.classList.add('active');
+  // 전설 토글
+  if (legendaryToggle) {
+    if (currentFilter.legendaryOnly) {
+      legendaryToggle.classList.add('active');
     } else {
-      showFavoriteIconToggle.classList.remove('active');
+      legendaryToggle.classList.remove('active');
+    }
+  }
+
+  // 환상 토글
+  if (mythicalToggle) {
+    if (currentFilter.mythicalOnly) {
+      mythicalToggle.classList.add('active');
+    } else {
+      mythicalToggle.classList.remove('active');
     }
   }
 
@@ -4526,6 +4491,13 @@ function syncFilterUI() {
       } else if (currentFilter.generations.includes(value)) {
         chip.classList.add('active');
       }
+    } else if (filterType === 'habitat') {
+      // 서식지: 배열이 비어있으면 'all', 아니면 해당 서식지들 활성화
+      if (currentFilter.habitats.length === 0 && value === 'all') {
+        chip.classList.add('active');
+      } else if (currentFilter.habitats.includes(value)) {
+        chip.classList.add('active');
+      }
     } else if (filterType === 'sort' && currentFilter.sort === value) {
       chip.classList.add('active');
     }
@@ -4535,11 +4507,14 @@ function syncFilterUI() {
 // 필터 적용
 function applyFilter() {
   const favoritesToggle = document.getElementById('filter-favorites-toggle');
+  const legendaryToggle = document.getElementById('filter-legendary-toggle');
+  const mythicalToggle = document.getElementById('filter-mythical-toggle');
   const showFavoriteIconToggle = document.getElementById('filter-show-favorite-icon');
 
   // UI에서 필터 값 읽기
   currentFilter.favoritesOnly = favoritesToggle?.classList.contains('active') || false;
-  currentFilter.showFavoriteIcon = showFavoriteIconToggle?.classList.contains('active') !== false;
+  currentFilter.legendaryOnly = legendaryToggle?.classList.contains('active') || false;
+  currentFilter.mythicalOnly = mythicalToggle?.classList.contains('active') || false;
 
   // 완료 상태
   const completionChip = document.querySelector('.filter-chip[data-filter="completion"].active');
@@ -4553,9 +4528,15 @@ function applyFilter() {
   const activeGenerationChips = document.querySelectorAll('.filter-chip[data-filter="generation"].active:not([data-value="all"])');
   currentFilter.generations = Array.from(activeGenerationChips).map(chip => chip.dataset.value);
 
+  // 서식지 (복수 선택)
+  const activeHabitatChips = document.querySelectorAll('.filter-chip[data-filter="habitat"].active:not([data-value="all"])');
+  currentFilter.habitats = Array.from(activeHabitatChips).map(chip => chip.dataset.value);
+
   // 정렬
   const sortChip = document.querySelector('.filter-chip[data-filter="sort"].active');
-  currentFilter.sort = sortChip?.dataset.value || 'default';
+  const newSort = sortChip?.dataset.value || 'default';
+  const sortChanged = currentFilter.sort !== newSort;
+  currentFilter.sort = newSort;
 
   // 저장
   saveFilterSettings();
@@ -4563,8 +4544,12 @@ function applyFilter() {
   // 필터 배지 업데이트
   updateFilterBadge();
 
-  // 아이콘 목록 새로고침 (필터 적용)
-  loadUserPokemonIcons();
+  // 아이콘 목록 새로고침 (정렬이 바뀌었으면 fetch 필요할 수 있음)
+  if (sortChanged && (newSort === 'generation' || lastLoadedIconApiEndpoint?.includes('all-pokemon'))) {
+    loadUserPokemonIcons();
+  } else {
+    updateUserPokemonIconsUI();
+  }
 
   showToast('필터가 적용되었습니다.');
 }
@@ -4572,17 +4557,25 @@ function applyFilter() {
 // 필터 초기화
 function resetFilter() {
   currentFilter = {
+    ...currentFilter,
     favoritesOnly: false,
-    showFavoriteIcon: true,
     completion: 'all',
     types: [],
+    habitats: [],
     generations: [],
-    sort: 'default'
+    sort: 'default',
+    searchQuery: ''
   };
 
   saveFilterSettings();
   syncFilterUI();
   updateFilterBadge();
+
+  // 검색창 UI 초기화
+  if (iconSearchInput) iconSearchInput.value = '';
+  if (iconSearchContainer) iconSearchContainer.classList.remove('active');
+
+  loadUserPokemonIcons();
 
   showToast('필터가 초기화되었습니다.');
 }
@@ -4597,8 +4590,11 @@ function updateFilterBadge() {
   // 기본값이 아닌 필터가 있으면 배지 표시
   const hasActiveFilter =
     currentFilter.favoritesOnly ||
+    currentFilter.legendaryOnly ||
+    currentFilter.mythicalOnly ||
     currentFilter.completion !== 'all' ||
     currentFilter.types.length > 0 ||
+    currentFilter.habitats.length > 0 ||
     currentFilter.generations.length > 0 ||
     currentFilter.sort !== 'default';
 
@@ -4616,10 +4612,40 @@ function getFilteredPokemonList(icons) {
   if (!icons || icons.length === 0) return [];
 
   let filtered = [...icons];
+  const query = (currentFilter.searchQuery || '').toLowerCase().trim();
+
+  // 0. 검색 필터 (aria-label 기준 검색 요청에 따라 이름/이미지명 검색)
+  if (query) {
+    filtered = filtered.filter(icon => {
+      const name = (icon.name || icon.base_image_name || '').toLowerCase();
+      return name.includes(query);
+    });
+  }
 
   // 1. 즐겨찾기 필터
   if (currentFilter.favoritesOnly) {
     filtered = filtered.filter(icon => icon.is_favorite);
+  }
+
+  // 1.5. 전설/환상 필터
+  if (currentFilter.legendaryOnly && currentFilter.mythicalOnly) {
+    // 둘 다 선택된 경우: 전설 OR 환상
+    filtered = filtered.filter(icon => icon.is_legendary || icon.is_mythical);
+  } else {
+    // 개별 선택인 경우 (둘 중 하나만 선택 or 둘 다 미선택)
+    if (currentFilter.legendaryOnly) {
+      filtered = filtered.filter(icon => icon.is_legendary);
+    }
+    if (currentFilter.mythicalOnly) {
+      filtered = filtered.filter(icon => icon.is_mythical);
+    }
+  }
+
+  // 1.8. 서식지 필터 (OR 검색)
+  if (currentFilter.habitats.length > 0) {
+    filtered = filtered.filter(icon => {
+      return currentFilter.habitats.includes(icon.habitat);
+    });
   }
 
   // 2. 완료 상태 필터
@@ -4632,8 +4658,10 @@ function getFilteredPokemonList(icons) {
   // 3. 타입 필터 (복수 선택 가능)
   if (currentFilter.types.length > 0) {
     filtered = filtered.filter(icon => {
-      // 선택된 타입 중 하나라도 일치하면 표시
-      return currentFilter.types.includes(icon.type1) || currentFilter.types.includes(icon.type2);
+      // 선택된 모든 타입을 포함하는 포켓몬만 표시 (AND 검색)
+      return currentFilter.types.every(selectedType =>
+        icon.type1 === selectedType || icon.type2 === selectedType
+      );
     });
   }
 
@@ -4646,9 +4674,7 @@ function getFilteredPokemonList(icons) {
   }
 
   // 4. 정렬
-  if (currentFilter.sort === 'progress-high') {
-    filtered.sort((a, b) => (b.completion_percentage || 0) - (a.completion_percentage || 0));
-  } else if (currentFilter.sort === 'progress-low') {
+  if (currentFilter.sort === 'progress-low') {
     filtered.sort((a, b) => (a.completion_percentage || 0) - (b.completion_percentage || 0));
   } else if (currentFilter.sort === 'recent') {
     filtered.sort((a, b) => {
@@ -4688,16 +4714,11 @@ const shopCloseBtn = document.getElementById('shop-close');
 
 // 트레이드 숍 레시피 정의
 const shopRecipes = [
-  { cost: 'Shiny Charm', costCount: 1, reward: 'Mystic Charm', rewardCount: 1 },
-  { cost: 'Shiny Charm', costCount: 3, reward: 'Oval Charm', rewardCount: 1 },
-
   { cost: 'Mystic Charm', costCount: 1, reward: 'Shiny Charm', rewardCount: 1 },
   { cost: 'Rare Candy', costCount: 1, reward: 'Shiny Charm', rewardCount: 2 },
   { cost: 'Oval Charm', costCount: 1, reward: 'Shiny Charm', rewardCount: 3 },
   { cost: 'Shiny Charm', costCount: 5, reward: 'Brilliance Charm', rewardCount: 1 },
   { cost: 'Mystic Charm', costCount: 2, reward: 'Awakening Charm', rewardCount: 1 },
-
-
 ];
 
 // 아이템 정보 캐시
@@ -4918,11 +4939,11 @@ async function exchangeItem(costItemName, costAmount, rewardItemName, rewardAmou
     `<div style="text-align: center;">
        <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px;">
          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-           <span style="font-size: 10px; color: #ef4444; font-weight: 600; background: #fef2f2; padding: 2px 8px; border-radius: 4px;">소모</span>
+           <span style="font-size: 10px; color: #CD5C5C; font-weight: 600; background: #FFF5F5; padding: 2px 8px; border-radius: 4px;">소모</span>
            <div style="width: 56px; height: 56px; background: #fef2f2; border-radius: 12px; display: flex; align-items: center; justify-content: center; border: 1px solid #fecaca; position: relative;">
              <img src="${costImgUrl}" width="36" height="36" style="object-fit: contain;" onerror="this.style.display='none'">
            </div>
-           <span id="exchange-cost-count" style="font-size: 13px; color: #ef4444; font-weight: 600;">x${costAmount}</span>
+           <span id="exchange-cost-count" style="font-size: 13px; color: #CD5C5C; font-weight: 600;">x${costAmount}</span>
            <span style="font-size: 11px; color: #666;">${safeCostName}</span>
            <span id="exchange-after-cost" style="font-size: 10px; color: #999;">${currentCostOwned} → ${currentCostOwned - costAmount}</span>
          </div>
@@ -4932,11 +4953,11 @@ async function exchangeItem(costItemName, costAmount, rewardItemName, rewardAmou
            </svg>
          </div>
          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-           <span style="font-size: 10px; color: #10b981; font-weight: 600; background: #ecfdf5; padding: 2px 8px; border-radius: 4px;">획득</span>
+           <span style="font-size: 10px; color: #185888; font-weight: 600; background: #E6F0F6; padding: 2px 8px; border-radius: 4px;">획득</span>
            <div style="width: 56px; height: 56px; background: #ecfdf5; border-radius: 12px; display: flex; align-items: center; justify-content: center; border: 1px solid #a7f3d0; position: relative;">
              <img src="${rewardImgUrl}" width="36" height="36" style="object-fit: contain;" onerror="this.style.display='none'">
            </div>
-           <span id="exchange-reward-count" style="font-size: 13px; color: #10b981; font-weight: 600;">x${rewardAmount}</span>
+           <span id="exchange-reward-count" style="font-size: 13px; color: #185888; font-weight: 600;">x${rewardAmount}</span>
            <span style="font-size: 11px; color: #666;">${safeRewardName}</span>
            <span id="exchange-after-reward" style="font-size: 10px; color: #999;">${currentRewardOwned} → ${currentRewardOwned + rewardAmount}</span>
          </div>
@@ -4946,8 +4967,7 @@ async function exchangeItem(costItemName, costAmount, rewardItemName, rewardAmou
          <span style="font-size: 12px; color: #666;">교환 수량</span>
          <button id="exchange-minus" style="width: 28px; height: 28px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;" disabled>−</button>
          <span id="exchange-quantity" style="font-size: 16px; font-weight: 600; min-width: 24px; text-align: center;">1</span>
-         <button id="exchange-plus" style="width: 28px; height: 28px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;" ${maxExchangeCount <= 1 ? 'disabled' : ''}>＋</button>
-         <span style="font-size: 11px; color: #999;">(최대 ${maxExchangeCount}회)</span>
+         <button id="exchange-plus" style="width: 28px; height: 28px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;" ${maxExchangeCount <= 1 ? 'disabled' : ''}>＋</button>         
        </div>
        ` : ''}
      </div>`,
@@ -5147,7 +5167,7 @@ function updateScreenTimePreview() {
     preview.style.color = '#EF4444';
   } else {
     preview.textContent = `📱 ${hours}시간 ${minutes}분`;
-    preview.style.color = '#4F46E5';
+    preview.style.color = '#CD5C5C';
   }
 }
 
@@ -5241,6 +5261,11 @@ if (submitScreenTimeBtn) {
         return;
       }
 
+      // 주간 검증 확인 (추가)
+      if (!checkScreenTimeInputAllowed()) {
+        return; // 검증 필요 시 차단
+      }
+
       const userId = window.getCurrentUserId ? window.getCurrentUserId() : null;
       if (!userId) {
         showToast('로그인이 필요합니다.');
@@ -5315,63 +5340,23 @@ if (submitScreenTimeBtn) {
       console.log('스크린타임 저장 성공:', data);
 
       // 결과 표시
+      // 결과 표시 요소 가져오기
       const resultDiv = document.getElementById('screenTimeResult');
-      resultDiv.className = 'result-message result-success';
-      resultDiv.style.display = 'block';
 
-      // 보상 정보 렌더링
-      let rewardHtml = '';
+      let modalShown = false;
+
+      // 보상 획득 모달 표시 시도
       if (data.isNewEntry && data.rewards) {
-        const rewards = data.rewards;
-        const rewardItems = [];
-
-        if (rewards.mysticCharmReceived > 0) {
-          rewardItems.push(`신비의 부적 x${rewards.mysticCharmReceived}`);
-        }
-        if (rewards.rareCandyReceived > 0) {
-          rewardItems.push(`이상한 사탕 x${rewards.rareCandyReceived}`);
-        }
-        if (rewards.ovalCharmReceived > 0) {
-          rewardItems.push(`둥근 부적 x${rewards.ovalCharmReceived}`);
-        }
-        if (rewards.shinyCharmReceived > 0) {
-          rewardItems.push(`빛나는 부적 x${rewards.shinyCharmReceived}`);
-        }
-        if (rewards.brillianceCharmReceived > 0) {
-          rewardItems.push(`찬란한 부적 x${rewards.brillianceCharmReceived}`);
-        }
-        if (rewards.basePokemonList && rewards.basePokemonList.length > 0) {
-          rewardItems.push(`기초 포켓몬 ${rewards.basePokemonList.length}마리`);
-        }
-        if (rewards.legendaryPokemon) {
-          rewardItems.push(`전설 포켓몬 획득!`);
-        }
-        if (rewards.mythicalPokemon) {
-          rewardItems.push(`환상 포켓몬 획득!`);
-        }
-        if (rewards.specialDayPokemon) {
-          rewardItems.push(`특별 보상 포켓몬!`);
-        }
-
-        if (rewardItems.length > 0) {
-          rewardHtml = `<br><strong>🎁 보상:</strong> ${rewardItems.join(', ')}`;
+        const hasRewards = (data.rewards.pokemons && data.rewards.pokemons.length > 0) ||
+          (data.rewards.items && data.rewards.items.length > 0);
+        if (hasRewards) {
+          const comparisonResult = data.weeklyComparison?.comparisonResult || null;
+          showRewardResultModal(data.rewards, comparisonResult, data.eventName);
+          modalShown = true;
+          // 모달이 뜨면 텍스트 결과는 숨김 (또는 필요시 표시하지 않음)
+          resultDiv.style.display = 'none';
         }
       }
-
-      // 전주 비교 정보
-      let comparisonHtml = '';
-      if (data.weeklyComparison && data.weeklyComparison.comparisonResult) {
-        comparisonHtml = `<br><small>📊 ${data.weeklyComparison.comparisonResult}</small>`;
-      }
-
-      resultDiv.innerHTML = `
-          <strong>✅ 저장 완료!</strong><br>
-          날짜: ${dateInput}<br>
-          📱 ${data.usage?.hours || 0}시간 ${data.usage?.minutes || 0}분
-          ${comparisonHtml}
-          ${rewardHtml}
-        `;
-
       // 입력 필드 초기화
       clearScreenTimeCodeInputs();
       document.getElementById('isOver10Hours').checked = false;
@@ -5379,11 +5364,22 @@ if (submitScreenTimeBtn) {
       // 어제 날짜로 다시 설정
       setYesterdayDate();
 
-      // 5초 후 결과 메시지 숨기기 (보상 있으면 더 오래 표시)
-      const hideDelay = rewardHtml ? 5000 : 3000;
-      setTimeout(() => {
-        resultDiv.style.display = 'none';
-      }, hideDelay);
+      // 스크린타임 모달 닫기
+      if (typeof closeScreenTimeModal === 'function') closeScreenTimeModal();
+
+      // 주간 달성 바 업데이트
+      if (typeof updateWeeklyAchievementBar === 'function') updateWeeklyAchievementBar();
+
+      // 오늘의 포켓몬 및 수면 상태 갱신 (새로운 포켓몬 획득 시 홈화면 업데이트)
+      if (data.isNewEntry && data.rewards) {
+        const hasPokemons = data.rewards.pokemons && data.rewards.pokemons.length > 0;
+        if (hasPokemons) {
+          if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+          if (window.sleepTracker && typeof window.sleepTracker.loadSleepStatus === 'function') {
+            await window.sleepTracker.loadSleepStatus();
+          }
+        }
+      }
 
     } catch (err) {
       console.error('스크린타임 저장 중 예외 발생:', err);
@@ -5543,14 +5539,30 @@ function initTabNavigation() {
           window.dispatchEvent(new Event('resize'));
 
           // Load data for specific tabs
-          if (targetTab === 'eggs') {
-            if (typeof loadUserEggs === 'function') loadUserEggs();
+          if (targetTab === 'pokedex') {
+            // 이미 로드되었으면 재요청 방지
+            if (!window.isPokedexLoaded && typeof loadUserPokemonIcons === 'function') {
+              loadUserPokemonIcons();
+            }
+          }
+
+          // 수면 탭 데이터 로드
+          if (targetTab === 'sleep') {
+            if (window.sleepTracker && (!window.sleepTracker.sleepStatusLoaded || !window.sleepTracker.sleepStatus)) {
+              console.log('Reloading sleep status for sleep tab');
+              window.sleepTracker.loadSleepStatus();
+            }
           }
         } else {
           view.classList.remove('active');
           view.style.display = 'none';
         }
       });
+
+      // PWA 배너 가시성 업데이트
+      if (typeof window.updatePwaBannerVisibility === 'function') {
+        window.updatePwaBannerVisibility();
+      }
     });
   });
 
@@ -5579,9 +5591,8 @@ function setupGuestModeUI() {
   // 저장 관련 버튼들에 비활성화 스타일 적용
   const saveButtons = [
     'submitScreenTimeBtn',      // 스크린타임 저장
-    'log-session-btn',          // 운동 세션 기록
-    'add-exercise-btn',         // 운동 등록
-    'validateScreenTimeBtn'     // 스크린타임 검증
+    'validateScreenTimeBtn',    // 스크린타임 검증
+    'submitSleepBtn'            // 수면 저장
   ];
 
   saveButtons.forEach(btnId => {
@@ -5602,13 +5613,33 @@ function setupGuestModeUI() {
   }
 }
 
+// 탭 상태 및 데이터 리스트 초기화 (로그인/로그아웃 시 호출)
+function resetTabState() {
+  console.log('Resetting all tab states and data lists');
+  window.isPokedexLoaded = false;
+  lastLoadedIconApiEndpoint = null;
+
+  if (window.sleepTracker) {
+    window.sleepTracker.sleepStatusLoaded = false;
+    window.sleepTracker.sleepStatus = null;
+  }
+
+  // 데이터 리스트 초기화 (네비게이션 및 UI 잔상 방지)
+  userPokemonList = [];
+  todayPokemonList = [];
+  sleepPokemonList = [];
+  homeFavorites = [];
+}
+
 // 게스트 모드 UI 해제 함수 (로그인 시 호출)
 function clearGuestModeUI() {
+  // 탭 상태 및 데이터 초기화 우선 실행
+  resetTabState();
+
   const saveButtons = [
     'submitScreenTimeBtn',
-    'log-session-btn',
-    'add-exercise-btn',
-    'validateScreenTimeBtn'
+    'validateScreenTimeBtn',
+    'submitSleepBtn'
   ];
 
   saveButtons.forEach(btnId => {
@@ -5618,11 +5649,2575 @@ function clearGuestModeUI() {
     }
   });
 
-  const guestBanners = document.querySelectorAll('.guest-mode-banner');
-  guestBanners.forEach(banner => banner.classList.remove('visible'));
-
   const eggSearchInput = document.getElementById('eggSearchInput');
   if (eggSearchInput) {
     eggSearchInput.placeholder = '🔍 알 검색...';
   }
 }
+
+// ==========================================
+// Sleep Mode Logic (v2.0 - with Rewards)
+// ==========================================
+class SleepTracker {
+  constructor() {
+    this.storageKey = 'sleepSession';
+    this.queueKey = 'sleepSyncQueue';
+    this.wakeLock = null;
+    this.timerInterval = null;
+    this.wakeUpTimeout = null;
+    this.sleepStatus = null;
+    this.sleepStatusLoaded = false; // 로드 상태 플래그
+
+    this.elements = {
+      startBtn: document.getElementById('startSleepBtn'),
+      stopBtn: document.getElementById('stopSleepBtn'),
+
+      overlay: document.getElementById('sleepOverlay'),
+      timer: document.getElementById('sleepTimer'),
+
+      percentageText: document.getElementById('currentPercentage'),
+      holidayRuleText: document.getElementById('holidayRuleText'),
+      sleepTimePrefix: document.getElementById('sleepTimePrefix'),
+      pokemonIcons: document.getElementById('sleepPokemonIcons'),
+      message: document.getElementById('sleepMessage')
+    };
+
+    this.init();
+  }
+
+  init() {
+    if (this.elements.startBtn) {
+      this.elements.startBtn.addEventListener('click', () => this.startSleep());
+    }
+    if (this.elements.stopBtn) {
+      this.elements.stopBtn.addEventListener('click', () => this.finishSleep());
+    }
+
+    // Handle Window Resize for snake connectors
+    window.addEventListener('resize', () => this.handleResize());
+
+
+    // Setup Mascots (Komala & Musharna)
+    this.setupMascots();
+
+    // Visibility Change Listener
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        this.handleVisibleState();
+      } else if (document.visibilityState === 'hidden') {
+        this.handleHiddenState();
+      }
+    });
+
+    // Also check on touchstart for iOS safety
+    document.addEventListener('touchstart', () => {
+      if (document.visibilityState === 'visible') {
+        this.handleVisibleState();
+      }
+    }, { passive: true });
+
+    // Check status on load
+    this.checkSleepStatus();
+
+    // Try to sync any queued data
+    this.syncData();
+
+    // Listen for user-synced event to retry sync
+    window.addEventListener('user-synced', () => {
+      this.syncData();
+      // Only load sleep status if sleep tab is active
+      const viewSleep = document.getElementById('view-sleep');
+      if (viewSleep && viewSleep.classList.contains('active')) {
+        this.loadSleepStatus();
+      }
+    });
+
+    // Listen for network recovery to sync queued data
+    window.addEventListener('online', () => {
+      console.log('[SleepTracker] Network recovered, syncing queued data...');
+      this.syncData();
+    });
+
+    // Load sleep status when sleep tab is activated
+    const sleepTabBtn = document.querySelector('[data-tab="sleep"]');
+    if (sleepTabBtn) {
+      sleepTabBtn.addEventListener('click', () => {
+        // 이미 로드되었으면 재요청 방지
+        if (this.sleepStatusLoaded) return;
+        setTimeout(() => this.loadSleepStatus(), 100);
+      });
+    }
+  }
+
+  setupMascots() {
+    const overlay = this.elements.overlay;
+    if (!overlay) return;
+
+    // 기존 moon icon 찾기
+    const moonIcon = overlay.querySelector('.sleep-moon-icon');
+
+    // 이미 교체되었는지 확인
+    if (!moonIcon && overlay.querySelector('.sleep-mascot-container')) return;
+
+    // 컨테이너 생성
+    const container = document.createElement('div');
+    container.className = 'sleep-mascot-container';
+
+    // 자말라 (Center)
+    const komalaUrl = getPokemonImageUrl('KOMALA', '', 'Front');
+    const komalaDiv = document.createElement('div');
+    komalaDiv.id = 'sleep-mascot-komala';
+    komalaDiv.className = 'sleep-mascot';
+    komalaDiv.style.setProperty('--scale-x', '1');
+
+    // Zzz 효과
+    const zzz = document.createElement('div');
+    zzz.className = 'sleep-zzz';
+    zzz.textContent = 'Zzz...';
+
+    container.appendChild(zzz);
+    container.appendChild(komalaDiv);
+
+    if (moonIcon) {
+      moonIcon.replaceWith(container);
+    } else {
+      const content = overlay.querySelector('.sleep-content');
+      if (content) {
+        content.prepend(container);
+      }
+    }
+
+    // 스프라이트 애니메이션 초기화 (div가 DOM에 추가된 후 실행)
+    setupSprite('sleep-mascot-komala', komalaUrl, 3);
+  }
+
+  async requestWakeLock() {
+    if ('wakeLock' in navigator) {
+      try {
+        this.wakeLock = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock active');
+      } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+      }
+    }
+  }
+
+  releaseWakeLock() {
+    if (this.wakeLock) {
+      this.wakeLock.release();
+      this.wakeLock = null;
+      console.log('Wake Lock released');
+    }
+  }
+
+  startSleep() {
+    // Check if already slept today
+    if (this.sleepStatus && !this.sleepStatus.canSleepToday) {
+      this.showMessage('이미 오늘은 수면을 기록했습니다.', 'warning');
+      return;
+    }
+
+    // Step 1: Sleep Prep
+    localStorage.setItem('sleepPrep', 'true');
+    this.showOverlay(Date.now());
+    this.requestWakeLock();
+  }
+
+  handleHiddenState() {
+    // Step 2: Sleep Start
+    if (localStorage.getItem('sleepPrep') === 'true') {
+      const startTime = Date.now();
+      const session = {
+        status: 'sleeping',
+        startTime: startTime
+      };
+      localStorage.setItem(this.storageKey, JSON.stringify(session));
+      localStorage.removeItem('sleepPrep');
+      console.log('Sleep started at', new Date(startTime).toLocaleTimeString());
+    }
+
+    // If already sleeping, cancel any wake-up timeout (user went back to sleep)
+    if (this.wakeUpTimeout) {
+      clearTimeout(this.wakeUpTimeout);
+      this.wakeUpTimeout = null;
+      console.log('Sleep resumed (screen off)');
+    }
+  }
+
+  handleVisibleState() {
+    // Step 4: Wake up - Strict mode: immediately check duration
+    const sessionStr = localStorage.getItem(this.storageKey);
+    if (!sessionStr) return;
+
+    const session = JSON.parse(sessionStr);
+    if (session.status === 'sleeping') {
+      const now = Date.now();
+      const duration = now - session.startTime;
+      const MIN_SLEEP_DURATION = 4 * 60 * 60 * 1000; // 4 hours
+
+      if (duration < MIN_SLEEP_DURATION) {
+        // 4시간 미만: 즉시 수면 취소
+        console.log('Sleep cancelled: duration less than 4 hours');
+        localStorage.removeItem(this.storageKey);
+        this.hideOverlay();
+        this.releaseWakeLock();
+
+        const hours = Math.floor(duration / 3600000);
+        const minutes = Math.floor((duration % 3600000) / 60000);
+        showToast(`수면 시간이 너무 짧아 기록되지 않았어요 (${hours}시간 ${minutes}분 / 최소 4시간)`);
+        return;
+      }
+
+      // 4시간 이상: 오버레이 표시하고 바로 종료 처리
+      this.showOverlay(session.startTime);
+      this.finishSleep();
+    }
+  }
+
+  finishSleep() {
+    // 1. 세션 정보 확인
+    const sessionStr = localStorage.getItem(this.storageKey);
+    if (!sessionStr) {
+      this.hideOverlay();
+      this.releaseWakeLock();
+      return;
+    }
+
+    const session = JSON.parse(sessionStr);
+    const endTime = Date.now();
+    const startTime = session.startTime;
+    const duration = endTime - startTime;
+
+    // 4 hours in ms = 14,400,000
+    const MIN_SLEEP_DURATION = 14400000;
+
+    // 2. 중요: 로컬 스토리지 세션 삭제 (가장 먼저 실행하여 상태 리셋 보장)
+    localStorage.removeItem(this.storageKey);
+    console.log('Sleep session cleared from localStorage');
+
+    // 3. UI 및 리소스 정리
+    this.hideOverlay();
+    this.releaseWakeLock();
+    if (this.wakeUpTimeout) {
+      clearTimeout(this.wakeUpTimeout);
+      this.wakeUpTimeout = null;
+    }
+
+    // 4. 수면 시간 검증 및 처리
+    if (duration < MIN_SLEEP_DURATION) {
+      showToast('수면 시간이 너무 짧아 기록되지 않았어요 (4시간 미만)');
+      // 상태 리프레시 (서버는 "아직 안 잤음" 상태일 것이므로 UI가 "수면 가능"으로 돌아감)
+      this.loadSleepStatus();
+    } else {
+      const sleepLog = {
+        start: startTime,
+        end: endTime,
+        duration: duration
+      };
+
+      // 동기화 큐에 추가
+      this.addToSyncQueue(sleepLog);
+
+      const hours = Math.floor(duration / 3600000);
+      const minutes = Math.floor((duration % 3600000) / 60000);
+
+      // 서버 동기화 시도
+      this.syncData().then((data) => {
+        if (data && data.success) {
+          const result = data.data;
+          if (result.rewardedPokemon && result.rewardedPokemon.length > 0) {
+            showToast(`✨ ${result.rewardedPokemon.length}마리의 이로치를 획득했습니다!`);
+            this.showMessage(`${result.rewardedPokemon.map(p => p.name).join(', ')} 이로치 획득!`, 'success');
+
+            if (typeof loadUserPokemonIcons === 'function') {
+              loadUserPokemonIcons();
+            }
+          } else {
+            showToast(`수면 시간 기록됨: ${hours}시간 ${minutes}분`);
+          }
+        } else {
+          // 오프라인이거나 실패 시 로컬 메시지
+          showToast(`수면 시간 기록됨: ${hours}시간 ${minutes}분 (동기화 대기)`);
+        }
+        // 동기화 후 최신 상태 로드 (서버의 "수면 완료" 상태 반영)
+        this.loadSleepStatus();
+      });
+    }
+  }
+
+  // Legacy cancel method (optional, if we want a specific cancel button)
+  cancelSleep() {
+    this.finishSleep(); // Just map to finish for now
+  }
+
+  showOverlay(startTime) {
+    if (this.elements.overlay) {
+      this.elements.overlay.style.display = 'flex';
+      void this.elements.overlay.offsetWidth;
+      this.elements.overlay.classList.add('active');
+    }
+
+    this.updateTimer(startTime);
+    if (this.timerInterval) clearInterval(this.timerInterval);
+    this.timerInterval = setInterval(() => this.updateTimer(startTime), 1000);
+  }
+
+  hideOverlay() {
+    if (this.elements.overlay) {
+      this.elements.overlay.style.display = 'none';
+      this.elements.overlay.classList.remove('active');
+    }
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+  }
+
+  updateTimer(startTime) {
+    if (!this.elements.timer) return;
+    const diff = Date.now() - startTime;
+    const hours = Math.floor(diff / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    this.elements.timer.textContent =
+      `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  checkSleepStatus() {
+    // On load, check if we should show overlay AND validate duration
+    const sessionStr = localStorage.getItem(this.storageKey);
+    if (sessionStr) {
+      const session = JSON.parse(sessionStr);
+      if (session.status === 'sleeping') {
+        const now = Date.now();
+        const duration = now - session.startTime;
+        const MIN_SLEEP_DURATION = 4 * 60 * 60 * 1000; // 4 hours
+
+        if (duration < MIN_SLEEP_DURATION) {
+          // 4시간 미만: 즉시 수면 취소 (오버레이 표시하지 않음)
+          console.log('Sleep cancelled on reload: duration less than 4 hours');
+          localStorage.removeItem(this.storageKey);
+
+          const hours = Math.floor(duration / 3600000);
+          const minutes = Math.floor((duration % 3600000) / 60000);
+          showToast(`수면 시간이 너무 짧아 기록되지 않았어요 (${hours}시간 ${minutes}분 / 최소 4시간)`);
+        } else {
+          // 4시간 이상: 오버레이 표시
+          this.showOverlay(session.startTime);
+        }
+      }
+    }
+    // Remove anti-flicker class now that JS has taken over
+    document.documentElement.classList.remove('sleep-mode-pending');
+  }
+
+  addToSyncQueue(log) {
+    let queue = [];
+    try {
+      queue = JSON.parse(localStorage.getItem(this.queueKey) || '[]');
+    } catch (e) {
+      queue = [];
+    }
+    queue.push(log);
+    localStorage.setItem(this.queueKey, JSON.stringify(queue));
+  }
+
+  async syncData() {
+    if (!window.isAuthenticated()) return;
+
+    let queue = [];
+    try {
+      queue = JSON.parse(localStorage.getItem(this.queueKey) || '[]');
+    } catch (e) {
+      return;
+    }
+
+    if (queue.length === 0) return;
+
+    const userId = window.getCurrentUserId ? window.getCurrentUserId() : null;
+    if (!userId) return;
+
+    console.log(`Syncing ${queue.length} sleep logs...`);
+
+    let lastResponseData = null;
+    const newQueue = [];
+    for (const log of queue) {
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch('/api/sleep', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            userId: userId,
+            start: log.start,
+            end: log.end,
+            duration: log.duration
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Sync failed');
+        }
+        lastResponseData = await response.json();
+      } catch (err) {
+        console.error('Sleep sync error:', err);
+        newQueue.push(log);
+        // Schedule retry after 3 seconds (handles WiFi reconnection delay)
+        if (!this._retryScheduled) {
+          this._retryScheduled = true;
+          setTimeout(() => {
+            this._retryScheduled = false;
+            console.log('[SleepTracker] Retrying sync after 3s delay...');
+            this.syncData();
+          }, 3000);
+        }
+      }
+    }
+
+    localStorage.setItem(this.queueKey, JSON.stringify(newQueue));
+    return lastResponseData;
+  }
+
+  // ==========================================
+  // Sleep Reward UI Methods
+  // ==========================================
+
+  async loadSleepStatus() {
+    const isGuest = window.isGuest();
+    if (!window.isAuthenticated() && !isGuest) {
+      this.renderGuestState();
+      return;
+    }
+
+    try {
+      const headers = await getAuthHeaders();
+      const apiEndpoint = isGuest ? '/api/guest/sleep-status' : '/api/sleep/status';
+      const response = await fetch(apiEndpoint, { headers });
+
+      if (!response.ok) {
+        throw new Error('Failed to load sleep status');
+      }
+
+      const responseData = await response.json();
+      if (responseData.success) {
+        this.sleepStatus = responseData.data.sleepStatus;
+        this.sleepStatusLoaded = true; // 로드 성공 표시
+        this.renderSleepRewardUI(responseData);
+      }
+    } catch (err) {
+      console.error('Failed to load sleep status:', err);
+      this.showMessage('수면 상태를 불러오는데 실패했습니다.', 'error');
+    }
+  }
+
+  renderGuestState() {
+
+    if (this.elements.percentageText) {
+      this.elements.percentageText.textContent = '--%';
+    }
+    if (this.elements.holidayRuleText) {
+      this.elements.holidayRuleText.style.display = 'none';
+    }
+
+    if (this.elements.startBtn) {
+      this.elements.startBtn.disabled = true;
+    }
+  }
+
+  renderSleepRewardUI(responseData) {
+    const { todayPokemon, sleepStatus } = responseData.data;
+    const timestamp = responseData.timestamp;
+
+    // 전역 변수에 sleepPokemonList 저장 (네비게이션용)
+    sleepPokemonList = todayPokemon || [];
+
+    // Determine which percentage to show
+    const displayPercentage = sleepStatus.canSleepToday
+      ? sleepStatus.expectedPercentage
+      : sleepStatus.currentRewardPercentage;
+
+    // Save data for resize rerendering
+    this.lastRenderData = {
+      pokemon: todayPokemon,
+      percentage: displayPercentage,
+      rewardTable: sleepStatus.rewardTable
+    };
+
+    // Update percentage text
+    if (this.elements.percentageText) {
+      this.elements.percentageText.textContent = `${Math.round(displayPercentage)}%`;
+    }
+
+    // Update Holiday Rule Visibility
+    if (this.elements.holidayRuleText) {
+      if (sleepStatus.isWakeUpDayOff) {
+        this.elements.holidayRuleText.style.display = 'flex';
+      } else {
+        this.elements.holidayRuleText.style.display = 'none';
+      }
+    }
+
+    // Update Sleep Time Prefix (Before 10 PM vs After 10 PM)
+    if (this.elements.sleepTimePrefix) {
+      const serverTime = timestamp ? new Date(timestamp) : new Date();
+      const hour = serverTime.getHours();
+      if (hour < 22) {
+        this.elements.sleepTimePrefix.textContent = '일찍 자면';
+      } else {
+        this.elements.sleepTimePrefix.textContent = '지금 자면';
+      }
+    }
+
+    // Progress bar logic removed (replaced by snake connectors)
+
+    // Render Pokemon icons and Time Markers
+    this.renderPokemonIcons(todayPokemon, displayPercentage, sleepStatus.rewardTable);
+
+    // Update button states
+
+    if (this.elements.startBtn) {
+      this.elements.startBtn.disabled = !sleepStatus.canSleepToday;
+    }
+
+    this.hideMessage();
+  }
+
+  renderPokemonIcons(pokemon, percentage, rewardTable = null) {
+    if (!this.elements.pokemonIcons) return;
+
+    this.elements.pokemonIcons.innerHTML = '';
+
+    if (!pokemon || pokemon.length === 0) {
+      const noMsg = document.createElement('div');
+      noMsg.className = 'no-pokemon-message';
+      noMsg.innerHTML = `
+        <p>오늘 획득한 포켓몬이 없습니다.<br>포켓몬을 획득하면 이로치 보상이 표시됩니다.</p>
+      `;
+      this.elements.pokemonIcons.appendChild(noMsg);
+      return;
+    }
+
+    // 1. Define Markers from API data
+    let markers = [];
+    if (rewardTable) {
+      markers = Object.entries(rewardTable).map(([hour, percent]) => ({
+        label: hour.padStart(2, '0'),
+        percent: percent,
+        type: 'marker'
+      }));
+    }
+
+    // 2. Assign percent to Pokemon
+    const totalPokemon = pokemon.length;
+    const pokemonWithPercent = pokemon.map((p, index) => ({
+      ...p,
+      percent: ((totalPokemon - index) / (totalPokemon + 1)) * 100,
+      type: 'pokemon'
+    }));
+
+    // 3. Merge and Sort
+    // Sort by percent descending.
+    // If percents are equal (or very close), Markers should come BEFORE Pokemon
+    let mergedList = [...pokemonWithPercent, ...markers];
+    mergedList.sort((a, b) => {
+      if (Math.abs(a.percent - b.percent) < 0.1) {
+        return a.type === 'marker' ? -1 : 1;
+      }
+      return b.percent - a.percent;
+    });
+
+    // 4. Grid Setup
+    const totalItems = mergedList.length;
+    const cols = 4;
+    const rows = Math.ceil(totalItems / cols);
+    const cellWidth = 100 / cols;
+    const cellHeightPx = 80; // Fixed height per row in pixels
+    const totalHeightPx = Math.max(rows, 3) * cellHeightPx;
+
+    // Set container height dynamically
+    if (this.elements.pokemonIcons) {
+      this.elements.pokemonIcons.style.height = `${totalHeightPx}px`;
+    }
+
+    let prevX = null;
+    let prevY = null;
+    let prevObtainable = true;
+
+    // Store connector data for deferred rendering
+    const connectorData = [];
+
+    mergedList.forEach((item, index) => {
+      const isObtainable = item.percent <= percentage;
+
+      // Grid Coordinates
+      const row = Math.floor(index / cols);
+      let col = index % cols;
+      if (row % 2 === 1) col = cols - 1 - col;
+
+      const x = (col * cellWidth) + (cellWidth / 2);
+      const y = (row * cellHeightPx) + (cellHeightPx / 2);
+
+      if (item.type === 'pokemon') {
+        // Render Pokemon
+        const milestoneEl = document.createElement('div');
+        milestoneEl.className = `sleep-milestone ${isObtainable ? 'obtainable' : 'missed'}`;
+        milestoneEl.style.left = `${x}%`;
+        milestoneEl.style.top = `${y}px`;
+        milestoneEl.title = `${item.name} (필요 달성률: ${Math.round(item.percent)}%)`;
+
+        // Icon Box
+        const iconBox = document.createElement('div');
+        iconBox.className = 'sleep-pokemon-icon';
+
+        // 클릭 이벤트 추가 (항상 기본형 도감 표시)
+        iconBox.style.cursor = 'pointer';
+        iconBox.setAttribute('onclick', `showIconGroupDetail('${item.base_image_name || item.image_name}', '${item.stable_id}', false, 'sleep')`);
+
+        // Use pokemon-sprite logic for half-split effect
+        const loadAndSetupSprite = (url, isRetry = false) => {
+          const img = new Image();
+          img.onload = () => {
+            const spriteDiv = document.createElement('div');
+            spriteDiv.className = 'pokemon-sprite';
+            spriteDiv.dataset.src = url;
+            iconBox.innerHTML = ''; // Clear previous content
+            iconBox.appendChild(spriteDiv);
+            if (typeof setupPokemonSprite === 'function') {
+              setupPokemonSprite(spriteDiv);
+            }
+          };
+          img.onerror = () => {
+            if (!isRetry) {
+              const normalUrl = url.replace('Icons%20shiny', 'Icons');
+              loadAndSetupSprite(normalUrl, true);
+            }
+          };
+          img.src = url;
+        };
+
+        loadAndSetupSprite(item.icon_shiny_url);
+
+        // Label
+        const labelEl = document.createElement('div');
+        labelEl.className = 'milestone-label';
+        labelEl.textContent = `${Math.round(item.percent)}%`;
+
+        milestoneEl.appendChild(iconBox);
+        milestoneEl.appendChild(labelEl);
+        this.elements.pokemonIcons.appendChild(milestoneEl);
+      } else {
+        // Render Marker
+        const markerEl = document.createElement('div');
+        markerEl.className = `time-marker-item ${isObtainable ? 'active' : ''}`;
+        markerEl.style.left = `${x}%`;
+        markerEl.style.top = `${y}px`;
+        markerEl.textContent = item.label;
+        markerEl.title = `${item.label}시 (${item.percent}%)`;
+
+        this.elements.pokemonIcons.appendChild(markerEl);
+      }
+
+      // Store connector data instead of drawing immediately
+      if (index > 0 && prevX !== null && prevY !== null) {
+        connectorData.push({
+          x1: prevX,
+          y1: prevY,
+          x2: x,
+          y2: y,
+          isActive: prevObtainable && isObtainable
+        });
+      }
+
+      prevX = x;
+      prevY = y;
+      prevObtainable = isObtainable;
+    });
+
+    // Draw all connectors after DOM layout is complete
+    requestAnimationFrame(() => {
+      connectorData.forEach(data => {
+        this.drawConnector(data.x1, data.y1, data.x2, data.y2, data.isActive);
+      });
+    });
+  }
+
+  drawConnector(x1, y1, x2, y2, isActive) {
+    const connector = document.createElement('div');
+    connector.className = `snake-connector ${isActive ? 'active' : ''}`;
+
+    // Get container dimensions to convert % to px
+    const container = this.elements.pokemonIcons;
+    if (!container) return;
+
+    const w = container.offsetWidth;
+
+    // Safety check: if container width is 0, skip rendering
+    if (w <= 0) {
+      console.warn('Container width is 0, skipping connector rendering');
+      return;
+    }
+
+    const px1 = (x1 / 100) * w;
+    const py1 = y1; // Already in px
+    const px2 = (x2 / 100) * w;
+    const py2 = y2; // Already in px
+
+    const length = Math.sqrt(Math.pow(px2 - px1, 2) + Math.pow(py2 - py1, 2));
+    const angle = Math.atan2(py2 - py1, px2 - px1) * (180 / Math.PI);
+
+    // Style
+    connector.style.width = `${length}px`;
+    connector.style.height = '6px'; // Thickness
+    connector.style.left = `${x1}%`;
+    connector.style.top = `${y1}px`;
+    connector.style.transform = `rotate(${angle}deg)`;
+
+    this.elements.pokemonIcons.prepend(connector); // Behind icons
+  }
+
+  handleResize() {
+    if (this.resizeTimeout) clearTimeout(this.resizeTimeout);
+    this.resizeTimeout = setTimeout(() => {
+      if (this.lastRenderData) {
+        this.renderPokemonIcons(
+          this.lastRenderData.pokemon,
+          this.lastRenderData.percentage,
+          this.lastRenderData.rewardTable
+        );
+      }
+    }, 200);
+  }
+
+  showMessage(text, type = 'info') {
+    if (!this.elements.message) return;
+    this.elements.message.textContent = text;
+    this.elements.message.className = `sleep-message ${type}`;
+  }
+
+  hideMessage() {
+    if (!this.elements.message) return;
+    this.elements.message.className = 'sleep-message';
+    this.elements.message.textContent = '';
+  }
+}
+
+// Initialize Sleep Mode on Load
+document.addEventListener('DOMContentLoaded', () => {
+  window.sleepTracker = new SleepTracker();
+});
+
+// Initialize Pokemon filter modal when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof initPokemonFilter === 'function') {
+    try {
+      initPokemonFilter();
+    } catch (e) {
+      console.error('initPokemonFilter 호출 중 오류:', e);
+    }
+  }
+});
+
+
+// ==========================================
+// 서식지 시스템 (Habitat System)
+// ==========================================
+
+let currentHabitatData = {
+  current_habitat: 'random',
+  current_sub_habitat: null,
+  can_change_habitat: true
+};
+
+// 서식지 초기화
+async function initHabitat() {
+  console.log('initHabitat called');
+  const habitatIconBtn = document.getElementById('habitatIconBtn');
+  const habitatCloseBtn = document.getElementById('habitat-close');
+
+  // 탭 버튼
+  const changeTab = document.getElementById('changeTab');
+  const moveTab = document.getElementById('moveTab');
+  const pokemonDisplayBackBtn = document.getElementById('pokemonDisplayBackBtn');
+
+  console.log('habitatIconBtn:', habitatIconBtn);
+
+  if (habitatIconBtn) {
+    habitatIconBtn.addEventListener('click', openHabitatModal);
+    console.log('habitatIconBtn click listener added');
+  } else {
+    console.error('habitatIconBtn not found!');
+  }
+
+  if (habitatCloseBtn) {
+    habitatCloseBtn.addEventListener('click', closeHabitatModal);
+  }
+
+  // 탭 전환 이벤트
+  if (changeTab) {
+    changeTab.addEventListener('click', () => switchTab('change'));
+  }
+
+  if (moveTab) {
+    moveTab.addEventListener('click', () => switchTab('move'));
+  }
+
+  if (pokemonDisplayBackBtn) {
+    pokemonDisplayBackBtn.addEventListener('click', hidePokemonDisplay);
+  }
+
+  // 탭 변경 시 서식지 아이콘 표시/숨김 처리 (홈 탭에서만 표시)
+  const tabButtons = document.querySelectorAll('.tab-item');
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.getAttribute('data-tab');
+      if (habitatIconBtn) {
+        habitatIconBtn.style.display = tabId === 'home' ? 'flex' : 'none';
+      }
+    });
+  });
+
+  // 초기 데이터 로드
+  await fetchUserHabitat();
+}
+
+// 탭 전환 함수
+function switchTab(tabName) {
+  // 탭 버튼 활성화 상태 변경
+  document.querySelectorAll('.habitat-tab').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  document.getElementById(`${tabName}Tab`).classList.add('active');
+
+  // 탭 패널 표시/숨김
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.style.display = 'none';
+  });
+  document.getElementById(`${tabName}TabPane`).style.display = 'block';
+
+  // 포켓몬 디스플레이 숨기기
+  hidePokemonDisplay();
+
+  // 탭에 따라 데이터 렌더링
+  if (tabName === 'change') {
+    renderMajorHabitatsGrid();
+  } else if (tabName === 'move') {
+    renderCurrentSubHabitats();
+  }
+}
+
+
+// 사용자 서식지 정보 조회
+async function fetchUserHabitat() {
+  // 게스트 모드인 경우 기본 데이터 사용
+  if (window.isGuestMode) {
+    currentHabitatData = {
+      current_habitat: 'random',
+      current_sub_habitat: null,
+      can_change_habitat: true
+    };
+    updateHabitatUI();
+    return;
+  }
+
+  if (!currentUserId) return;
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/user/habitat`, { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        currentHabitatData = result.data;
+        updateHabitatUI();
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch user habitat:', error);
+  }
+}
+
+// 서식지 UI 업데이트 (아이콘 등)
+function updateHabitatUI() {
+  const iconImg = document.getElementById('currentHabitatIcon');
+  const label = document.getElementById('currentHabitatLabel');
+  const placeholder = document.querySelector('.habitat-icon-placeholder');
+
+  if (!iconImg || !label || !placeholder) return;
+
+  const habitatNameMap = {
+    'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
+    'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
+    'random': '랜덤', 'rare': '희귀'
+  };
+
+  const habitatName = habitatNameMap[currentHabitatData.current_habitat] || '랜덤';
+  label.textContent = habitatName;
+
+  // 아이콘 이미지 설정
+  if (currentHabitatData.current_habitat !== 'random') {
+    // 실제 서식지의 경우 아이콘 이미지 표시
+    const iconFilename = `${currentHabitatData.current_habitat}.png`;
+    iconImg.src = `${ASSETS_BASE_URL}/custom/img/ui/${iconFilename}`;
+    iconImg.style.display = 'block';
+    placeholder.style.display = 'none';
+  } else {
+    // 랜덤의 경우 물음표 placeholder 표시
+    placeholder.style.display = 'block';
+    iconImg.style.display = 'none';
+    placeholder.textContent = '?';
+  }
+}
+
+// 서식지 모달 열기
+async function openHabitatModal() {
+  console.log('openHabitatModal called, isGuestMode:', window.isGuestMode);
+  const modal = document.getElementById('habitat-modal');
+  console.log('habitat-modal:', modal);
+  if (!modal) {
+    console.error('habitat-modal not found!');
+    return;
+  }
+
+  modal.style.display = 'flex';
+  onModalOpen();
+
+  // 데이터 최신화 (캐시 초기화 포함)
+  cachedHabitats = null;
+
+  // 병렬로 데이터 로드 (유저 정보 + 서식지 목록)
+  await Promise.all([
+    fetchUserHabitat(),
+    loadHabitatsList()
+  ]);
+
+  // 현재 위치 렌더링 (데이터 로드 후 실행)
+  renderCurrentLocationCard();
+  renderMoveCounter();
+
+  // 포켓몬 디스플레이 숨기기
+  hidePokemonDisplay();
+
+  // 첫 번째 탭 활성화 (서식지 변경)
+  switchTab('change');
+}
+
+// ... (renderMajorHabitatsGrid는 아래에서 수정) ...
+
+// 서식지 변경 확인 및 요청
+async function confirmMajorHabitatChange(habitatSlug, displayName) {
+  // 게스트 모드에서는 기능 제한
+  if (window.isGuestMode) {
+    showToast('로그인하면 서식지를 변경할 수 있습니다!');
+    return;
+  }
+
+  let message = `메인 구역 <strong>[${displayName}]</strong>(으)로 이동하시겠습니까?`;
+
+  if (habitatSlug === 'rare') {
+    // 희귀 서식지 잠금 체크 (다른 모든 서식지 100% 완료 여부)
+    const otherHabitats = (cachedHabitats || []).filter(h => h.slug !== 'rare' && h.slug !== 'random');
+    const isFullyCompleted = otherHabitats.length > 0 && otherHabitats.every(h => {
+      const totalCollected = h.backgrounds.reduce((sum, bg) => sum + (bg.collected_count || 0), 0);
+      const totalPokemon = h.backgrounds.reduce((sum, bg) => sum + (bg.total_count || 0), 0);
+      return totalPokemon > 0 && totalCollected >= totalPokemon;
+    });
+
+    if (!isFullyCompleted) {
+      showToast('모든 서식지의 포켓몬을 수집해야 이동가능합니다.');
+      return;
+    }
+  }
+
+  if (habitatSlug !== 'random') {
+    if (!currentHabitatData.can_change_habitat) {
+      // 이미 함수 진입 전에 체크하겠지만, 한 번 더 체크
+    }
+
+    if (habitatSlug === 'rare') {
+      message = `전설의 <strong>[${displayName}]</strong>(으)로 이동하시겠습니까?<br><br><small style="color:#d97706">✨ 이곳에서는 아주 특별한 포켓몬들이 등장합니다.</small>`;
+    }
+
+    message += `<br><br><small style="color:#e74c3c">⚠️ 주의: 메인 구역 이동은 하루 1회만 가능하며, 내일 새벽 4시까지 다시 변경할 수 없습니다.</small>`;
+  } else {
+    message += `<br><br><small>랜덤 서식지에서는 모든 포켓몬을 만날 수 있지만, 특정 구역을 선택할 수 없습니다.</small>`;
+  }
+
+  const confirmed = await showConfirmModal('서식지 이동', message);
+
+  if (confirmed) {
+    requestHabitatChange(habitatSlug, null);
+  }
+}
+
+
+// 서식지 모달 닫기
+function closeHabitatModal() {
+  const modal = document.getElementById('habitat-modal');
+  if (modal) {
+    modal.style.display = 'none';
+    onModalClose();
+  }
+}
+
+// 포켓몬 디스플레이 숨기기
+function hidePokemonDisplay() {
+  document.getElementById('habitatPokemonDisplay').style.display = 'none';
+}
+
+// 현재 위치 카드 렌더링
+function renderCurrentLocationCard() {
+  const container = document.getElementById('currentLocationCard');
+  if (!container) return;
+
+  const habitatNameMap = {
+    'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
+    'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
+    'random': '랜덤', 'rare': '희귀'
+  };
+
+  const name = habitatNameMap[currentHabitatData.current_habitat] || '랜덤';
+  const slug = currentHabitatData.current_habitat;
+
+  // 기본값 설정
+  let subName = '모든 서브 구역 탐험 가능';
+  let bgImage = '';
+
+  // 서식지 정보 찾기
+  const habitat = cachedHabitats?.find(h => h.slug === slug);
+
+  if (habitat) {
+    // 기본 배경 (첫 번째)
+    bgImage = habitat.backgrounds[0]?.image || '';
+
+    // 현재 세부 서식지가 선택되어 있다면 해당 정보 찾기
+    if (currentHabitatData.current_sub_habitat) {
+      const currentBg = habitat.backgrounds.find(b => `${slug}_${b.type}` === currentHabitatData.current_sub_habitat);
+      if (currentBg) {
+        subName = currentBg.display_name; // 예: "깊은 동굴 (얼음)"
+        bgImage = currentBg.image;        // 해당 구역의 배경 이미지 사용
+      }
+    }
+  }
+
+  let html = '';
+
+  if (slug === 'random') {
+    // 랜덤 서식지 - 스플릿 이미지 생성
+    const randomSlugs = ['cave', 'forest', 'sea', 'urban', 'grassland'];
+    const selectedImages = [];
+    randomSlugs.forEach(rs => {
+      const found = (cachedHabitats || []).find(h => h.slug === rs);
+      if (found && found.backgrounds.length > 0) {
+        selectedImages.push(`${ASSETS_BASE_URL}/custom/img/background/${rs}/${found.backgrounds[0].image}`);
+      }
+    });
+
+    let collageHtml = '';
+    if (selectedImages.length >= 3) {
+      const stripHtml = selectedImages.slice(0, 5).map(url =>
+        `<div style="flex:1; background-image: url('${url}'); background-size: cover; background-position: center; border-right: 1px solid rgba(255,255,255,0.2);"></div>`
+      ).join('');
+
+      collageHtml = `
+        <div style="display: flex; width: 100%; height: 200px; position: relative;">
+          ${stripHtml}
+          <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;">
+            <img src="/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 72px; height: 72px; filter: brightness(0) invert(1) drop-shadow(0 4px 12px rgba(0,0,0,0.6));">
+          </div>
+        </div>
+      `;
+    } else {
+      collageHtml = `<div style="height: 200px; background: linear-gradient(135deg, rgba(255,154,158,0.8) 0%, rgba(254,207,239,0.8) 50%, rgba(255,209,255,0.8) 100%), #333; display: flex; align-items: center; justify-content: center;"><img src="/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 72px; height: 72px; filter: brightness(0) invert(1) drop-shadow(2px 2px 4px rgba(0,0,0,0.3));"></div>`;
+    }
+
+    html = `
+      ${collageHtml}
+      <div class="habitat-card-info">
+        <div class="habitat-card-name">${name}</div>
+        <div class="habitat-card-desc">모든 포켓몬이 등장할 수 있는 모험 지역입니다</div>
+      </div>
+    `;
+  } else {
+    // 특정 서식지
+    const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${slug}/${bgImage}` : '';
+
+    // 낮은 개체수 경고 로직
+    let warningHtml = '';
+    if (currentHabitatData.current_sub_habitat) {
+      const currentBg = habitat.backgrounds.find(b => `${slug}_${b.type}` === currentHabitatData.current_sub_habitat);
+      if (currentBg && currentBg.total_count <= 3) {
+        warningHtml = `<div class="habitat-warning" style="color: #e53e3e; font-size: 0.8rem; margin-top: 4px;">
+             ⚠️ 획득 가능한 포켓몬이 적은 구역입니다 (최대 ${currentBg.collected_count}마리)
+           </div>`;
+        // 토스트로도 알림 (한 번만 뜨게 하려면 플래그가 필요하지만, 여기서는 렌더링 될 때마다 표시되지 않도록 주의)
+        // 렌더링은 자주 일어나므로 토스트는 제외하고 카드 내에 표시
+      }
+    }
+
+    html = `
+      <img src="${bgUrl}" alt="${name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22200%22%3E%3Crect fill=%22%23e2e8f0%22 width=%22400%22 height=%22200%22/%3E%3C/svg%3E'">
+      <div class="habitat-card-info">
+        <div class="habitat-card-name">${currentHabitatData.current_sub_habitat ? name : name + ' 랜덤'}</div>
+        <div class="habitat-card-desc">${subName}</div>
+        ${warningHtml}
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+}
+
+// 이동 횟수 표시 렌더링
+function renderMoveCounter() {
+  const container = document.getElementById('moveCounter');
+  if (!container) return;
+
+  const canMove = currentHabitatData.can_change_habitat;
+  const icon = canMove ? '🚀' : '✅';
+  const text = canMove ? '오늘 이동 가능' : '금일 이동 완료';
+  const className = canMove ? '' : 'used';
+
+  container.innerHTML = `
+    <span class="icon">${icon}</span>
+    <span>${text}</span>
+  `;
+  container.className = `move-counter ${className}`;
+}
+
+
+
+// 현재 서식지의 세부 서식지들을 현재 서식지 정보 섹션에 표시
+function renderCurrentSubHabitatsInDisplay() {
+  const grid = document.getElementById('currentSubHabitatsGrid');
+  if (!grid) return;
+
+  const slug = currentHabitatData.current_habitat;
+  const habitat = cachedHabitats?.find(h => h.slug === slug);
+
+  if (!habitat) {
+    grid.innerHTML = '<p class="empty-message">서식지 정보를 불러오는 중...</p>';
+    return;
+  }
+
+  grid.innerHTML = '';
+
+  // 배경 이미지(및 표시 이름) 기준으로 그룹화
+  const groupedBackgrounds = {};
+  habitat.backgrounds.forEach(bg => {
+    const key = `${bg.display_name}|${bg.image}`;
+    if (!groupedBackgrounds[key]) {
+      groupedBackgrounds[key] = {
+        display_name: bg.display_name,
+        image: bg.image,
+        variants: []
+      };
+    }
+    groupedBackgrounds[key].variants.push(bg);
+  });
+
+  Object.values(groupedBackgrounds).forEach(group => {
+    const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${slug}/${group.image}`;
+
+    const card = document.createElement('div');
+    card.className = 'habitat-card';
+    card.innerHTML = `
+      <img src="${bgUrl}" class="habitat-card-img" alt="${group.display_name}">
+      <div class="habitat-card-overlay">
+        <div class="habitat-name">${group.display_name}</div>
+      </div>
+    `;
+
+    // 클릭 시 포켓몬 목록 표시
+    card.onclick = () => showPokemonListForSubHabitat(group.display_name, group.variants);
+
+    grid.appendChild(card);
+  });
+}
+
+// 세부 서식지의 포켓몬 목록 표시
+function showPokemonListForSubHabitat(displayName, variants) {
+  const pokemonDisplay = document.getElementById('habitatPokemonDisplay');
+  const nameEl = document.getElementById('selectedSubHabitatName');
+  const statsEl = document.getElementById('habitatPokemonStats');
+  const gridEl = document.getElementById('habitatPokemonGrid');
+
+  nameEl.textContent = displayName;
+
+  // TODO: API 호출하여 실제 포켓몬 데이터 가져오기
+  // 지금은 UI만 표시
+  statsEl.innerHTML = `<strong>이 구역의 포켓몬</strong><br><span style="font-size: 12px; color: #718096;">정보 준비 중...</span>`;
+  gridEl.innerHTML = `
+    <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+      <p>포켓몬 데이터는 API 연동 후 표시됩니다.</p>
+    </div>
+    
+    <div style="grid-column: 1 / -1; margin-top: 20px; text-align: center;">
+      <button id="confirmMoveBtn" class="confirm-move-btn" style="
+        background-color: var(--primary-color); 
+        color: white; 
+        border: none; 
+        padding: 12px 24px; 
+        border-radius: 12px; 
+        font-weight: bold; 
+        font-size: 1rem; 
+        cursor: pointer; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+      ">
+        이 구역으로 이동
+      </button>
+    </div>
+  `;
+
+  const confirmBtn = document.getElementById('confirmMoveBtn');
+  if (confirmBtn) {
+    // variants가 있으면 첫 번째 배경의 type을 사용하여 habitat_type 식별
+    // habitat는 currentHabitatData.current_habitat
+    // subHabitatKey는 "habitat_type"
+
+    const currentHabitat = currentHabitatData.current_habitat;
+    if (variants && variants.length > 0) {
+      const type = variants[0].type; // bug, ice, etc.
+      const subHabitatKey = `${currentHabitat}_${type}`;
+
+      confirmBtn.onclick = async () => {
+        // requestInnerHabitatMove 호출 (이동 후 UI 갱신 최적화)
+        // displayName (예: 숲 (벌레))
+        await requestInnerHabitatMove(currentHabitat, subHabitatKey, displayName);
+      };
+    } else {
+      confirmBtn.style.display = 'none';
+    }
+  }
+
+  pokemonDisplay.style.display = 'block';
+}
+
+
+// 전체 서식지 목록 로드 및 렌더링
+let cachedHabitats = null;
+async function loadHabitatsList() {
+  if (cachedHabitats) {
+    renderHabitatsGrid(cachedHabitats);
+    return;
+  }
+
+  // 게스트 모드에서는 API 호출 스킵하고 빈 배열 사용 (또는 기본 데이터 사용)
+  if (window.isGuestMode) {
+    cachedHabitats = [];
+    renderHabitatsGrid(cachedHabitats);
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/habitats`, { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        cachedHabitats = result.data || [];
+
+        // 현재 모달이 열려있고, 서식지 변경 탭이 활성화된 경우 UI 갱신
+        const changeTabPane = document.getElementById('changeTabPane');
+        if (changeTabPane && changeTabPane.style.display !== 'none') {
+          renderMajorHabitatsGrid();
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load habitats:', error);
+  }
+}
+
+
+
+// 대분류 서식지 목록 렌더링 (서식지간 이동)
+function renderMajorHabitatsGrid() {
+  const grid = document.getElementById('majorHabitatGrid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+
+  const habitatNameMap = {
+    'grassland': '초원', 'forest': '숲', 'watersedge': '물가', 'sea': '바다',
+    'cave': '동굴', 'mountain': '산', 'roughterrain': '험지', 'urban': '도시',
+    'random': '랜덤', 'rare': '희귀'
+  };
+
+  // 랜덤 옵션 추가
+  // 랜덤 옵션 추가
+  const randomCard = document.createElement('div');
+  randomCard.className = 'habitat-card';
+
+  // 스플릿 이미지 생성 (Vertical Strips)
+  let randomImagesHtml = '';
+  const randomSlugs = ['cave', 'forest', 'sea', 'urban', 'grassland'];
+  const pool = cachedHabitats || [];
+
+  // pool에서 랜덤하게 4개 정도 뽑거나, 고정된 순서로 가져옴
+  const selectedImages = [];
+  randomSlugs.forEach(slug => {
+    const found = pool.find(h => h.slug === slug);
+    if (found && found.backgrounds.length > 0) {
+      selectedImages.push(`${ASSETS_BASE_URL}/custom/img/background/${slug}/${found.backgrounds[0].image}`);
+    }
+  });
+
+  // 이미지가 3개 이상 모였을 때만 스플릿 뷰 적용
+  if (selectedImages.length >= 3) {
+    const stripHtml = selectedImages.slice(0, 5).map(url =>
+      `<div style="flex:1; background-image: url('${url}'); background-size: cover; background-position: center; border-right: 1px solid rgba(255,255,255,0.2);"></div>`
+    ).join('');
+
+    randomImagesHtml = `
+      <div style="display: flex; width: 100%; height: 100px; position: relative;">
+        ${stripHtml}
+        <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;">
+          <img src="/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 32px; height: 32px; filter: brightness(0) invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.6));">
+        </div>
+      </div>
+    `;
+  } else {
+    // Fallback gradient
+    randomImagesHtml = `<div style="height: 100px; background: linear-gradient(135deg, rgba(255,154,158,0.8) 0%, rgba(254,207,239,0.8) 50%, rgba(255,209,255,0.8) 100%), #333; display: flex; align-items: center; justify-content: center;"><img src="/custom/img/ui/flip.svg" class="flip-icon" alt="flip" style="width: 32px; height: 32px; filter: brightness(0) invert(1) drop-shadow(2px 2px 4px rgba(0,0,0,0.3));"></div>`;
+  }
+
+  // 수집률 계산 (랜덤용 전체 통계)
+  let totalAllCollected = 0;
+  let totalAllPokemon = 0;
+  let isRareUnlocked = false;
+
+  if (cachedHabitats) {
+    const otherHabitats = cachedHabitats.filter(h => h.slug !== 'rare' && h.slug !== 'random');
+
+    // 전체 통계 계산
+    cachedHabitats.forEach(habitat => {
+      totalAllCollected += habitat.backgrounds.reduce((sum, bg) => sum + (bg.collected_count || 0), 0);
+      totalAllPokemon += habitat.backgrounds.reduce((sum, bg) => sum + (bg.total_count || 0), 0);
+    });
+
+    // 희귀 서식지 해금 여부 확인
+    isRareUnlocked = otherHabitats.length > 0 && otherHabitats.every(h => {
+      const tc = h.backgrounds.reduce((sum, bg) => sum + (bg.collected_count || 0), 0);
+      const tp = h.backgrounds.reduce((sum, bg) => sum + (bg.total_count || 0), 0);
+      return tp > 0 && tc >= tp;
+    });
+  }
+
+  randomCard.innerHTML = `
+    ${randomImagesHtml}
+    <div class="habitat-card-info">
+      <div class="habitat-card-name">전체 랜덤</div>
+      <div class="habitat-card-type" style="font-size: 11px; color: #888;">
+        전체: (${totalAllCollected}/${totalAllPokemon})
+      </div>
+    </div>
+  `;
+  randomCard.onclick = () => confirmMajorHabitatChange('random', '랜덤');
+  grid.appendChild(randomCard);
+
+  // 실제 서식지들 (Backend에서 이미 total_count 기준으로 정렬되어 옴)
+  if (cachedHabitats) {
+    // 희귀 서식지를 항상 마지막에 배치
+    const sortedHabitats = [...cachedHabitats].sort((a, b) => {
+      if (a.slug === 'rare') return 1;
+      if (b.slug === 'rare') return -1;
+      return 0; // 나머지는 기존 순서(백엔드 정렬) 유지
+    });
+
+    sortedHabitats.forEach(habitat => {
+      const slug = habitat.slug;
+      if (!slug || slug === 'random') return; // 방어 코드
+      if (!habitat) return;
+
+      const bgImage = habitat.backgrounds[0]?.image || '';
+      const bgUrl = bgImage ? `${ASSETS_BASE_URL}/custom/img/background/${slug}/${bgImage}` : '';
+      const name = habitatNameMap[slug] || habitat.name;
+
+      // 수집률 계산
+      const totalCollected = habitat.backgrounds.reduce((sum, bg) => sum + (bg.collected_count || 0), 0);
+      const totalPokemon = habitat.backgrounds.reduce((sum, bg) => sum + (bg.total_count || 0), 0);
+      const isCompleted = totalPokemon > 0 && totalCollected >= totalPokemon;
+      const progressPercent = totalPokemon > 0 ? Math.round((totalCollected / totalPokemon) * 100) : 0;
+
+      const card = document.createElement('div');
+      card.className = 'habitat-card';
+      if (isCompleted) card.classList.add('completed-habitat'); // CSS 스타일링용 클래스
+
+      let collectionStatusHtml = '';
+      if (totalPokemon === 0) {
+        collectionStatusHtml = '<span style="color: #aaa;">발견된 포켓몬 없음</span>';
+      } else if (isCompleted) {
+        collectionStatusHtml = '<span style="color: #d97706; font-weight: bold;">🎉 수집 완료!</span>';
+      } else {
+        collectionStatusHtml = `수집률: ${progressPercent}% (${totalCollected}/${totalPokemon})`;
+      }
+
+      // 희귀 서식지 잠금 상태 처리
+      const isLockedRare = slug === 'rare' && !isRareUnlocked;
+
+      card.innerHTML = `
+      <img src="${bgUrl}" class="habitat-card-img" alt="${name}" style="${isLockedRare ? 'filter: grayscale(1) brightness(0.7);' : ''}">
+      ${isCompleted ? '<div class="habitat-completed-badge" style="background: rgba(255, 215, 0, 0.9); color: #744210; font-weight: bold; padding: 4px 8px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">👑 졸업</div>' : ''}
+      ${isLockedRare ? '<div class="habitat-lock-overlay" style="position: absolute; top:0; left:0; width:100%; height:100px; display: flex; align-items: center; justify-content: center; font-size: 30px; color: white; text-shadow: 0 0 10px rgba(0,0,0,0.8);">🔒</div>' : ''}
+      <div class="habitat-card-info" style="${isLockedRare ? 'opacity: 0.6;' : ''}">
+        <div class="habitat-card-name">${name}</div>
+        <div class="habitat-card-type" style="font-size: 11px; color: #666;">
+          ${isLockedRare ? '<span style="color: #e53e3e;">🔒 모두 수집 필요</span>' : collectionStatusHtml}
+        </div>
+      </div>
+    `;
+
+      // TODO: 포켓몬 수집 여부에 따른 disabled 처리
+      // 지금은 일단 모두 활성화
+      const isAvailable = true; // await checkHabitatAvailability(slug);
+
+      if (!isAvailable || isLockedRare) {
+        card.classList.add('disabled');
+        if (isLockedRare) {
+          card.onclick = () => showToast('모든 서식지의 포켓몬을 수집해야 이동가능합니다.');
+        }
+      }
+
+      if (isAvailable) {
+        card.onclick = async () => {
+          if (isCompleted) {
+            const confirmed = await showConfirmModal(
+              '졸업 서식지 알림',
+              `<strong>[${name}]</strong> 서식지의 모든 포켓몬을 이미 획득했습니다! (졸업)<br><br>그래도 이동하시겠습니까?<br><small style="color: #666">(이동 시 보상으로 다른 서식지의 포켓몬이 등장할 수 있습니다)</small>`
+            );
+            if (!confirmed) return;
+          }
+          confirmMajorHabitatChange(slug, name);
+        };
+      }
+
+      grid.appendChild(card);
+    });
+  }
+}
+
+// 현재 서식지의 세부 서식지 목록 렌더링 (서식지 내 이동)
+function renderCurrentSubHabitats() {
+  const grid = document.getElementById('subHabitatGrid');
+  if (!grid) return;
+
+  const slug = currentHabitatData.current_habitat;
+
+  if (slug === 'random') {
+    grid.innerHTML = '<p class="empty-message" style="grid-column: 1 / -1; text-align: center; padding: 40px;">랜덤 서식지는 세부 구역이 없습니다<br><span style="font-size:12px; color:#888;">(모든 포켓몬이 랜덤하게 등장합니다)</span></p>';
+    return;
+  }
+
+  const habitat = cachedHabitats?.find(h => h.slug === slug);
+
+  if (!habitat) {
+    grid.innerHTML = '<p class="empty-message">서식지 정보를 불러올 수 없습니다.</p>';
+    return;
+  }
+
+  grid.innerHTML = '';
+
+  // 배경 이미지 기준으로 그룹화
+  const groupedBackgrounds = {};
+  habitat.backgrounds.forEach(bg => {
+    const key = `${bg.display_name}|${bg.image}`;
+    if (!groupedBackgrounds[key]) {
+      groupedBackgrounds[key] = {
+        display_name: bg.display_name,
+        image: bg.image,
+        variants: []
+      };
+    }
+    groupedBackgrounds[key].variants.push(bg);
+  });
+
+  Object.values(groupedBackgrounds).forEach(group => {
+    const bgUrl = `${ASSETS_BASE_URL}/custom/img/background/${slug}/${group.image}`;
+
+    // 수집률 계산 (그룹 내 합산)
+    const groupCollected = group.variants.reduce((sum, v) => sum + (v.collected_count || 0), 0);
+    const groupTotal = group.variants.reduce((sum, v) => sum + (v.total_count || 0), 0);
+    const isCompleted = groupTotal > 0 && groupCollected >= groupTotal;
+
+    // 타입 아이콘 생성
+    const typesHtml = group.variants.map(v =>
+      `<img src="${ASSETS_BASE_URL}/custom/img/ui/${v.type}.png" alt="${getKoreanType(v.type)}" class="type-icon" title="${getKoreanType(v.type)}">`
+    ).join('');
+
+    const card = document.createElement('div');
+    card.className = 'habitat-card';
+    if (isCompleted) {
+      // card.style.opacity = '0.7'; // 졸업한 구역은 반투명 처리 (선택사항)
+      // card.title = "졸업한 구역입니다";
+    }
+
+    card.innerHTML = `
+      <img src="${bgUrl}" class="habitat-card-img" alt="${group.display_name}">
+      ${isCompleted ? '<div class="habitat-completed-badge">👑 졸업</div>' : ''}
+      <div class="habitat-card-info">
+        <div class="habitat-card-name">${group.display_name}</div>
+        <div class="habitat-card-types">
+          ${typesHtml}
+        </div>
+        <div class="habitat-card-collection">
+          <span class="collection-count" style="${isCompleted ? 'color: #ffd700; fontWeight: bold;' : ''}">
+            ${groupCollected}/${groupTotal} ${isCompleted ? '(완료)' : ''}
+          </span>
+         
+        </div>
+      </div>
+    `;
+
+    // 클릭 이벤트: 구역 이동 (무제한)
+    card.onclick = async () => {
+      const currentHabitat = currentHabitatData.current_habitat;
+      const type = group.variants[0].type;
+      const subHabitatKey = `${currentHabitat}_${type}`;
+
+      const confirmed = await showConfirmModal('구역 이동', `<strong>[${group.display_name}]</strong> 구역으로 이동하시겠습니까?`);
+      if (confirmed) {
+        await requestInnerHabitatMove(currentHabitat, subHabitatKey, group.display_name);
+      }
+    };
+
+    grid.appendChild(card);
+  });
+}
+
+
+// 세부 서식지 내 이동 요청 (무제한)
+async function requestInnerHabitatMove(habitat, subHabitat, displayName) {
+  // 게스트 모드
+  if (window.isGuestMode) {
+    showToast('로그인하면 서식지를 변경할 수 있습니다!');
+    return;
+  }
+
+  try {
+    showGlobalLoading('이동 중...');
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/user/habitat`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ habitat, subHabitat, innerMove: true })
+    });
+
+    const result = await response.json();
+    hideGlobalLoading();
+
+    if (response.ok && result.success) {
+      showToast('이동하였습니다.');
+      if (result.data) {
+        currentHabitatData.current_sub_habitat = result.data.current_sub_habitat;
+        // fetchUserHabitat()를 호출하여 전체 상태를 동기화하는 것이 가장 안전함
+        await fetchUserHabitat();
+      }
+
+      // UI 업데이트
+      updateHabitatUI();
+      renderCurrentLocationCard();
+
+      // 필요하다면 모달 내 뷰를 갱신하거나 닫기할 수 있음
+      // 여기서는 토스트만 띄우고 유지 (사용자가 계속 탐색할 수 있도록)
+    } else {
+      showToast(result.message || '이동에 실패했습니다.');
+    }
+  } catch (error) {
+    hideGlobalLoading();
+    console.error('Inner habitat move error:', error);
+    showToast('이동 중 오류가 발생했습니다.');
+  }
+}
+
+
+async function requestHabitatChange(habitat, subHabitat) {
+  try {
+    showGlobalLoading('서식지 이동 중...');
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/user/habitat`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ habitat, subHabitat })
+    });
+
+    const result = await response.json();
+    hideGlobalLoading();
+
+    if (response.ok && result.success) {
+      showToast(result.data.message || '서식지가 변경되었습니다.');
+      // 데이터 재요청 (요청사항 반영)
+      await fetchUserHabitat();
+
+      // UI 업데이트
+      updateHabitatUI();
+      renderCurrentLocationCard();
+      renderMoveCounter();
+
+      if (typeof showHabitatMainView === 'function') {
+        showHabitatMainView(); // 메인 뷰로 복귀
+      }
+
+    } else {
+      showToast(result.message || '서식지 이동에 실패했습니다.'); // error toast
+    }
+  } catch (error) {
+    hideGlobalLoading();
+    console.error('Habitat change error:', error);
+    showToast('서식지 이동 중 오류가 발생했습니다.');
+  }
+}
+
+// 서식지 포켓몬 목록 로드 (표시용)
+async function loadHabitatPokemonList(habitatSlug) {
+  const listContainer = document.getElementById('habitatPokemonList');
+  if (!listContainer) return;
+
+  if (habitatSlug === 'random') {
+    listContainer.innerHTML = '<p class="info-text" style="text-align:center; padding:20px;">모든 포켓몬이 등장할 수 있습니다!</p>';
+    return;
+  }
+
+  listContainer.innerHTML = '<div class="loading-spinner"></div>';
+
+  listContainer.innerHTML = `
+    <div style="text-align: center; padding: 20px; color: var(--text-secondary);">
+      <p>이 서식지에서 발견 가능한 포켓몬 목록은<br>아직 준비 중입니다.</p>
+    </div>
+  `;
+}
+
+// 전역 노출
+window.openHabitatModal = openHabitatModal;
+window.closeHabitatModal = closeHabitatModal;
+
+
+/* ==========================================
+   보상 획득 결과 모달 로직
+   ========================================== */
+function showRewardResultModal(rewards, comparisonResult = null, eventName = null) {
+  const modal = document.getElementById('reward-result-modal');
+  const modalBody = modal.querySelector('.reward-modal-body');
+  const confirmBtn = document.getElementById('reward-confirm-btn');
+
+  if (!modal || !modalBody) return;
+
+  // 모달 바디 초기화
+  modalBody.innerHTML = '';
+
+  // obtained_reason 기반으로 등급 스타일 결정하는 헬퍼 함수
+  const getGradeClass = (reason) => {
+    if (!reason) return 'grade-s';
+    const r = reason.toLowerCase();
+    if (r.includes('환상')) return 'grade-ex';
+    if (r.includes('전설')) return 'grade-sss';
+    if (r.includes('울트라') || r.includes('패러독스')) return 'grade-ss';
+    return 'grade-s';
+  };
+
+  // 포켓몬을 기본 보상과 이벤트 보상으로 분류
+  const basePokemon = [];  // 스크린타임 기록 보상
+  const eventPokemon = []; // 공휴일, 절기, 포켓몬 데이, 토요일 등
+
+  if (rewards.pokemons && rewards.pokemons.length > 0) {
+    rewards.pokemons.forEach(p => {
+      const reason = p.obtained_reason || '';
+      // 이벤트 보상 키워드 체크
+      if (reason.includes('공휴일') || reason.includes('절기') || reason.includes('포켓몬 데이') || reason.includes('토요일')) {
+        eventPokemon.push(p);
+      } else {
+        basePokemon.push(p);
+      }
+    });
+
+    // 등급 우선순위 정렬 (EX -> SSS -> SS -> S)
+    const gradePriority = {
+      'grade-ex': 4,
+      'grade-sss': 3,
+      'grade-ss': 2,
+      'grade-s': 1
+    };
+
+    const sortPokemonByGrade = (a, b) => {
+      const gradeA = getGradeClass(a.obtained_reason);
+      const gradeB = getGradeClass(b.obtained_reason);
+      return (gradePriority[gradeB] || 1) - (gradePriority[gradeA] || 1);
+    };
+
+    basePokemon.sort(sortPokemonByGrade);
+    eventPokemon.sort(sortPokemonByGrade);
+  }
+
+  let hasContent = false;
+
+  // 통합 카드 섹션 생성
+  const mainSection = document.createElement('div');
+  mainSection.className = 'reward-category-section';
+  // ===== 1. 이벤트 보상 섹션 =====
+  if (eventPokemon.length > 0) {
+    hasContent = true;
+
+    // 이벤트 헤더
+    let eventHeaderHtml = `
+      <div class="reward-category-header event">
+        <span class="reward-category-icon">🎉</span>
+        <span class="reward-category-title">이벤트 보상</span>
+      </div>
+    `;
+    if (eventName) {
+      eventHeaderHtml += `<div class="reward-event-name">오늘은 "${eventName}"입니다!</div>`;
+    }
+
+    const headerWrapper = document.createElement('div');
+    headerWrapper.innerHTML = eventHeaderHtml;
+    while (headerWrapper.firstChild) mainSection.appendChild(headerWrapper.firstChild);
+
+    // 이벤트 포켓몬 그리드
+    const grid = document.createElement('div');
+    grid.className = 'reward-grid-display';
+
+    eventPokemon.forEach(p => {
+      const gradeClass = getGradeClass(p.obtained_reason);
+      const card = document.createElement('div');
+      card.className = `reward-card ${gradeClass}`;
+      const assetFolder = (p.asset_source === 'external' || p.asset_source === 'custom') ? 'custom' : 'base';
+      const imgSrc = `${ASSETS_BASE_URL}/${assetFolder}/img/Icons/${p.image_name || p.stable_id}.png`;
+
+      let badgeHtml = '';
+      const reason = (p.obtained_reason || '').toLowerCase();
+      if (reason.includes('환상')) badgeHtml = '<div class="reward-grade-badge mythical">환상</div>';
+      else if (reason.includes('전설')) badgeHtml = '<div class="reward-grade-badge legendary">전설</div>';
+      else if (reason.includes('울트라') || reason.includes('패러독스')) badgeHtml = '<div class="reward-grade-badge ultrabeast">울/패</div>';
+      else {
+        let eventLabel = '이벤트';
+        if (reason.includes('공휴일')) eventLabel = '공휴일';
+        else if (reason.includes('절기')) eventLabel = '24절기';
+        else if (reason.includes('포켓몬 데이')) eventLabel = '포켓몬 데이';
+        else if (reason.includes('토요일')) eventLabel = '토요일';
+        badgeHtml = `<div class="reward-event-badge">${eventLabel}</div>`;
+      }
+
+      card.innerHTML = `
+        ${badgeHtml}
+        <div class="reward-img-container">
+          <img src="${imgSrc}" class="reward-img reward-pokemon-img" onerror="this.src='${ASSETS_BASE_URL}/base/img/Eggs/000.png'">
+        </div>
+        <div class="reward-name">${p.name}</div>
+      `;
+      grid.appendChild(card);
+    });
+
+    mainSection.appendChild(grid);
+  }
+  // ===== 1. 스크린타임 보상 섹션 (기본 + 아이템) =====
+  if (basePokemon.length > 0 || (rewards.items && rewards.items.length > 0)) {
+    hasContent = true;
+
+    // 헤더
+    let headerHtml = `
+      <div class="reward-category-header">
+        <span class="reward-category-icon">📱</span>
+        <span class="reward-category-title">스크린타임 보상</span>
+      </div>
+    `;
+
+    // 비교 결과 텍스트
+    if (comparisonResult) {
+      headerHtml += `<div class="reward-comparison-text">${comparisonResult}</div>`;
+    }
+
+    const headerWrapper = document.createElement('div');
+    headerWrapper.innerHTML = headerHtml;
+    while (headerWrapper.firstChild) mainSection.appendChild(headerWrapper.firstChild);
+
+    // 1-1. 새로운 포켓몬 (스크린타임)
+    if (basePokemon.length > 0) {
+      const pokemonSubSection = document.createElement('div');
+      pokemonSubSection.className = 'reward-subsection';
+      pokemonSubSection.innerHTML = `<div class="reward-subsection-title">새로운 포켓몬</div>`;
+
+      const grid = document.createElement('div');
+      grid.className = 'reward-grid-display';
+
+      basePokemon.forEach(p => {
+        const gradeClass = getGradeClass(p.obtained_reason);
+        const card = document.createElement('div');
+        card.className = `reward-card ${gradeClass}`;
+        const assetFolder = (p.asset_source === 'external' || p.asset_source === 'custom') ? 'custom' : 'base';
+        const imgSrc = `${ASSETS_BASE_URL}/${assetFolder}/img/Icons/${p.image_name || p.stable_id}.png`;
+
+        let badgeHtml = '';
+        const reason = (p.obtained_reason || '').toLowerCase();
+        if (reason.includes('환상')) badgeHtml = '<div class="reward-grade-badge mythical">환상</div>';
+        else if (reason.includes('전설')) badgeHtml = '<div class="reward-grade-badge legendary">전설</div>';
+        else if (reason.includes('울트라')) badgeHtml = '<div class="reward-grade-badge ultrabeast">울트라</div>';
+        else if (reason.includes('패러독스')) badgeHtml = '<div class="reward-grade-badge paradox">패러독스</div>';
+
+        card.innerHTML = `
+          ${badgeHtml}
+          <div class="reward-img-container">
+            <img src="${imgSrc}" class="reward-img reward-pokemon-img" onerror="this.src='${ASSETS_BASE_URL}/base/img/Eggs/000.png'">
+          </div>
+          <div class="reward-name">${p.name}</div>
+        `;
+        grid.appendChild(card);
+      });
+
+      pokemonSubSection.appendChild(grid);
+      mainSection.appendChild(pokemonSubSection);
+    }
+
+    // 1-2. 아이템
+    if (rewards.items && rewards.items.length > 0) {
+      const itemSubSection = document.createElement('div');
+      itemSubSection.className = 'reward-subsection';
+      itemSubSection.innerHTML = `<div class="reward-subsection-title">아이템</div>`;
+
+      const grid = document.createElement('div');
+      grid.className = 'reward-grid-display';
+
+      const itemImageMap = {
+        'Mystic Charm': 'MYSTICCHARM',
+        'Rare Candy': 'RARECANDY',
+        'Oval Charm': 'OVALCHARM',
+        'Shiny Charm': 'SHINYCHARM',
+        'Brilliance Charm': 'BRILLIANCECHARM'
+      };
+
+      rewards.items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'reward-card';
+        const imgName = itemImageMap[item.name] || 'RARECANDY';
+        const imgSrc = `${ASSETS_BASE_URL}/custom/img/items/${imgName}.webp`;
+        card.innerHTML = `
+          <div class="reward-count-badge">${item.count}</div>
+          <div class="reward-img-container">
+            <img src="${imgSrc}" class="reward-img" onerror="this.style.display='none'">
+          </div>
+          <div class="reward-name">${item.nameKr || item.name}</div>
+        `;
+        grid.appendChild(card);
+      });
+
+      itemSubSection.appendChild(grid);
+      mainSection.appendChild(itemSubSection);
+    }
+  }
+
+
+
+  // 보상이 없는 경우
+  if (!hasContent) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.className = 'reward-empty-message';
+    emptyMsg.innerHTML = '이번엔 보상이 없네요.<br>다음 기회에 도전해보세요!';
+    modalBody.appendChild(emptyMsg);
+  } else {
+    modalBody.appendChild(mainSection);
+  }
+
+  // 모달 표시
+  modal.style.display = 'flex';
+  if (typeof onModalOpen === 'function') onModalOpen();
+
+  // 확인 버튼 이벤트
+  confirmBtn.onclick = () => {
+    modal.style.display = 'none';
+    if (typeof onModalClose === 'function') onModalClose();
+
+    // 아이템/포켓몬 목록 갱신 트리거
+    if (typeof loadUserPokemonIcons === 'function') loadUserPokemonIcons();
+    if (typeof loadHomeFavoritePokemon === 'function') loadHomeFavoritePokemon();
+  };
+}
+
+// 전역 노출
+window.showRewardResultModal = showRewardResultModal;
+
+
+// ==========================================
+// 미션 상태 시스템 (Mission Status System)
+// ==========================================
+
+let weeklyVerificationData = null;
+let isWeeklyVerificationRequired = false;
+let needsYesterdayScreenTime = false;
+let yesterdayDate = null;
+let isTodayScreenTimeCompleted = false;
+
+/**
+ * 앱 시작 시 미션 상태 확인 (주간 검증 + 어제 스크린타임 입력)
+ */
+async function checkMissionStatus() {
+  // 게스트 모드에서는 검증 불필요
+  if (window.isGuest() || !window.isAuthenticated()) {
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/screen-time/status', { headers });
+
+    if (!response.ok) {
+      console.error('Failed to check mission status');
+      return;
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      const data = result.data;
+
+      // 주간 검증 필요 여부 처리
+      if (data.needsVerification) {
+        weeklyVerificationData = data;
+        isWeeklyVerificationRequired = true;
+      } else {
+        isWeeklyVerificationRequired = false;
+        weeklyVerificationData = null;
+      }
+
+      // 어제 스크린타임 입력 필요 여부 처리
+      needsYesterdayScreenTime = data.needsYesterdayScreenTime || false;
+      yesterdayDate = data.yesterdayDate || null;
+
+      // 미션 카드 상태 업데이트
+      if (typeof updateHomeMissionCards === 'function') updateHomeMissionCards();
+    }
+  } catch (error) {
+    console.error('Mission status check error:', error);
+  }
+}
+
+// 호환성을 위해 기존 함수명도 유지
+const checkWeeklyVerificationStatus = checkMissionStatus;
+
+/**
+ * 주간 검증 모달 표시
+ */
+function showWeeklyVerificationModal() {
+  const modal = document.getElementById('weekly-verification-modal');
+  if (!modal) return;
+
+  // 경고 상태 표시
+  const warningStatusEl = document.getElementById('warning-status');
+  const warningCountEl = document.getElementById('warning-count-display');
+  const warningMessageEl = document.getElementById('warning-message');
+
+  if (weeklyVerificationData.warningCount > 0) {
+    if (warningStatusEl) warningStatusEl.style.display = 'flex';
+    if (warningCountEl) warningCountEl.textContent = weeklyVerificationData.warningCount;
+
+    if (warningMessageEl) {
+      if (weeklyVerificationData.warningCount === 1) {
+        warningMessageEl.textContent = '입력값과 기록값의 차이가 10% 이상입니다.';
+      } else if (weeklyVerificationData.warningCount === 2) {
+        warningMessageEl.innerHTML = '<strong style="color: #e53e3e;">한 번 더 오입력 시 포켓몬이 모두 삭제됩니다!</strong>';
+      }
+    }
+  } else {
+    if (warningStatusEl) warningStatusEl.style.display = 'none';
+  }
+
+  // 체크박스 초기화
+  const over10Checkbox = document.getElementById('weeklyIsOver10Hours');
+  if (over10Checkbox) {
+    over10Checkbox.checked = false;
+  }
+
+  // 모달 표시
+  modal.style.display = 'flex';
+  document.body.classList.add('modal-open');
+  onModalOpen();
+
+  // 입력 필드 초기화 및 이벤트 리스너 설정
+  setupWeeklyVerificationInputs();
+}
+
+/**
+ * 주간 검증 모달 닫기
+ */
+function closeWeeklyVerificationModal() {
+  const modal = document.getElementById('weekly-verification-modal');
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    onModalClose();
+  }
+}
+window.closeWeeklyVerificationModal = closeWeeklyVerificationModal;
+
+
+/**
+ * 주간 검증 입력 필드 설정
+ */
+function setupWeeklyVerificationInputs() {
+  const digit1 = document.getElementById('weeklyDigit1');
+  const digit2 = document.getElementById('weeklyDigit2');
+  const digit3 = document.getElementById('weeklyDigit3');
+  const digit4 = document.getElementById('weeklyDigit4');
+  const preview = document.getElementById('weeklyVerificationPreview');
+  const submitBtn = document.getElementById('weekly-verification-submit-btn');
+  const over10Checkbox = document.getElementById('weeklyIsOver10Hours');
+
+  const digits = [digit1, digit2, digit3, digit4];
+
+  // 입력 필드 초기화
+  digits.forEach(input => {
+    if (input) {
+      input.value = '';
+      // Remove old listeners to prevent duplicates
+      const newEl = input.cloneNode(true);
+      input.parentNode.replaceChild(newEl, input);
+    }
+  });
+
+  // Re-select inputs after replacement (cloneNode)
+  const newDigit1 = document.getElementById('weeklyDigit1');
+  const newDigit2 = document.getElementById('weeklyDigit2');
+  const newDigit3 = document.getElementById('weeklyDigit3');
+  const newDigit4 = document.getElementById('weeklyDigit4');
+  const newDigits = [newDigit1, newDigit2, newDigit3, newDigit4];
+
+  newDigits.forEach(input => {
+    if (input) {
+      input.addEventListener('input', handleDigitInput);
+      input.addEventListener('keydown', handleDigitKeydown);
+    }
+  });
+
+  if (over10Checkbox) {
+    // Remove old listener
+    const newCheckbox = over10Checkbox.cloneNode(true);
+    over10Checkbox.parentNode.replaceChild(newCheckbox, over10Checkbox);
+    newCheckbox.addEventListener('change', updatePreviewAndButton);
+  }
+
+  // 제출 버튼 리스너 (기존 리스너 제거 위해 재설정)
+  if (submitBtn) {
+    const newSubmitBtn = submitBtn.cloneNode(true);
+    submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
+    newSubmitBtn.addEventListener('click', handleSubmit);
+  }
+
+  function handleDigitInput(e) {
+    const input = e.target;
+    // 숫자만 허용
+    const val = input.value.replace(/[^0-9]/g, '');
+    input.value = val;
+
+    if (val.length >= 1) {
+      const nextInput = input.nextElementSibling;
+      if (nextInput && nextInput.classList.contains('screen-time-digit')) {
+        nextInput.focus();
+      }
+    }
+
+    updatePreviewAndButton();
+  }
+
+  function handleDigitKeydown(e) {
+    if (e.key === 'Backspace' && e.target.value === '') {
+      const prevInput = e.target.previousElementSibling;
+      if (prevInput && prevInput.classList.contains('screen-time-digit')) {
+        prevInput.focus();
+      }
+    }
+  }
+
+  // 값을 가져오고 파싱하여 미리보기 및 버튼 상태 업데이트
+  function updatePreviewAndButton() {
+    const d1 = document.getElementById('weeklyDigit1').value || '';
+    const d2 = document.getElementById('weeklyDigit2').value || '';
+    const d3 = document.getElementById('weeklyDigit3').value || '';
+    const d4 = document.getElementById('weeklyDigit4').value || '';
+
+    const codeStr = d1 + d2 + d3 + d4;
+
+    if (codeStr.length === 0) {
+      if (preview) preview.textContent = '-';
+      toggleSubmitBtn(false);
+      return;
+    }
+
+    let hours = 0;
+    let minutes = 0;
+    const isOver10 = document.getElementById('weeklyIsOver10Hours')?.checked || false;
+
+    // 기존 스크린타임 로직과 동일하게 파싱
+    if (codeStr.length === 4) {
+      hours = parseInt(codeStr.substring(0, 2));
+      minutes = parseInt(codeStr.substring(2, 4));
+    } else if (codeStr.length === 3) {
+      if (isOver10) {
+        hours = parseInt(codeStr.substring(0, 2));
+        minutes = parseInt(codeStr.substring(2, 3));
+      } else {
+        hours = parseInt(codeStr.substring(0, 1));
+        minutes = parseInt(codeStr.substring(1, 3));
+      }
+    } else if (codeStr.length <= 2) {
+      // 2자리 이하는 분으로만 간주하거나, 아직 입력 중으로 처리
+      // 여기서는 일단 분으로 처리하되, 사용자가 계속 입력할 것임
+      hours = 0;
+      minutes = parseInt(codeStr);
+    }
+
+    let isValid = true;
+    let message = `📱 ${hours}시간 ${minutes}분`;
+    let color = '#2d3748';
+
+    if (minutes >= 60) {
+      message = '⚠️ 분은 59 이하여야 합니다';
+      color = '#EF4444';
+      isValid = false;
+    } else if (hours >= 24) {
+      message = '⚠️ 24시간을 넘을 수 없습니다';
+      color = '#EF4444';
+      isValid = false;
+    }
+
+    if (preview) {
+      preview.textContent = message;
+      preview.style.color = color;
+    }
+
+    // 제출 버튼 활성화: 유효한 값이고, 최소 1글자 이상 입력됨
+    // (기존 스크린타임은 4자리 입력을 강제하지 않음. 130 -> 1시간 30분 가능)
+    toggleSubmitBtn(isValid && codeStr.length > 0);
+  }
+
+  function toggleSubmitBtn(enabled) {
+    const btn = document.getElementById('weekly-verification-submit-btn');
+    if (btn) btn.disabled = !enabled;
+  }
+
+  function handleSubmit() {
+    const d1 = document.getElementById('weeklyDigit1').value || '';
+    const d2 = document.getElementById('weeklyDigit2').value || '';
+    const d3 = document.getElementById('weeklyDigit3').value || '';
+    const d4 = document.getElementById('weeklyDigit4').value || '';
+    const codeStr = d1 + d2 + d3 + d4;
+
+    if (codeStr.length === 0) {
+      showToast('평균 스크린타임을 입력해주세요');
+      return;
+    }
+
+    let hours = 0;
+    let minutes = 0;
+    const isOver10 = document.getElementById('weeklyIsOver10Hours')?.checked || false;
+
+    if (codeStr.length === 4) {
+      hours = parseInt(codeStr.substring(0, 2));
+      minutes = parseInt(codeStr.substring(2, 4));
+    } else if (codeStr.length === 3) {
+      if (isOver10) {
+        hours = parseInt(codeStr.substring(0, 2));
+        minutes = parseInt(codeStr.substring(2, 3));
+      } else {
+        hours = parseInt(codeStr.substring(0, 1));
+        minutes = parseInt(codeStr.substring(1, 3));
+      }
+    } else {
+      hours = 0;
+      minutes = parseInt(codeStr);
+    }
+
+    const totalMinutes = hours * 60 + minutes;
+    submitWeeklyVerification(totalMinutes);
+  }
+}
+
+/**
+ * 주간 검증 제출
+ */
+async function submitWeeklyVerification(userInputAverage) {
+  try {
+    showGlobalLoading('검증 중...');
+
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/screen-time/verify', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userInputAverage })
+    });
+
+    const result = await response.json();
+    hideGlobalLoading();
+
+    if (!response.ok) {
+      showToast(result.message || '검증 실패');
+      return;
+    }
+
+    if (result.success) {
+      if (result.data.verified) {
+        // ✅ 검증 성공
+        showToast('검증 완료! 스크린타임을 입력할 수 있습니다.');
+        isWeeklyVerificationRequired = false;
+        closeWeeklyVerificationModal();
+        // 미션 카드 전환 애니메이션
+        if (typeof animateCardTransition === 'function') {
+          animateCardTransition();
+        } else if (typeof updateHomeMissionCards === 'function') {
+          updateHomeMissionCards();
+        }
+      } else {
+        // ⚠️ 검증 실패 - 경고
+        handleVerificationFailure(result.data);
+      }
+    }
+  } catch (error) {
+    hideGlobalLoading();
+    console.error('Weekly verification submit error:', error);
+    showToast('검증 중 오류가 발생했습니다');
+  }
+}
+
+/**
+ * 검증 실패 처리
+ */
+function handleVerificationFailure(data) {
+  const warningStatusEl = document.getElementById('warning-status');
+  const warningCountEl = document.getElementById('warning-count-display');
+  const warningMessageEl = document.getElementById('warning-message');
+
+  if (data.penalty) {
+    // 🚨 3회 오입력 - 포켓몬 삭제
+    showToast(data.message);
+
+    // 주간 검증 UI 내 경고 표시
+    if (warningStatusEl) {
+      warningStatusEl.style.display = 'flex';
+      warningCountEl.textContent = '3';
+      warningMessageEl.innerHTML = `<strong style="color: #e53e3e;">포켓몬 ${data.deletedPokemonCount}마리가 삭제되었습니다.</strong>`;
+    }
+
+    // 입력 필드 초기화
+    document.getElementById('weeklyDigit1').value = '';
+    document.getElementById('weeklyDigit2').value = '';
+    document.getElementById('weeklyDigit3').value = '';
+    document.getElementById('weeklyDigit4').value = '';
+    const preview = document.getElementById('weeklyVerificationPreview');
+    if (preview) preview.textContent = '-';
+    document.getElementById('weekly-verification-submit-btn').disabled = true;
+
+    // 포켓몬 목록 새로고침
+    if (typeof loadUserPokemonIcons === 'function') loadUserPokemonIcons();
+    if (typeof loadHomeFavoritePokemon === 'function') loadHomeFavoritePokemon();
+    if (typeof loadTodayObtainedPokemon === 'function') loadTodayObtainedPokemon();
+
+  } else {
+    // 1~2회 경고
+    showToast(data.message);
+
+    if (warningStatusEl) {
+      warningStatusEl.style.display = 'flex';
+      warningCountEl.textContent = data.warningCount;
+
+      if (data.warningCount === 1) {
+        warningMessageEl.textContent = '입력값과 기록값의 차이가 10% 이상입니다.';
+      } else if (data.warningCount === 2) {
+        warningMessageEl.innerHTML = '<strong style="color: #e53e3e;">한 번 더 오입력 시 포켓몬이 모두 삭제됩니다!</strong>';
+      }
+    }
+
+    // 입력 필드 초기화
+    document.getElementById('weeklyDigit1').value = '';
+    document.getElementById('weeklyDigit2').value = '';
+    document.getElementById('weeklyDigit3').value = '';
+    document.getElementById('weeklyDigit4').value = '';
+    const preview = document.getElementById('weeklyVerificationPreview');
+    if (preview) preview.textContent = '-';
+    document.getElementById('weekly-verification-submit-btn').disabled = true;
+  }
+}
+
+/**
+ * 스크린타임 입력 전 검증 확인
+ * @returns {boolean} true면 입력 가능, false면 차단
+ */
+function checkScreenTimeInputAllowed() {
+  if (isWeeklyVerificationRequired) {
+    showToast('지난주 평균 검증을 먼저 완료해주세요!');
+
+    // 홈 탭으로 전환
+    const homeTabBtn = document.querySelector('[data-tab="home"]');
+    if (homeTabBtn) homeTabBtn.click();
+
+    showWeeklyVerificationModal();
+    return false;
+  }
+  return true;
+}
+
+// 전역 노출
+window.checkScreenTimeInputAllowed = checkScreenTimeInputAllowed;
+window.checkMissionStatus = checkMissionStatus;
+window.checkWeeklyVerificationStatus = checkWeeklyVerificationStatus;
+
+// ==================== 홈탭 미션 카드 및 주간 달성 바 ==================== //
+
+/**
+ * 스크린타임 입력 모달 열기
+ */
+function openScreenTimeModal() {
+  // 앞선 미션(주간 검증)이 필요한 경우 차단
+  if (isWeeklyVerificationRequired) {
+    showToast('앞선 미션을 먼저 해결해주세요!');
+    return;
+  }
+
+  const modal = document.getElementById('screen-time-modal');
+  if (modal) {
+    modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
+    onModalOpen();
+
+    // 입력 필드 초기화
+    const digit1 = document.getElementById('screenTimeDigit1');
+    if (digit1) digit1.focus();
+  }
+}
+window.openScreenTimeModal = openScreenTimeModal;
+
+/**
+ * 스크린타임 입력 모달 닫기
+ */
+function closeScreenTimeModal() {
+  const modal = document.getElementById('screen-time-modal');
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    onModalClose();
+  }
+}
+window.closeScreenTimeModal = closeScreenTimeModal;
+
+/**
+ * 주간 검증 모달 열기 (미션 카드에서 호출)
+ */
+function openWeeklyVerificationFromCard() {
+  showWeeklyVerificationModal();
+}
+window.openWeeklyVerificationFromCard = openWeeklyVerificationFromCard;
+
+/**
+ * 홈탭 미션 카드 상태 업데이트 (스택 방식)
+ */
+function updateHomeMissionCards() {
+  const homeMissionsSection = document.getElementById('homeMissionsSection');
+  const cardStack = document.getElementById('missionCardStack');
+  const verificationCard = document.getElementById('weeklyVerificationCard');
+  const screenTimeCard = document.getElementById('screenTimeCard');
+  const screenTimeCardSubtitle = document.getElementById('screenTimeCardSubtitle');
+
+  if (!cardStack) return;
+
+  // 기본적으로 섹션 표시
+  if (homeMissionsSection) homeMissionsSection.style.display = 'block';
+
+  // 주간 검증 필요 여부에 따라 카드 표시
+  if (isWeeklyVerificationRequired && weeklyVerificationData) {
+    // 검증 카드 표시 (앞쪽)
+    if (verificationCard) {
+      verificationCard.style.display = 'flex';
+    }
+    // 스택에 앞쪽 카드가 있음을 표시
+    cardStack.classList.add('has-front');
+
+    // 스크린타임 카드는 뒤에 보이도록 유지하되 메시지 변경
+    if (screenTimeCard) {
+      screenTimeCard.style.display = 'flex';
+    }
+    if (screenTimeCardSubtitle) {
+      screenTimeCardSubtitle.textContent = '먼저 주간 검증을 완료해주세요';
+    }
+  } else {
+    // 검증 카드 숨기기
+    if (verificationCard) {
+      verificationCard.style.display = 'none';
+    }
+    // 스택에서 앞쪽 카드 제거
+    cardStack.classList.remove('has-front');
+
+    // 어제 스크린타임 입력 필요 여부 체크
+    if (!needsYesterdayScreenTime) {
+      // 어제 입력을 완료했다면 스크린타임 카드 숨기기
+      if (screenTimeCard) {
+        screenTimeCard.style.display = 'none';
+      }
+      // 검증도 없고 스크린타임도 완료했다면 섹션 전체 숨기기
+      if (homeMissionsSection) {
+        homeMissionsSection.style.display = 'none';
+      }
+    } else {
+      // 어제 입력이 필요하다면 스크린타임 카드 표시
+      if (screenTimeCard) {
+        screenTimeCard.style.display = 'flex';
+      }
+      if (screenTimeCardSubtitle) {
+        screenTimeCardSubtitle.textContent = '어제의 스크린타임을 기록해주세요';
+      }
+    }
+  }
+}
+window.updateHomeMissionCards = updateHomeMissionCards;
+
+/**
+ * 검증 완료 후 카드 전환 애니메이션
+ */
+function animateCardTransition() {
+  const cardStack = document.getElementById('missionCardStack');
+  const verificationCard = document.getElementById('weeklyVerificationCard');
+  const screenTimeCard = document.getElementById('screenTimeCard');
+  const screenTimeCardSubtitle = document.getElementById('screenTimeCardSubtitle');
+
+  if (!verificationCard || !screenTimeCard) {
+    updateHomeMissionCards();
+    return;
+  }
+
+  // 1. 검증 카드에 exit 애니메이션 추가
+  verificationCard.classList.add('card-exit');
+
+  // 2. 스크린타임 카드에 reveal 애니메이션 추가
+  screenTimeCard.classList.add('card-reveal');
+
+  // 3. 스크린타임 카드 메시지 업데이트
+  if (screenTimeCardSubtitle) {
+    screenTimeCardSubtitle.textContent = '스크린타임을 기록해주세요';
+  }
+
+  // 4. 애니메이션 완료 후 정리
+  setTimeout(() => {
+    verificationCard.classList.remove('card-exit');
+    verificationCard.style.display = 'none';
+    screenTimeCard.classList.remove('card-reveal');
+    if (cardStack) {
+      cardStack.classList.remove('has-front');
+    }
+  }, 800);
+}
+window.animateCardTransition = animateCardTransition;
+
+/**
+ * 주간 달성 바 업데이트 (일요일~토요일)
+ */
+async function updateWeeklyAchievementBar() {
+  // 게스트 모드에서는 더미 데이터 표시 (일~토 순서)
+  if (window.isGuest()) {
+    updateWeeklyAchievementBarUI([false, true, true, false, false, false, false], 3);
+    return;
+  }
+
+  if (!window.isAuthenticated()) {
+    return;
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/screen-time/weekly-stats', { headers });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data) {
+        const weeklyData = result.data;
+        const completedDays = [false, false, false, false, false, false, false];
+
+        // dailyRecords 배열을 순회하며 완료된 요일 체크
+        const dailyRecords = weeklyData.dailyRecords || [];
+        const dailyTimes = Array(7).fill(null);
+
+        console.log('Weekly Data:', weeklyData);
+        console.log('Daily Records:', dailyRecords);
+
+        dailyRecords.forEach(record => {
+          if (record && record.date) {
+            // YYYY-MM-DD 형식의 날짜를 파싱하여 요일 인덱스 추출
+            const dateObj = new Date(record.date);
+            const dayIndex = dateObj.getDay(); // 0(일) ~ 6(토)
+            if (dayIndex >= 0 && dayIndex <= 6) {
+              completedDays[dayIndex] = true;
+
+              // 시간 포맷팅 (H'MM)
+              const hours = record.hours || 0;
+              const minutes = record.minutes || 0;
+              const timeLabel = `${hours}'${minutes.toString().padStart(2, '0')}`;
+              dailyTimes[dayIndex] = timeLabel;
+              console.log(`Day ${dayIndex} (${record.date}): hours=${hours}, minutes=${minutes}, label=${timeLabel}`);
+            }
+          }
+        });
+
+        // 오늘 요일 인덱스 (일=0, 월=1, ... 토=6)
+        const now = new Date();
+        const todayIndex = now.getDay();
+
+        // 오늘의 입력 완료 여부 저장 (서버 데이터 기반)
+        isTodayScreenTimeCompleted = completedDays[todayIndex];
+
+        console.log('Completed Days:', completedDays);
+        console.log('Daily Times:', dailyTimes);
+        console.log('Today Index:', todayIndex);
+
+        updateWeeklyAchievementBarUI(completedDays, dailyTimes, todayIndex);
+
+        // 미션 카드 상태 업데이트 (이미 완료했으면 카드 숨김 등)
+        updateHomeMissionCards();
+      }
+    }
+  } catch (error) {
+    console.error('Failed to update weekly achievement bar:', error);
+  }
+}
+
+/**
+ * 주간 달성 바 UI 업데이트 (일~토 순서, 통합 라벨)
+ */
+function updateWeeklyAchievementBarUI(completedDays, dailyTimes, todayIndex) {
+  const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
+
+  for (let i = 0; i < 7; i++) {
+    const dayCircle = document.getElementById(`weeklyDay${i}`);
+    if (!dayCircle) continue;
+
+    const label = dayLabels[i];
+    let timeLabel = '';
+
+    // 완료 상태 업데이트
+    if (completedDays[i]) {
+      dayCircle.classList.add('completed');
+      dayCircle.textContent = label;
+      timeLabel = dailyTimes[i] || '';
+    } else {
+      dayCircle.classList.remove('completed');
+      dayCircle.textContent = label;
+    }
+
+    // 오늘 표시
+    if (i === todayIndex) {
+      dayCircle.classList.add('today');
+      // 오늘인데 완료 안했으면 '오늘', 완료했으면 시간
+      if (!timeLabel) timeLabel = '오늘';
+    } else {
+      dayCircle.classList.remove('today');
+    }
+
+    // 데이터 라벨 설정 (CSS content: attr(data-label)에서 사용)
+    dayCircle.setAttribute('data-label', timeLabel);
+  }
+}
+window.updateWeeklyAchievementBar = updateWeeklyAchievementBar;
+
+/**
+ * 홈탭 초기화 시 호출
+ */
+function initHomeTab() {
+  updateHomeMissionCards();
+  updateWeeklyAchievementBar();
+}
+window.initHomeTab = initHomeTab;

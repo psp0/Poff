@@ -18,7 +18,7 @@ async function main() {
     // 1. Initialize asset loader based on environment
     const loader = isProduction
         ? new S3Loader(process.env.S3_BUCKET_NAME, process.env.S3_BASE_PATH || '')
-        : new FileSystemLoader(process.env.ASSETS_DIR || '../pokehabit-assets');
+        : new FileSystemLoader(process.env.ASSETS_DIR || '../poff-assets');
 
     // 2. Initialize database connection (MySQL for both local and RDS)
     const db = await connectMySQL();
@@ -67,9 +67,27 @@ async function insertPokemonData(db, parser) {
     const records = await parser.createPokemonRecords();
 
     console.log(`Inserting ${records.length} Pokemon records...`);
+
+    // 1. Fetch habitat background mappings
+    console.log('  Fetching habitat background mappings...');
+    const [bgRows] = await db.query('SELECT id, habitat_slug, type_slug FROM habitat_backgrounds');
+    const bgMap = new Map();
+    bgRows.forEach(row => {
+        bgMap.set(`${row.habitat_slug}|${row.type_slug}`, row.id);
+    });
+    console.log(`  Loaded ${bgMap.size} background mappings`);
+
     let inserted = 0;
 
     for (const record of records) {
+        // Calculate background ID
+        const habitatSlug = record.habitat_en || 'rare';
+        const typeSlug = (record.type1_en?.toLowerCase() === 'normal' && record.type2_en)
+            ? record.type2_en.toLowerCase()
+            : (record.type1_en?.toLowerCase() || 'normal');
+
+        const bgId = bgMap.get(`${habitatSlug}|${typeSlug}`) || null;
+
         // MySQL: ON DUPLICATE KEY UPDATE
         await db.query(`
             INSERT INTO pokemon (
@@ -79,8 +97,9 @@ async function insertPokemonData(db, parser) {
               base_sp_defense, base_speed, base_stat_total,
               image_name, form_suffix, asset_source,
               has_icon, has_icon_shiny, has_front, has_front_shiny, has_back, has_back_shiny, has_cry,
-              back_animation_speed, front_animation_speed
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              back_animation_speed, front_animation_speed,
+              bg_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
               name = VALUES(name),
               category = VALUES(category),
@@ -88,6 +107,8 @@ async function insertPokemonData(db, parser) {
               type2 = VALUES(type2),
               type1_en = VALUES(type1_en),
               type2_en = VALUES(type2_en),
+              habitat = VALUES(habitat),
+              habitat_en = VALUES(habitat_en),
               asset_source = VALUES(asset_source),
               has_icon = VALUES(has_icon),
               has_icon_shiny = VALUES(has_icon_shiny),
@@ -98,6 +119,7 @@ async function insertPokemonData(db, parser) {
               has_cry = VALUES(has_cry),
               back_animation_speed = VALUES(back_animation_speed),
               front_animation_speed = VALUES(front_animation_speed),
+              bg_id = VALUES(bg_id),
               updated_at = NOW()
         `, [
             record.name, record.category, record.type1, record.type2,
@@ -108,7 +130,8 @@ async function insertPokemonData(db, parser) {
             record.base_speed, record.base_stat_total, record.image_name,
             record.form_suffix, record.asset_source,
             record.has_icon, record.has_icon_shiny, record.has_front, record.has_front_shiny, record.has_back, record.has_back_shiny, record.has_cry,
-            record.back_animation_speed, record.front_animation_speed
+            record.back_animation_speed, record.front_animation_speed,
+            bgId
         ]);
 
         inserted++;
@@ -124,12 +147,13 @@ async function insertFlags(db, parser) {
     const records = parser.createFlagRecords();
     console.log(`Inserting ${records.length} flag records...`);
 
-    for (const record of records) {
-        await db.query(
-            'INSERT INTO pokemon_flags (name, name_ko) VALUES (?, ?) ON DUPLICATE KEY UPDATE name_ko = VALUES(name_ko)',
-            [record.name, record.name_ko]
-        );
-    }
+    if (records.length === 0) return;
+
+    const values = records.map(r => [r.name, r.name_ko]);
+    await db.query(
+        'INSERT INTO pokemon_flags (name, name_ko) VALUES ? ON DUPLICATE KEY UPDATE name_ko = VALUES(name_ko)',
+        [values]
+    );
 
     console.log(`✓ Inserted ${records.length} flags`);
 }
@@ -141,10 +165,11 @@ async function insertFlagRelations(db, parser) {
     // Clear existing relations
     await db.query('DELETE FROM pokemon_flag_relations');
 
-    for (const rel of relations) {
+    if (relations.length > 0) {
+        const values = relations.map(r => [r.pokemon_stable_id, r.flag_name]);
         await db.query(
-            'INSERT INTO pokemon_flag_relations (pokemon_stable_id, flag_name) VALUES (?, ?)',
-            [rel.pokemon_stable_id, rel.flag_name]
+            'INSERT INTO pokemon_flag_relations (pokemon_stable_id, flag_name) VALUES ?',
+            [values]
         );
     }
 
@@ -158,10 +183,11 @@ async function insertEvolutions(db, parser) {
     // Clear existing evolutions
     await db.query('DELETE FROM pokemon_evolutions');
 
-    for (const evo of evolutions) {
+    if (evolutions.length > 0) {
+        const values = evolutions.map(e => [e.from_pokemon, e.to_pokemon]);
         await db.query(
-            'INSERT INTO pokemon_evolutions (from_pokemon, to_pokemon) VALUES (?, ?)',
-            [evo.from_pokemon, evo.to_pokemon]
+            'INSERT INTO pokemon_evolutions (from_pokemon, to_pokemon) VALUES ?',
+            [values]
         );
     }
 
@@ -174,10 +200,10 @@ async function insertGuestUserPokemon(db) {
 
     // 게스트 유저에게 줄 포켓몬 목록 - 4마리만 (1단계 포켓몬)
     const guestPokemon = [
-        { stable_id: 'BULBASAUR', is_shiny: false, obtained_reason: '체험모드 기본 지급' },  // 이상해씨
-        { stable_id: 'CHARMANDER', is_shiny: false, obtained_reason: '체험모드 기본 지급' }, // 파이리
-        { stable_id: 'SQUIRTLE', is_shiny: false, obtained_reason: '체험모드 기본 지급' },   // 꼬부기
-        { stable_id: 'PIKACHU', is_shiny: false, obtained_reason: '체험모드 기본 지급' }     // 피카켄
+        { stable_id: 'BULBASAUR', is_shiny: false, is_favorite: false, obtained_reason: '체험모드 기본 지급' },  // 이상해씨
+        { stable_id: 'CHARMANDER', is_shiny: false, is_favorite: false, obtained_reason: '체험모드 기본 지급' }, // 파이리
+        { stable_id: 'SQUIRTLE', is_shiny: false, is_favorite: false, obtained_reason: '체험모드 기본 지급' },   // 꼬부기
+        { stable_id: 'PIKACHU', is_shiny: false, is_favorite: true, obtained_reason: '체험모드 기본 지급' }     // 피카켄
     ];
 
     console.log(`Inserting guest user Pokemon collection...`);
@@ -199,10 +225,10 @@ async function insertGuestUserPokemon(db) {
             }
 
             await db.query(`
-                INSERT INTO user_pokemon_collection (user_id, pokemon_stable_id, is_shiny, obtained_reason)
-                VALUES (?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE obtained_reason = VALUES(obtained_reason)
-            `, [GUEST_USER_ID, pokemon.stable_id, pokemon.is_shiny, pokemon.obtained_reason]);
+                INSERT INTO user_pokemon_collection (user_id, pokemon_stable_id, is_shiny, is_favorite, obtained_reason)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE obtained_reason = VALUES(obtained_reason), is_favorite = VALUES(is_favorite)
+            `, [GUEST_USER_ID, pokemon.stable_id, pokemon.is_shiny, pokemon.is_favorite, pokemon.obtained_reason]);
 
             inserted++;
         } catch (err) {

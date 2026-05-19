@@ -21,6 +21,11 @@ output "api_endpoint" {
   value       = module.compute.api_gateway_endpoint
 }
 
+output "api_gateway_domain_extracted" {
+  description = "Extracted API Gateway domain for CloudFront"
+  value       = replace(replace(module.compute.api_gateway_endpoint, "https://", ""), "/.*", "")
+}
+
 output "rds_port" {
   description = "RDS port number"
   value       = module.database.rds_port
@@ -39,6 +44,11 @@ output "s3_bucket" {
 output "cloudfront_url" {
   description = "CloudFront distribution domain name"
   value       = var.enable_cloudfront ? module.storage_cdn.cloudfront_domain_name : "CloudFront not enabled"
+}
+
+output "website_url" {
+  description = "Main website URL (CloudFront or custom domain)"
+  value       = var.cloudfront_custom_domain_name != "" ? "https://${var.cloudfront_custom_domain_name}" : (var.enable_cloudfront ? "https://${module.storage_cdn.cloudfront_domain_name}" : "CloudFront not enabled")
 }
 
 output "cloudfront_distribution_id" {

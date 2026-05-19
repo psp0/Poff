@@ -5,8 +5,8 @@ terraform {
       version = "~> 6.0"
     }
   }
-  #backend "local" {
-  #  path = "terraform.tfstate"      
-  #}
-  backend "s3" {}
+  backend "local" {
+    path = "terraform.tfstate"
+  }
+  # backend "s3" {}
 }

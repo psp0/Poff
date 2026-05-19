@@ -83,8 +83,10 @@ class HolidaySeeder {
             const holidays = items
                 .filter(item => item.isHoliday === 'Y') // 공휴일만 필터링
                 .map(item => ({
-                    holiday_date: this.formatDate(item.locdate),
-                    name_ko: this.normalizeHolidayName(item.dateName)
+                    date: this.formatDate(item.locdate),
+                    name: this.normalizeHolidayName(item.dateName),
+                    type: 'holiday',
+                    is_holiday: true
                 }));
 
             console.log(`  ✓ Found ${holidays.length} holidays`);
@@ -97,6 +99,52 @@ class HolidaySeeder {
             } else {
                 console.error(`  ❌ Error fetching holidays:`, error.message);
             }
+            throw error;
+        }
+    }
+
+    /**
+     * 24절기 정보 API 호출
+     */
+    async fetchSolarTerms(year, month = null) {
+        try {
+            const url = `${this.baseUrl}/get24DivisionsInfo`;
+            const params = {
+                ServiceKey: decodeURIComponent(this.apiKey),
+                solYear: year,
+                numOfRows: 100,
+                _type: 'json'
+            };
+
+            if (month) {
+                params.solMonth = String(month).padStart(2, '0');
+            }
+
+            console.log(`📡 Fetching solar terms for ${year}${month ? `-${month}` : ''}...`);
+            const response = await axios.get(url, { params });
+
+            const body = response.data.response?.body;
+            if (!body || !body.items) {
+                console.log(`  ℹ️  No solar terms found for ${year}`);
+                return [];
+            }
+
+            let items = body.items.item;
+            if (!items) return [];
+            if (!Array.isArray(items)) items = [items];
+
+            const solarTerms = items.map(item => ({
+                date: this.formatDate(item.locdate),
+                name: item.dateName,
+                type: 'solar_term',
+                is_holiday: item.isHoliday === 'Y'
+            }));
+
+            console.log(`  ✓ Found ${solarTerms.length} solar terms`);
+            return solarTerms;
+
+        } catch (error) {
+            console.error(`  ❌ Error fetching solar terms:`, error.message);
             throw error;
         }
     }
@@ -142,37 +190,37 @@ class HolidaySeeder {
     }
 
     /**
-     * 공휴일 데이터를 DB에 삽입/업데이트 (UPSERT)
+     * 날짜 정보(공휴일/절기)를 DB에 삽입/업데이트 (UPSERT)
      */
-    async upsertHolidays(holidays) {
-        if (holidays.length === 0) {
-            console.log('  ℹ️  No holidays to insert');
+    async upsertDateInfo(items) {
+        if (items.length === 0) {
+            console.log('  ℹ️  No items to insert');
             return { inserted: 0, updated: 0 };
         }
 
-        console.log(`💾 Upserting ${holidays.length} holidays...`);
+        console.log(`💾 Upserting ${items.length} date entries...`);
 
         let inserted = 0;
         let updated = 0;
 
-        for (const holiday of holidays) {
+        for (const item of items) {
             try {
-                // MySQL: ON DUPLICATE KEY UPDATE
                 const [result] = await this.db.query(`
-                    INSERT INTO holidays (holiday_date, name_ko)
-                    VALUES (?, ?)
+                    INSERT INTO date_info (date, name, type, is_holiday)
+                    VALUES (?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE 
-                        name_ko = VALUES(name_ko)
-                `, [holiday.holiday_date, holiday.name_ko]);
+                        name = VALUES(name),
+                        type = VALUES(type),
+                        is_holiday = VALUES(is_holiday)
+                `, [item.date, item.name, item.type, item.is_holiday]);
 
-                // affectedRows가 1이면 INSERT, 2면 UPDATE
                 if (result.affectedRows === 1) {
                     inserted++;
                 } else if (result.affectedRows === 2) {
                     updated++;
                 }
             } catch (error) {
-                console.error(`  ❌ Error upserting holiday ${holiday.holiday_date}:`, error.message);
+                console.error(`  ❌ Error upserting date ${item.date}:`, error.message);
                 throw error;
             }
         }
@@ -182,12 +230,23 @@ class HolidaySeeder {
     }
 
     /**
-     * 연도별 공휴일 수집 및 DB 저장
+     * 연도별 날짜 정보 수집 및 DB 저장
      */
     async seedYear(year) {
         console.log(`\n📅 Processing year ${year}...`);
-        const holidays = await this.fetchHolidays(year);
-        const result = await this.upsertHolidays(holidays);
+
+        // 병렬로 API 호출
+        const [holidays, solarTerms] = await Promise.all([
+            this.fetchHolidays(year),
+            this.fetchSolarTerms(year)
+        ]);
+
+        const allItems = [...holidays, ...solarTerms];
+
+        // 날짜순 정렬
+        allItems.sort((a, b) => a.date.localeCompare(b.date));
+
+        const result = await this.upsertDateInfo(allItems);
         return result;
     }
 
@@ -223,17 +282,18 @@ class HolidaySeeder {
     }
 
     /**
-     * DB의 기존 공휴일 목록 조회
+     * DB의 기존 날짜 정보 조회
      */
-    async getExistingHolidays() {
+    async getExistingDateInfo() {
         const [rows] = await this.db.query(
-            'SELECT holiday_date, name_ko FROM holidays ORDER BY holiday_date'
+            'SELECT date, name, type FROM date_info ORDER BY date'
         );
 
-        console.log(`\n📊 Current holidays in database: ${rows.length}`);
+        console.log(`\n📊 Current date info in database: ${rows.length}`);
         if (rows.length > 0) {
-            console.log(`   First: ${rows[0].holiday_date} - ${rows[0].name_ko}`);
-            console.log(`   Last: ${rows[rows.length - 1].holiday_date} - ${rows[rows.length - 1].name_ko}`);
+            console.log(`   First: ${rows[0].date} - ${rows[0].name} (${rows[0].type})`);
+            const last = rows.length - 1;
+            console.log(`   Last: ${rows[last].date} - ${rows[last].name} (${rows[last].type})`);
         }
 
         return rows;
@@ -258,24 +318,24 @@ async function main() {
         await seeder.connect();
 
         // 기존 데이터 조회
-        await seeder.getExistingHolidays();
+        await seeder.getExistingDateInfo();
 
         // 현재 연도와 다음 연도의 공휴일 수집
         const currentYear = new Date().getFullYear();
         const years = [currentYear, currentYear + 1];
 
-        console.log(`\n🔄 Fetching holidays for years: ${years.join(', ')}`);
+        console.log(`\n🔄 Fetching data for years: ${years.join(', ')}`);
 
         const result = await seeder.seedYears(years);
 
         console.log('\n==========================================');
-        console.log('✅ Holiday seeding completed!');
+        console.log('✅ Date info seeding completed!');
         console.log(`   Total inserted: ${result.inserted}`);
         console.log(`   Total updated: ${result.updated}`);
         console.log('==========================================');
 
         // 최종 결과 조회
-        await seeder.getExistingHolidays();
+        await seeder.getExistingDateInfo();
 
     } catch (error) {
         console.error('\n❌ Holiday seeding failed:', error);

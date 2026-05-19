@@ -103,6 +103,12 @@ variable "datadog_api_key" {
   default     = ""
 }
 
+variable "datadog_site" {
+  description = "Datadog site URL (e.g. datadoghq.com, datadoghq.eu)"
+  type        = string
+  default     = "datadoghq.com"
+}
+
 variable "datadog_extension_version" {
   description = "Datadog Lambda Extension layer version"
   type        = number
@@ -115,15 +121,41 @@ variable "datadog_lambda_layer_version" {
   default     = 115
 }
 
-variable "rds_secret_arn" {
-  description = "ARN of the RDS credentials secret in Secrets Manager (optional)"
+
+
+
+variable "firebase_service_account" {
+  description = "Firebase Service Account JSON (Base64 encoded)"
+  type        = string
+  sensitive   = true
+}
+
+variable "firebase_api_key" {
+  description = "Firebase API Key"
   type        = string
   default     = ""
 }
 
-
-variable "firebase_service_account" {
-  description = "Firebase Service Account JSON"
+variable "firebase_auth_domain" {
+  description = "Firebase Auth Domain"
   type        = string
-  sensitive   = true
+  default     = ""
+}
+
+variable "firebase_project_id" {
+  description = "Firebase Project ID"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_messaging_sender_id" {
+  description = "Firebase Messaging Sender ID"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_app_id" {
+  description = "Firebase App ID"
+  type        = string
+  default     = ""
 }

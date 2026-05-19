@@ -30,6 +30,7 @@ lambda/functions/*/node_modules/
 !package.json
 !package-lock.json
 !*.example.json
+!public/manifest.json
 
 # Logs & temp
 logs/
@@ -70,8 +71,14 @@ secrets/
 !*.pub
 
 # Project-specific large assets / trash
-pokehabit-assets/*
+poff-assets/*
 trash*/ 
 
 # Misc
 crash.log
+
+# Testing
+coverage/
+jest-junit.xml
+junit.xml
+.jest-cache/

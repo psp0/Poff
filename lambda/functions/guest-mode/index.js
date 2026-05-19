@@ -8,6 +8,7 @@
 const { success, notFound, internalServerError } = require('../../shared/response');
 const db = require('../../shared/database');
 const { logger } = require('../../shared/logger');
+const { toKstDate, getKstDateString } = require('../../shared/timezone');
 
 // 게스트 유저 ID (고정)
 const GUEST_USER_ID = '00000000-0000-0000-0000-000000000000';
@@ -37,11 +38,13 @@ async function getGuestPokemonIcons() {
       p.generation,
       p.has_icon,
       p.has_icon_shiny,
-      p.asset_source
+      p.asset_source,
+      p.type1,
+      p.type2
     FROM user_pokemon_collection upc
     JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
     WHERE upc.user_id = ?
-    GROUP BY p.image_name, p.stable_id, p.generation, p.has_icon, p.has_icon_shiny, p.asset_source
+    GROUP BY p.image_name, p.stable_id, p.generation, p.has_icon, p.has_icon_shiny, p.asset_source, p.type1, p.type2
     ORDER BY p.generation, p.image_name
   `;
 
@@ -60,6 +63,8 @@ async function getGuestPokemonIcons() {
       display_stable_id: row.display_stable_id,
       is_shiny: isShiny,
       generation: row.generation,
+      type1: row.type1,
+      type2: row.type2,
       icon_url: buildAssetUrl(assetSource, iconFolder, `${row.base_image_name}.png`)
     };
   });
@@ -71,9 +76,10 @@ async function getGuestPokemonIcons() {
 async function getGuestPokemonDetail(stableId, isShiny) {
   // 먼저 게스트 유저가 해당 포켓몬을 보유하고 있는지 확인
   const collectionQuery = `
-    SELECT upc.*, p.*
+    SELECT upc.*, p.*, hb.image_filename as background_filename, hb.habitat_slug as background_habitat
     FROM user_pokemon_collection upc
     JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    LEFT JOIN habitat_backgrounds hb ON p.bg_id = hb.id
     WHERE upc.user_id = ? AND p.stable_id = ?
     LIMIT 1
   `;
@@ -83,7 +89,13 @@ async function getGuestPokemonDetail(stableId, isShiny) {
 
   if (rows.length === 0) {
     // 보유하지 않은 포켓몬이면 기본 정보만 반환
-    const pokemonQuery = `SELECT * FROM pokemon WHERE stable_id = ? LIMIT 1`;
+    const pokemonQuery = `
+      SELECT p.*, hb.image_filename as background_filename, hb.habitat_slug as background_habitat
+      FROM pokemon p
+      LEFT JOIN habitat_backgrounds hb ON p.bg_id = hb.id
+      WHERE p.stable_id = ? 
+      LIMIT 1
+    `;
     const pokemonResult = await db.query(pokemonQuery, [stableId]);
     const pokemonRows = pokemonResult.rows;
 
@@ -96,7 +108,7 @@ async function getGuestPokemonDetail(stableId, isShiny) {
   }
 
   const row = rows[0];
-  const hasShiny = row.has_icon_shiny || row.has_front_shiny;
+  const hasShiny = !!(row.has_icon_shiny || row.has_front_shiny);
 
   return buildPokemonResponse(row, row.is_favorite, isShiny && hasShiny, hasShiny);
 }
@@ -114,29 +126,18 @@ function buildPokemonResponse(p, isFavorite, isShiny, hasShiny) {
   const backExt = 'png';
 
   // 배경 이미지 로직 (로그인 모드와 동일)
-  const habitat = p.habitat_en ? p.habitat_en.toLowerCase().replace(/\s+/g, '_') : 'unknown';
-  const type1 = p.type1_en ? p.type1_en.toLowerCase() : 'normal';
-  const type2 = p.type2_en ? p.type2_en.toLowerCase() : null;
-
-  // Determine primary type for background
-  // If one of the types is 'normal' and there is another type, prioritize the other type
-  let primaryType = type1;
-  let secondaryType = type2;
-
-  if (type1 === 'normal' && type2) {
-    primaryType = type2;
-    secondaryType = type1;
+  let backgroundUrl = null;
+  if (p.background_filename && p.background_habitat) {
+    backgroundUrl = buildAssetUrl('custom', `img/background/${p.background_habitat}`, p.background_filename);
+  } else {
+    // Fallback
+    const habitat = p.habitat_en ? p.habitat_en.toLowerCase().replace(/\s+/g, '_') : 'unknown';
+    const type1 = p.type1_en ? p.type1_en.toLowerCase() : 'normal';
+    backgroundUrl = p.habitat_en ? buildAssetUrl('custom', `img/background/${habitat}`, `${type1}.png`) : null;
   }
-
-  // Background URL: custom/img/background/{habitat}/{type}.png
-  const backgroundUrl = p.habitat_en ? buildAssetUrl('custom', `img/background/${habitat}`, `${primaryType}.png`) : null;
 
   // Fallback backgrounds
   const fallbackBackgrounds = [];
-  if (secondaryType) {
-    fallbackBackgrounds.push(buildAssetUrl('custom', `img/background/${habitat}`, `${secondaryType}.png`));
-  }
-  fallbackBackgrounds.push(buildAssetUrl('custom', `img/background/${habitat}`, 'normal.png'));
 
   return {
     pokemon: {
@@ -432,62 +433,9 @@ async function getGuestEvolutionTree(baseImageName) {
   };
 }
 
-/**
- * 게스트 유저의 운동 목록 (고정값 - 읽기 전용)
- */
-function getGuestExercises() {
-  // DB 조회 대신 고정값 반환 (다른 사용자에게 영향 없음)
-  return [
-    { id: 'guest-ex-1', exercise_name: '벤치프레스 (체험용)', weight_kg: 60, intensity_type: 'reps', reps: 10, muscle_group_id: 'chest', muscle_group_name: '가슴' },
-    { id: 'guest-ex-2', exercise_name: '데드리프트 (체험용)', weight_kg: 100, intensity_type: 'reps', reps: 5, muscle_group_id: 'back', muscle_group_name: '등' },
-    { id: 'guest-ex-3', exercise_name: '스쿼트 (체험용)', weight_kg: 80, intensity_type: 'reps', reps: 8, muscle_group_id: 'quad', muscle_group_name: '대퇴사두근' }
-  ];
-}
 
-/**
- * 게스트 유저의 주간 운동 통계 (고정값 - 읽기 전용)
- */
-function getGuestWeeklyStats() {
-  // DB 조회 대신 고정값 반환 (다른 사용자에게 영향 없음)
-  // 실제 API 응답과 동일한 필드 구조 사용
-  return {
-    muscleGroups: [
-      {
-        muscle_group_id: 'chest',
-        muscle_group_name: 'chest',
-        muscle_group_name_ko: '가슴',
-        total_sets: 10,
-        mv_sets: 0,
-        mev_sets: 6,
-        mav_min_sets: 10,
-        mav_max_sets: 14,
-        mrv_sets: 20
-      },
-      {
-        muscle_group_id: 'back',
-        muscle_group_name: 'back',
-        muscle_group_name_ko: '등',
-        total_sets: 8,
-        mv_sets: 0,
-        mev_sets: 8,
-        mav_min_sets: 12,
-        mav_max_sets: 18,
-        mrv_sets: 25
-      },
-      {
-        muscle_group_id: 'quad',
-        muscle_group_name: 'quad',
-        muscle_group_name_ko: '대퇴사두근',
-        total_sets: 15,
-        mv_sets: 0,
-        mev_sets: 6,
-        mav_min_sets: 10,
-        mav_max_sets: 14,
-        mrv_sets: 20
-      }
-    ]
-  };
-}
+
+
 
 /**
  * 게스트 유저의 아이템 목록 (고정값 - 읽기 전용)
@@ -530,7 +478,17 @@ async function getStarterPokemon() {
 }
 
 exports.handler = async (event, context) => {
-  const { httpMethod, path, pathParameters, queryStringParameters } = event;
+  // Normalize event for Payload 2.0 support
+  const httpMethod = event.requestContext?.http?.method || event.httpMethod;
+  let path = event.rawPath || event.path;
+  const { pathParameters, queryStringParameters } = event;
+
+  // [Fix] CloudFront origin_path adds stage prefix (e.g. /dev/api/...), so we need to strip it
+  // Check if path starts with /<stage>/ and strip the stage part
+  const stage = event.requestContext?.stage;
+  if (stage && stage !== '$default' && path.startsWith(`/${stage}/`)) {
+    path = path.substring(stage.length + 1);
+  }
 
   try {
     // /api/guest/icons - 포켓몬 아이콘 목록
@@ -568,37 +526,18 @@ exports.handler = async (event, context) => {
       return success(evolutionData);
     }
 
-    // /api/guest/exercises - 운동 목록
-    if (path === '/api/guest/exercises' && httpMethod === 'GET') {
-      const exercises = getGuestExercises();
-      return success(exercises);
-    }
 
-    // /api/guest/muscle-groups - 근육 그룹 목록 (공개 데이터)
-    if (path === '/api/guest/muscle-groups' && httpMethod === 'GET') {
-      const groupsResult = await db.query(`
-        SELECT id, name, name_ko, mev_sets, mav_min_sets as mav_sets
-        FROM muscle_groups
-        ORDER BY name_ko
-      `);
-      return success(groupsResult.rows);
-    }
 
-    // /api/guest/weekly-stats - 주간 통계
-    if (path === '/api/guest/weekly-stats' && httpMethod === 'GET') {
-      const stats = getGuestWeeklyStats();
-      return success(stats);
-    }
+
+
+
 
     // /api/guest/eggs - 알 목록 (빈 목록)
     if (path === '/api/guest/eggs' && httpMethod === 'GET') {
       return success([]);
     }
 
-    // /api/guest/sessions - 운동 세션 (빈 목록)
-    if (path === '/api/guest/sessions' && httpMethod === 'GET') {
-      return success([]);
-    }
+
 
     // /api/guest/starter-pokemon - 스타터 포켓몬 목록 (로그인 화면용)
     if (path === '/api/guest/starter-pokemon' && httpMethod === 'GET') {
@@ -612,6 +551,30 @@ exports.handler = async (event, context) => {
       return success(items);
     }
 
+    // /api/guest/favorites - 즐겨찾기 목록
+    if (path === '/api/guest/favorites' && httpMethod === 'GET') {
+      const favorites = await getGuestFavorites();
+      return success(favorites);
+    }
+
+    // /api/guest/favorite - (오타 대응용) 즐겨찾기 목록
+    if (path === '/api/guest/favorite' && httpMethod === 'GET') {
+      const favorites = await getGuestFavorites();
+      return success(favorites);
+    }
+
+    // /api/guest/today - 오늘 획득한 포켓몬 목록 (게스트 모드)
+    if (path === '/api/guest/today' && httpMethod === 'GET') {
+      const todayPokemon = await getGuestTodayPokemon();
+      return success(todayPokemon);
+    }
+
+    // /api/guest/sleep-status - 수면 상태 (게스트 모드)
+    if (path === '/api/guest/sleep-status' && httpMethod === 'GET') {
+      const sleepStatus = await getGuestSleepStatus();
+      return success(sleepStatus);
+    }
+
     return notFound('Not found');
 
   } catch (err) {
@@ -619,3 +582,164 @@ exports.handler = async (event, context) => {
     return internalServerError('Internal server error: ' + err.message);
   }
 };
+
+/**
+ * 게스트 유저의 즐겨찾기 목록 조회
+ */
+async function getGuestFavorites() {
+  const query = `
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.is_favorite,
+      upc.obtained_date,
+      upc.obtained_reason,
+      p.name as pokemon_name,
+      p.type1 as pokemon_type1,
+      p.type2 as pokemon_type2,
+      p.category as pokemon_category
+    FROM user_pokemon_collection upc
+    INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    WHERE upc.user_id = ? AND upc.is_favorite = true
+    ORDER BY upc.favorited_at DESC
+  `;
+
+  const result = await db.query(query, [GUEST_USER_ID]);
+  const rows = result.rows;
+
+  // 만약 즐겨찾기가 하나도 없다면 피카츄를 기본으로 반환 (요구사항)
+  if (rows.length === 0) {
+    // 피카츄 조회
+    const pikachuQuery = `
+      SELECT 
+        upc.collection_id,
+        upc.pokemon_stable_id,
+        upc.is_shiny,
+        1 as is_favorite,
+        upc.obtained_date,
+        upc.obtained_reason,
+        p.name as pokemon_name,
+        p.type1 as pokemon_type1,
+        p.type2 as pokemon_type2,
+        p.category as pokemon_category
+      FROM user_pokemon_collection upc
+      INNER JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+      WHERE upc.user_id = ? AND p.image_name = 'PIKACHU'
+      LIMIT 1
+    `;
+
+    const pikachuResult = await db.query(pikachuQuery, [GUEST_USER_ID]);
+    if (pikachuResult.rows.length > 0) {
+      return pikachuResult.rows;
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * 게스트 유저의 수면 상태 조회 (Mock 데이터 및 실제 컬렉션 일부)
+ */
+async function getGuestSleepStatus() {
+  // KST 기준 오늘 날짜 계산
+  const todayDateStr = getKstDateString();
+
+  // 게스트 유저가 보유한 포켓몬 중 일부를 오늘 획득한 것처럼 표시
+  const pokemonQuery = `
+    SELECT 
+      p.stable_id, p.name, p.image_name, p.form_suffix, p.base_stat_total, p.asset_source, p.has_icon, p.has_icon_shiny
+    FROM user_pokemon_collection upc
+    JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    WHERE upc.user_id = ?
+    LIMIT 5
+  `;
+  const pokemonResult = await db.query(pokemonQuery, [GUEST_USER_ID]);
+  const todayPokemon = pokemonResult.rows.map(p => {
+    const hasShinyIcon = p.has_icon_shiny === 1;
+    const iconFolder = hasShinyIcon ? 'img/Icons shiny' : 'img/Icons';
+    const assetSource = p.asset_source || 'base';
+    return {
+      ...p,
+      icon_shiny_url: buildAssetUrl(assetSource, iconFolder, `${p.image_name}${p.form_suffix || ''}.png`)
+    };
+  });
+
+  return {
+    todayPokemon,
+    sleepStatus: {
+      canSleepToday: true,
+      alreadyRewarded: false,
+      currentRewardPercentage: 0,
+      expectedPercentage: 100,
+      isWakeUpDayOff: false,
+      lastSleepTime: null,
+      rewardTable: {
+        "22": 100, "23": 80, "00": 70, "01": 60, "02": 40, "03": 30, "04": 20
+      }
+    },
+    todayDate: todayDateStr
+  };
+}
+
+/**
+ * 게스트 유저의 오늘 획득한 포켓몬 조회 (Mock 데이터)
+ * 게스트 유저가 보유한 포켓몬 중 일부를 오늘 획득한 것처럼 표시
+ */
+async function getGuestTodayPokemon() {
+  const assetsBaseUrl = process.env.ASSETS_BASE_URL || '';
+
+  // 게스트 유저가 보유한 포켓몬 중 최근 획득 몇 마리를 반환
+  const query = `
+    SELECT 
+      upc.collection_id,
+      upc.pokemon_stable_id,
+      upc.is_shiny,
+      upc.obtained_date,
+      upc.obtained_reason,
+      p.name,
+      p.image_name,
+      p.form_suffix,
+      p.type1,
+      p.type2,
+      p.asset_source,
+      p.has_icon,
+      p.has_icon_shiny,
+      p.image_name AS base_image_name
+    FROM user_pokemon_collection upc
+    JOIN pokemon p ON upc.pokemon_stable_id = p.stable_id
+    WHERE upc.user_id = ?
+    ORDER BY upc.obtained_date DESC
+    LIMIT 5
+  `;
+
+  const result = await db.query(query, [GUEST_USER_ID]);
+  const rows = result.rows || [];
+
+  // 아이콘 URL 생성
+  return rows.map(pokemon => {
+    const isShiny = pokemon.is_shiny;
+    const hasIcon = pokemon.has_icon === 1;
+    const hasIconShiny = pokemon.has_icon_shiny === 1;
+    const formSuffix = pokemon.form_suffix || '';
+    const assetSource = pokemon.asset_source || 'base';
+
+    let iconFolder;
+    if (isShiny && hasIconShiny) {
+      iconFolder = 'img/Icons%20shiny';
+    } else {
+      iconFolder = 'img/Icons';
+    }
+
+    const fileName = hasIcon && formSuffix
+      ? `${pokemon.image_name}${formSuffix}.png`
+      : `${pokemon.image_name}.png`;
+
+    const icon_url = buildAssetUrl(assetSource, iconFolder, fileName);
+
+    return {
+      ...pokemon,
+      icon_url
+    };
+  });
+}

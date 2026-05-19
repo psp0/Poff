@@ -1,20 +1,25 @@
-# S3 Bucket for Static Website Hosting
-# Use fixed bucket name to preserve images across dev environment recreations
-resource "aws_s3_bucket" "frontend" {
+locals {
+  shared_env = var.base_environment != "" ? var.base_environment : var.environment
+  is_pr_env  = length(regexall("pr-", var.environment)) > 0
+}
+
+# S3 Bucket Data Source (Frontend)
+# Managed in bootstrap/dev/s3.tf for base environments
+data "aws_s3_bucket" "frontend" {
+  count  = local.is_pr_env ? 0 : 1
   bucket = "${var.project_name}-${var.environment}-frontend"
-
-  # Prevent accidental deletion of bucket with images
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-frontend"
-  })
 }
 
-resource "aws_s3_bucket_public_access_block" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
+# Dynamic S3 Bucket for PR environments
+resource "aws_s3_bucket" "frontend_pr" {
+  count         = local.is_pr_env ? 1 : 0
+  bucket        = "${var.project_name}-${var.environment}-frontend"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_public_access_block" "frontend_pr" {
+  count  = local.is_pr_env ? 1 : 0
+  bucket = aws_s3_bucket.frontend_pr[0].id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -22,82 +27,21 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_versioning" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
+locals {
+  frontend_bucket_id          = local.is_pr_env ? aws_s3_bucket.frontend_pr[0].id : data.aws_s3_bucket.frontend[0].id
+  frontend_bucket_arn         = local.is_pr_env ? aws_s3_bucket.frontend_pr[0].arn : data.aws_s3_bucket.frontend[0].arn
+  frontend_bucket_domain_name = local.is_pr_env ? aws_s3_bucket.frontend_pr[0].bucket_regional_domain_name : data.aws_s3_bucket.frontend[0].bucket_regional_domain_name
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-    bucket_key_enabled = true
-  }
-}
-
-resource "aws_s3_bucket_website_configuration" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-
-  index_document {
-    suffix = "index.html"
-  }
-
-  error_document {
-    key = "index.html"
-  }
-}
-
-# S3 Bucket for Assets
-resource "aws_s3_bucket" "assets" {
-  bucket = "${var.project_name}-${var.environment}-assets"
-
-  # Prevent accidental deletion of bucket with assets
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-assets"
-  })
-}
-
-resource "aws_s3_bucket_public_access_block" "assets" {
-  bucket = aws_s3_bucket.assets.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_versioning" "assets" {
-  bucket = aws_s3_bucket.assets.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
-  bucket = aws_s3_bucket.assets.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-    bucket_key_enabled = true
-  }
+# S3 Bucket Data Source (Assets)
+# Reuses the base environment's assets bucket to avoid copying huge files
+data "aws_s3_bucket" "assets" {
+  bucket = "${var.project_name}-${local.shared_env}-assets"
 }
 
 # S3 Bucket Policy for CloudFront (Frontend)
 resource "aws_s3_bucket_policy" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
+  bucket = local.frontend_bucket_id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -109,7 +53,7 @@ resource "aws_s3_bucket_policy" "frontend" {
           Service = "cloudfront.amazonaws.com"
         }
         Action   = "s3:GetObject"
-        Resource = "${aws_s3_bucket.frontend.arn}/*"
+        Resource = "${local.frontend_bucket_arn}/*"
         Condition = var.enable_cloudfront ? {
           StringEquals = {
             "AWS:SourceArn" = aws_cloudfront_distribution.main[0].arn
@@ -120,86 +64,18 @@ resource "aws_s3_bucket_policy" "frontend" {
   })
 
   depends_on = [
-    aws_s3_bucket_public_access_block.frontend,
+    # aws_s3_bucket_public_access_block.frontend,
     aws_cloudfront_distribution.main
   ]
 }
 
 # S3 Bucket Policy for CloudFront (Assets)
-resource "aws_s3_bucket_policy" "assets" {
-  bucket = aws_s3_bucket.assets.id
+# Note: assets 버킷 정책은 bootstrap/dev/s3.tf에서 계정 단위로 영구 관리합니다.
+# 계정 내 모든 CloudFront(dev + 모든 PR 환경)에 대해 단일 정책으로 허용하여
+# PR 환경마다 정책 충돌이 발생하는 문제를 방지합니다.
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowCloudFrontServicePrincipalReadOnly"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
-        Action   = "s3:GetObject"
-        Resource = "${aws_s3_bucket.assets.arn}/*"
-        Condition = var.enable_cloudfront ? {
-          StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.main[0].arn
-          }
-        } : {}
-      }
-    ]
-  })
-
-  depends_on = [
-    aws_s3_bucket_public_access_block.assets,
-    aws_cloudfront_distribution.main
-  ]
-}
-
-# S3 Bucket for CloudFront Logs
-resource "aws_s3_bucket" "cloudfront_logs" {
-  count = var.enable_cloudfront ? 1 : 0
-
-  bucket = "${var.project_name}-${var.environment}-cloudfront-logs"
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-cloudfront-logs"
-  })
-}
-
-resource "aws_s3_bucket_public_access_block" "cloudfront_logs" {
-  count = var.enable_cloudfront ? 1 : 0
-
-  bucket = aws_s3_bucket.cloudfront_logs[0].id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "cloudfront_logs" {
-  count = var.enable_cloudfront ? 1 : 0
-
-  bucket = aws_s3_bucket.cloudfront_logs[0].id
-
-  rule {
-    id     = "delete-old-logs"
-    status = "Enabled"
-
-    filter {}
-
-    expiration {
-      days = 30
-    }
-  }
-}
-
-resource "aws_s3_bucket_ownership_controls" "cloudfront_logs" {
-  count = var.enable_cloudfront ? 1 : 0
-
-  bucket = aws_s3_bucket.cloudfront_logs[0].id
-
-  rule {
-    object_ownership = "BucketOwnerPreferred"
-  }
+# S3 Bucket Data Source (CloudFront Logs)
+# Reuses the base environment's logs bucket
+data "aws_s3_bucket" "cloudfront_logs" {
+  bucket = "${var.project_name}-${local.shared_env}-cloudfront-logs"
 }

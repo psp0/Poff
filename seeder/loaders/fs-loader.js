@@ -7,7 +7,7 @@ const path = require('path');
  */
 class FileSystemLoader {
     constructor(baseDir) {
-        this.baseDir = baseDir; // e.g., '/pokehabit-assets' or './pokehabit-assets'
+        this.baseDir = baseDir; // e.g., '/poff-assets' or './poff-assets'
         console.log(`FileSystemLoader initialized with baseDir: ${this.baseDir}`);
     }
 
