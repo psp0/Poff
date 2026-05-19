@@ -17,8 +17,7 @@ locals {
 data "aws_vpc" "dev" {
   count = local.is_pr_env ? 1 : 0
   tags = {
-    Project     = var.project_name
-    Environment = "dev"
+    Name = "${var.project_name}-vpc"
   }
 }
 
@@ -28,8 +27,9 @@ data "aws_subnets" "private" {
     name   = "vpc-id"
     values = [data.aws_vpc.dev[0].id]
   }
-  tags = {
-    Name = "${var.project_name}-private-subnet-*"
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-private-subnet-*"]
   }
 }
 
@@ -43,7 +43,7 @@ data "aws_security_group" "lambda" {
 
 data "aws_db_instance" "dev" {
   count                  = local.is_pr_env ? 1 : 0
-  db_instance_identifier = "${var.project_name}-dev-rds"
+  db_instance_identifier = "${var.project_name}-rds"
 }
 
 # 1. Network Module - VPC, NAT, Subnets (Skip for PRs)
