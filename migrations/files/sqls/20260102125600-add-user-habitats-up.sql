@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS user_habitats (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_user_id (user_id),
   INDEX idx_current_habitat (current_habitat)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. 기존 사용자들에게 기본 서식지 할당
 INSERT INTO user_habitats (user_id, current_habitat)

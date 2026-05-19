@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS habitat_backgrounds (
   image_filename VARCHAR(100) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY unique_habitat_type (habitat_slug, type_slug)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO habitat_backgrounds (habitat_slug, type_slug, display_name, image_filename) VALUES
 -- 1. 동굴 (cave)
