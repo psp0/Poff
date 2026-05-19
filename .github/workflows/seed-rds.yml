@@ -265,9 +265,11 @@ jobs:
           S3_BUCKET_NAME: ${{ steps.infra.outputs.assets_bucket_name }}
           S3_BASE_PATH: ''
         run: |
+          set -o pipefail
           cd seeder
           echo "🌱 Seeding Pokemon Data..."
           npm run seed:rds 2>&1 | tee /tmp/step_output.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then exit ${PIPESTATUS[0]}; fi
 
       - name: Run Holiday Seeder
         if: inputs.seed_holidays == true || github.event.inputs.seed_holidays == 'true'
@@ -280,9 +282,11 @@ jobs:
           DB_PASSWORD: ${{ steps.db-creds.outputs.db_password }}
           HOLIDAY_API_KEY: ${{ secrets.HOLIDAY_API_KEY }}
         run: |
+          set -o pipefail
           cd seeder
           echo "📅 Seeding Holiday Data..."
           npm run seed:holidays:rds 2>&1 | tee /tmp/step_output.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then exit ${PIPESTATUS[0]}; fi
       
       - name: Cleanup
         if: always()
