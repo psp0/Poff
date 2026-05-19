@@ -329,7 +329,7 @@ jobs:
     uses: ./.github/workflows/deploy-dev.yml
     with:
       action: apply
-      seed_data: false
+      seed_data: true
       env_suffix: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || '' }}
     secrets: inherit
 
