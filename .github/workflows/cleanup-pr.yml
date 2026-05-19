@@ -8,6 +8,8 @@ permissions:
   contents: read
   id-token: write
   actions: read
+  statuses: write
+  deployments: write
 
 jobs:
   destroy-dev-pr:
