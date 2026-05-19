@@ -17,7 +17,8 @@ locals {
 data "aws_vpc" "dev" {
   count = local.is_pr_env ? 1 : 0
   tags = {
-    Name = "${var.project_name}-vpc"
+    Name        = "${var.project_name}-vpc"
+    Environment = "dev"
   }
 }
 
