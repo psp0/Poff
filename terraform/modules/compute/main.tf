@@ -67,6 +67,7 @@ locals {
     "GET /api/collection/evolution/{baseImageName}" = "pokemon-collection"
     "GET /api/collection/starters"                  = "pokemon-collection"
     "GET /api/collection/pokemon/{id}"              = "pokemon-collection"
+    "GET /api/habitats/{habitatSlug}/{typeSlug}/pokemon" = "pokemon-collection"
 
     # Egg Management
     "GET /api/eggs"          = "egg-management"
@@ -86,6 +87,9 @@ locals {
     "GET /api/config"                = "user-management"
     "POST /api/user/exchange"        = "user-management"
     "GET /api/shop/items"            = "user-management"
+    "GET /api/habitats"              = "user-management"
+    "GET /api/user/habitat"          = "user-management"
+    "POST /api/user/habitat"         = "user-management"
 
     # Guest Mode
     "GET /api/guest/icons"                     = "guest-mode"
