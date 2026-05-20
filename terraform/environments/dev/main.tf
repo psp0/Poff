@@ -16,9 +16,13 @@ locals {
 # -----------------------------------------------------------------------------
 data "aws_vpc" "dev" {
   count = local.is_pr_env ? 1 : 0
-  tags = {
-    Name        = "${var.project_name}-vpc"
-    Environment = "dev"
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-vpc"]
+  }
+  filter {
+    name   = "tag:Environment"
+    values = ["dev"]
   }
 }
 
@@ -37,8 +41,9 @@ data "aws_subnets" "private" {
 data "aws_security_group" "lambda" {
   count  = local.is_pr_env ? 1 : 0
   vpc_id = data.aws_vpc.dev[0].id
-  tags = {
-    Name = "${var.project_name}-lambda-sg"
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-lambda-sg"]
   }
 }
 
