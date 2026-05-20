@@ -3,17 +3,17 @@
 
 output "vpc_id" {
   description = "VPC ID for the development environment"
-  value       = module.network.vpc_id
+  value       = local.is_pr_env ? data.aws_vpc.dev[0].id : module.network[0].vpc_id
 }
 
 output "rds_endpoint" {
   description = "RDS endpoint address (without port)"
-  value       = module.database.rds_address
+  value       = local.is_pr_env ? data.aws_db_instance.dev[0].address : module.database[0].rds_address
 }
 
 output "database_name" {
   description = "Name of the MySQL database"
-  value       = module.database.database_name
+  value       = local.is_pr_env ? replace(var.project_name, "-", "_") : module.database[0].database_name
 }
 
 output "api_endpoint" {
@@ -48,12 +48,12 @@ output "cloudfront_distribution_id" {
 
 output "nat_instance_id" {
   description = "ID of the first NAT instance (for SSM Port Forwarding)"
-  value       = module.network.nat_instance_id
+  value       = local.is_pr_env ? "nat-not-available-in-pr" : module.network[0].nat_instance_id
 }
 
 output "rds_port" {
   description = "RDS port number"
-  value       = module.database.rds_port
+  value       = local.is_pr_env ? data.aws_db_instance.dev[0].port : module.database[0].rds_port
 }
 
 

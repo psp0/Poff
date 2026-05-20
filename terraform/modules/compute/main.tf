@@ -280,7 +280,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 
 # API Gateway HTTP API
 resource "aws_apigatewayv2_api" "main" {
-  name          = "${var.project_name}-api"
+  name          = "${var.project_name}-${var.environment}-api"
   protocol_type = "HTTP"
   description   = "HTTP API for ${var.project_name}"
 
@@ -334,7 +334,7 @@ resource "aws_apigatewayv2_stage" "main" {
 
 # CloudWatch Log Group for API Gateway
 resource "aws_cloudwatch_log_group" "api_gateway_logs" {
-  name              = "/aws/apigateway/${var.project_name}"
+  name              = "/aws/apigateway/${var.project_name}-${var.environment}"
   retention_in_days = var.lambda_log_retention_days
 
   tags = merge(local.common_tags, {

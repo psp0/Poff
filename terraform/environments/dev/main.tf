@@ -10,9 +10,52 @@ locals {
   cloudfront_domain = local.is_pr_env ? "" : var.cloudfront_custom_domain_name
 }
 
-# 1. Network Module - VPC, NAT, Subnets
+# -----------------------------------------------------------------------------
+# Data Sources for PR Environments
+# PR environments do not create their own Network/Database. They reuse "dev".
+# -----------------------------------------------------------------------------
+data "aws_vpc" "dev" {
+  count = local.is_pr_env ? 1 : 0
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-vpc"]
+  }
+  filter {
+    name   = "tag:Environment"
+    values = ["dev"]
+  }
+}
+
+data "aws_subnets" "private" {
+  count = local.is_pr_env ? 1 : 0
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.dev[0].id]
+  }
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-private-subnet-*"]
+  }
+}
+
+data "aws_security_group" "lambda" {
+  count  = local.is_pr_env ? 1 : 0
+  vpc_id = data.aws_vpc.dev[0].id
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-lambda-sg"]
+  }
+}
+
+data "aws_db_instance" "dev" {
+  count                  = local.is_pr_env ? 1 : 0
+  db_instance_identifier = "${var.project_name}-rds"
+}
+
+# 1. Network Module - VPC, NAT, Subnets (Skip for PRs)
 module "network" {
   source = "../../modules/network"
+  count  = local.is_pr_env ? 0 : 1
 
   project_name               = var.project_name
   environment                = var.environment
@@ -23,20 +66,21 @@ module "network" {
   az_instance_type_map       = var.az_instance_type_map
 }
 
-# 2. Database Module - RDS, Security Groups
+# 2. Database Module - RDS, Security Groups (Skip for PRs)
 module "database" {
   source = "../../modules/database"
+  count  = local.is_pr_env ? 0 : 1
 
   project_name          = var.project_name
   environment           = var.environment
-  vpc_id                = module.network.vpc_id
-  db_subnet_group_name  = module.network.db_subnet_group_name
-  nat_security_group_id = module.network.nat_security_group_id
+  vpc_id                = module.network[0].vpc_id
+  db_subnet_group_name  = module.network[0].db_subnet_group_name
+  nat_security_group_id = module.network[0].nat_security_group_id
 
   # [추가됨] RDS Proxy가 사용할 프라이빗 서브넷 ID 전달
-  private_subnet_ids = module.network.private_subnet_ids
+  private_subnet_ids = module.network[0].private_subnet_ids
 
-  lambda_security_group_id = module.network.lambda_security_group_id
+  lambda_security_group_id = module.network[0].lambda_security_group_id
 
   # [선택] 필요 시 루트 레벨 변수에서 제어하거나 직접 true/false 설정
   # enable_rds_proxy    = var.enable_rds_proxy
@@ -61,12 +105,12 @@ module "compute" {
   aws_region     = data.aws_region.current.id
   aws_account_id = data.aws_caller_identity.current.account_id
 
-  private_subnet_ids       = module.network.private_subnet_ids
-  lambda_security_group_id = module.network.lambda_security_group_id
+  private_subnet_ids       = local.is_pr_env ? data.aws_subnets.private[0].ids : module.network[0].private_subnet_ids
+  lambda_security_group_id = local.is_pr_env ? data.aws_security_group.lambda[0].id : module.network[0].lambda_security_group_id
 
-  rds_address   = module.database.rds_address
-  rds_port      = module.database.rds_port
-  database_name = module.database.database_name
+  rds_address   = local.is_pr_env ? data.aws_db_instance.dev[0].address : module.database[0].rds_address
+  rds_port      = local.is_pr_env ? data.aws_db_instance.dev[0].port : module.database[0].rds_port
+  database_name = local.is_pr_env ? replace(var.project_name, "-", "_") : module.database[0].database_name
 
   lambda_source_path        = var.lambda_source_path
   lambda_package_dir        = var.lambda_package_dir

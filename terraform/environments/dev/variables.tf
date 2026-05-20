@@ -49,7 +49,7 @@ variable "environment" {
 variable "vpc_cidr_block" {
   description = "The CIDR block for the VPC."
   type        = string
-  default     = "10.123.0.0/16"
+  default     = "10.120.0.0/16"
 }
 
 variable "availability_zones" {
@@ -61,13 +61,13 @@ variable "availability_zones" {
 variable "public_subnet_cidr_blocks" {
   description = "List of public subnet CIDR blocks. Cannot exceed the number of availability zones."
   type        = list(string)
-  default     = ["10.123.1.0/24", "10.123.3.0/24"]
+  default     = ["10.120.1.0/24", "10.120.3.0/24"]
 }
 
 variable "private_subnet_cidr_blocks" {
   description = "List of private subnet CIDR blocks. Cannot exceed the number of availability zones."
   type        = list(string)
-  default     = ["10.123.2.0/24", "10.123.4.0/24"]
+  default     = ["10.120.2.0/24", "10.120.4.0/24"]
 }
 
 variable "az_instance_type_map" {
