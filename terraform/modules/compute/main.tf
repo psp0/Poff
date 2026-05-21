@@ -4,6 +4,10 @@ locals {
     ManagedBy   = "terraform"
   }
 
+  is_pr_env    = length(regexall("pr-", var.environment)) > 0
+  db_creds_env = local.is_pr_env ? "dev" : var.environment
+
+
   lambda_functions = {
 
     pokemon-collection = {
@@ -152,9 +156,10 @@ resource "aws_iam_role_policy" "lambda_ssm_read" {
           "ssm:GetParameter",
           "ssm:GetParameters"
         ]
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/${var.environment}/database/*"
-        ]
+        Resource = distinct([
+          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/${var.environment}/database/*",
+          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/${local.db_creds_env}/database/*"
+        ])
       },
       {
         Effect = "Allow"
@@ -221,8 +226,8 @@ resource "aws_lambda_function" "functions" {
       DB_HOST           = var.rds_address
       DB_PORT           = tostring(var.rds_port)
       DB_NAME           = var.database_name
-      DB_USER_PARAM     = "/${var.project_name}/${var.environment}/database/admin/username"
-      DB_PASSWORD_PARAM = "/${var.project_name}/${var.environment}/database/admin/password"
+      DB_USER_PARAM     = "/${var.project_name}/${local.db_creds_env}/database/admin/username"
+      DB_PASSWORD_PARAM = "/${var.project_name}/${local.db_creds_env}/database/admin/password"
 
       # Datadog Configuration
       DD_API_KEY           = var.datadog_api_key

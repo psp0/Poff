@@ -52,6 +52,26 @@ data "aws_db_instance" "dev" {
   db_instance_identifier = "${var.project_name}-rds"
 }
 
+data "aws_instance" "dev_nat" {
+  count = local.is_pr_env ? 1 : 0
+
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-nat-instance-1"]
+  }
+
+  filter {
+    name   = "tag:Environment"
+    values = ["dev"]
+  }
+
+  filter {
+    name   = "instance-state-name"
+    values = ["running"]
+  }
+}
+
+
 # 1. Network Module - VPC, NAT, Subnets (Skip for PRs)
 module "network" {
   source = "../../modules/network"

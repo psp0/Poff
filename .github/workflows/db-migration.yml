@@ -148,6 +148,12 @@ jobs:
             ENV="dev"
           fi
           
+          # Fallback to dev for PR environments (since they share dev's network/database)
+          if [[ "$ENV" =~ pr- ]]; then
+            echo "PR environment detected ($ENV), using base 'dev' for SSM parameters"
+            ENV="dev"
+          fi
+          
           echo "Fetching infrastructure details from SSM for environment: $ENV"
           
           # Fetch parameters individually for better error handling
@@ -201,6 +207,11 @@ jobs:
         id: db-creds
         run: |
           ENV="${{ needs.determine-environment.outputs.environment }}"
+          # Fallback to dev for PR environments (since they share dev's database)
+          if [[ "$ENV" =~ pr- ]]; then
+            echo "PR environment detected ($ENV), using base 'dev' for SSM database credentials"
+            ENV="dev"
+          fi
           # Project name is fixed as 'poff' in Terraform variables
           PROJECT_NAME="poff"
           
