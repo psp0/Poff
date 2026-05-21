@@ -156,9 +156,10 @@ resource "aws_iam_role_policy" "lambda_ssm_read" {
           "ssm:GetParameter",
           "ssm:GetParameters"
         ]
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/${var.environment}/database/*"
-        ]
+        Resource = distinct([
+          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/${var.environment}/database/*",
+          "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}/${local.db_creds_env}/database/*"
+        ])
       },
       {
         Effect = "Allow"
