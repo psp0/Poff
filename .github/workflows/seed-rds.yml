@@ -223,6 +223,11 @@ jobs:
         id: db-creds
         run: |
           ENV="${{ steps.set-env.outputs.environment }}"
+          # Fallback to dev for PR environments (since they share dev's database)
+          if [[ "$ENV" =~ pr- ]]; then
+            echo "PR environment detected ($ENV), using base 'dev' for SSM parameters"
+            ENV="dev"
+          fi
           PROJECT_NAME="poff"
           
           USER_PARAM="/${PROJECT_NAME}/${ENV}/database/admin/username"

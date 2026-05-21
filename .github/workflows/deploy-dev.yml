@@ -254,6 +254,41 @@ jobs:
           done
           ls -la lambda/packages/
 
+      - name: Deploy Base Dev Environment (if missing)
+        if: steps.set-variables.outputs.action == 'apply' && contains(inputs.env_suffix, 'pr-')
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+        run: |
+          echo "Checking if base dev environment is deployed..."
+          if aws s3api head-object --bucket "${{ env.TF_STATE_BUCKET }}" --key "environments/dev/terraform.tfstate" >/dev/null 2>&1; then
+            echo "✅ Base dev environment state found in S3."
+          else
+            echo "⚠️ Base dev environment state not found. Deploying base dev environment first..."
+            
+            # Create temporary backend config for base dev
+            cat > backend-base-dev.hcl << EOF
+          bucket = "${{ env.TF_STATE_BUCKET }}"
+          key = "environments/dev/terraform.tfstate"
+          region = "${{ env.AWS_REGION }}"
+          encrypt = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
+          EOF
+
+            echo "::group::Initializing base dev Terraform"
+            terraform init -backend-config=backend-base-dev.hcl -input=false -reconfigure
+            echo "::endgroup::"
+
+            echo "::group::Deploying base dev environment"
+            TF_VAR_environment="dev" terraform apply -auto-approve -input=false
+            echo "::endgroup::"
+            
+            rm -f backend-base-dev.hcl
+            echo "✅ Base dev environment deployed successfully."
+          fi
+
       - name: Terraform Init
         id: terraform_init
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -279,7 +314,7 @@ jobs:
             echo "Backend configuration file cleaned up"
           }
           trap cleanup EXIT
-          terraform init -backend-config=backend-ci.hcl -input=false 2>&1 | tee /tmp/step_output.log
+          terraform init -backend-config=backend-ci.hcl -input=false -reconfigure 2>&1 | tee /tmp/step_output.log
           echo "Terraform initialization completed successfully"
           echo "::endgroup::"
 
@@ -390,6 +425,48 @@ jobs:
             echo "destroy_success=true" >> $GITHUB_OUTPUT
           fi
           echo "::endgroup::"
+
+      - name: Cleanup S3 State and Destroy Base Dev (if last PR)
+        if: steps.set-variables.outputs.action == 'destroy' && contains(inputs.env_suffix, 'pr-')
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+        run: |
+          set -e
+          echo "Cleaning up PR state file from S3..."
+          aws s3 rm "s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }}"
+          
+          echo "Checking for other active PR environments..."
+          ACTIVE_PRS=$(aws s3api list-objects-v2 --bucket "${{ env.TF_STATE_BUCKET }}" --prefix "environments/dev/terraform-pr-" --query "Contents[].Key" --output text 2>/dev/null || echo "")
+          ACTIVE_PRS=$(echo "$ACTIVE_PRS" | tr -s ' \t\n' ' ' | xargs)
+          
+          if [ -z "$ACTIVE_PRS" ]; then
+            echo "ℹ️ No other active PR environments found. Destroying base 'dev' environment..."
+            
+            cat > backend-base-dev.hcl << EOF
+          bucket = "${{ env.TF_STATE_BUCKET }}"
+          key = "environments/dev/terraform.tfstate"
+          region = "${{ env.AWS_REGION }}"
+          encrypt = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
+          EOF
+
+            echo "::group::Initializing base dev Terraform"
+            terraform init -backend-config=backend-base-dev.hcl -input=false -reconfigure
+            echo "::endgroup::"
+
+            echo "::group::Destroying base dev environment"
+            TF_VAR_environment="dev" terraform destroy -auto-approve -input=false
+            echo "::endgroup::"
+            
+            aws s3 rm "s3://${{ env.TF_STATE_BUCKET }}/environments/dev/terraform.tfstate"
+            rm -f backend-base-dev.hcl
+            echo "✅ Base 'dev' environment destroyed successfully."
+          else
+            echo "ℹ️ Active PR environments still exist: $ACTIVE_PRS. Keeping base 'dev' environment."
+          fi
 
       # Install jq for output parsing
       - name: Install jq
