@@ -48,7 +48,7 @@ output "cloudfront_distribution_id" {
 
 output "nat_instance_id" {
   description = "ID of the first NAT instance (for SSM Port Forwarding)"
-  value       = local.is_pr_env ? "nat-not-available-in-pr" : module.network[0].nat_instance_id
+  value       = local.is_pr_env ? data.aws_instance.dev_nat[0].id : module.network[0].nat_instance_id
 }
 
 output "rds_port" {
