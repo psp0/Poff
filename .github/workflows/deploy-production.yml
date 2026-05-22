@@ -371,17 +371,32 @@ jobs:
 
       - name: Archive Artifacts to S3
         if: steps.set-action.outputs.action == 'apply'
+        env:
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
           VERSION="${{ needs.pre-deployment-checks.outputs.deploy_version }}"
           S3_BUCKET="${{ env.TF_STATE_BUCKET }}"
           
+          echo "Assuming cross-account backend role to access S3 bucket..."
+          ASSUME_ROLE_OUTPUT=$(aws sts assume-role \
+            --role-arn "${BACKEND_ROLE_ARN}" \
+            --role-session-name "github-actions-s3-archive" \
+            --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
+            --output text)
+          
+          S3_KEY_ID=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $1}')
+          S3_SECRET_KEY=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $2}')
+          S3_TOKEN=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $3}')
+
           echo "Archiving artifacts for version $VERSION to s3://${S3_BUCKET}/releases/${VERSION}/..."
           
           # Upload Frontend
-          aws s3 sync dist/ "s3://${S3_BUCKET}/releases/${VERSION}/frontend/" --delete
+          AWS_ACCESS_KEY_ID="$S3_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" AWS_SESSION_TOKEN="$S3_TOKEN" \
+            aws s3 sync dist/ "s3://${S3_BUCKET}/releases/${VERSION}/frontend/" --delete
           
           # Upload Lambda
-          aws s3 sync lambda/packages/ "s3://${S3_BUCKET}/releases/${VERSION}/lambda/" --delete
+          AWS_ACCESS_KEY_ID="$S3_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" AWS_SESSION_TOKEN="$S3_TOKEN" \
+            aws s3 sync lambda/packages/ "s3://${S3_BUCKET}/releases/${VERSION}/lambda/" --delete
           
           echo "✅ Artifacts archived successfully"
 
