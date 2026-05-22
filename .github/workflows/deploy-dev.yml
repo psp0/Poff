@@ -260,8 +260,20 @@ jobs:
         env:
           BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
+          echo "Assuming cross-account backend role to check S3 bucket..."
+          ASSUME_ROLE_OUTPUT=$(aws sts assume-role \
+            --role-arn "${BACKEND_ROLE_ARN}" \
+            --role-session-name "github-actions-s3-check" \
+            --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
+            --output text)
+          
+          S3_KEY_ID=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $1}')
+          S3_SECRET_KEY=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $2}')
+          S3_TOKEN=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $3}')
+
           echo "Checking if base dev environment is deployed..."
-          if aws s3api head-object --bucket "${{ env.TF_STATE_BUCKET }}" --key "environments/dev/terraform.tfstate" >/dev/null 2>&1; then
+          if AWS_ACCESS_KEY_ID="$S3_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" AWS_SESSION_TOKEN="$S3_TOKEN" \
+            aws s3api head-object --bucket "${{ env.TF_STATE_BUCKET }}" --key "environments/dev/terraform.tfstate" >/dev/null 2>&1; then
             echo "✅ Base dev environment state found in S3."
           else
             echo "⚠️ Base dev environment state not found. Deploying base dev environment first..."
@@ -433,11 +445,24 @@ jobs:
           BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
           set -e
+          echo "Assuming cross-account backend role to access S3 bucket..."
+          ASSUME_ROLE_OUTPUT=$(aws sts assume-role \
+            --role-arn "${BACKEND_ROLE_ARN}" \
+            --role-session-name "github-actions-s3-cleanup" \
+            --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
+            --output text)
+          
+          S3_KEY_ID=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $1}')
+          S3_SECRET_KEY=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $2}')
+          S3_TOKEN=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $3}')
+
           echo "Cleaning up PR state file from S3..."
-          aws s3 rm "s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }}"
+          AWS_ACCESS_KEY_ID="$S3_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" AWS_SESSION_TOKEN="$S3_TOKEN" \
+            aws s3 rm "s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }}"
           
           echo "Checking for other active PR environments..."
-          ACTIVE_PRS=$(aws s3api list-objects-v2 --bucket "${{ env.TF_STATE_BUCKET }}" --prefix "environments/dev/terraform-pr-" --query "Contents[].Key" --output text 2>/dev/null || echo "")
+          ACTIVE_PRS=$(AWS_ACCESS_KEY_ID="$S3_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" AWS_SESSION_TOKEN="$S3_TOKEN" \
+            aws s3api list-objects-v2 --bucket "${{ env.TF_STATE_BUCKET }}" --prefix "environments/dev/terraform-pr-" --query "Contents[].Key" --output text 2>/dev/null || echo "")
           ACTIVE_PRS=$(echo "$ACTIVE_PRS" | tr -s ' \t\n' ' ' | xargs)
           
           if [ -z "$ACTIVE_PRS" ]; then
@@ -461,7 +486,8 @@ jobs:
             TF_VAR_environment="dev" terraform destroy -auto-approve -input=false
             echo "::endgroup::"
             
-            aws s3 rm "s3://${{ env.TF_STATE_BUCKET }}/environments/dev/terraform.tfstate"
+            AWS_ACCESS_KEY_ID="$S3_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" AWS_SESSION_TOKEN="$S3_TOKEN" \
+              aws s3 rm "s3://${{ env.TF_STATE_BUCKET }}/environments/dev/terraform.tfstate"
             rm -f backend-base-dev.hcl
             echo "✅ Base 'dev' environment destroyed successfully."
           else
