@@ -241,7 +241,7 @@ variable "datadog_app_key" {
 variable "datadog_site" {
   description = "Datadog site URL"
   type        = string
-  default     = "datadoghq.com"
+  default     = "us5.datadoghq.com"
 }
 
 variable "datadog_external_id" {
