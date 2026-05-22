@@ -132,7 +132,7 @@ module "storage_cdn" {
   api_gateway_domain = replace(module.compute.api_gateway_endpoint, "/^https?://([^/]*).*/", "$1")
 
   # WAF Web ACL ID 전달
-  waf_web_acl_id = module.waf.cloudfront_web_acl_id
+  waf_web_acl_id = module.waf.cloudfront_web_acl_arn
 }
 
 # 7. Route53 Records - Domain Aliases (Breaks Circular Dependency)
