@@ -293,6 +293,18 @@ resource "aws_iam_policy" "terraform_execution_misc_policy" {
         Effect   = "Allow"
         Action   = "secretsmanager:*"
         Resource = "*"
+      },
+      {
+        Sid      = "CloudFormationPermissions"
+        Effect   = "Allow"
+        Action   = "cloudformation:*"
+        Resource = "*"
+      },
+      {
+        Sid      = "ServerlessRepoPermissions"
+        Effect   = "Allow"
+        Action   = "serverlessrepo:*"
+        Resource = "*"
       }
     ]
   })
