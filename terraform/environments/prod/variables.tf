@@ -275,7 +275,7 @@ variable "datadog_lambda_layer_version" {
 variable "enable_waf" {
   description = "Enable WAF resources"
   type        = bool
-  default     = true
+  default     = false
 }
 
 ################################################################################
