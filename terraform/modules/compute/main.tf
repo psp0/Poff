@@ -208,7 +208,7 @@ resource "aws_lambda_function" "functions" {
   memory_size   = each.value.memory_size
 
   filename         = var.lambda_package_dir != "" ? "${var.lambda_package_dir}/${each.key}.zip" : data.archive_file.lambda_source[0].output_path
-  source_code_hash = var.lambda_package_dir != "" ? filebase64sha256("${var.lambda_package_dir}/${each.key}.zip") : data.archive_file.lambda_source[0].output_base64sha256
+  source_code_hash = var.lambda_package_dir != "" && fileexists("${var.lambda_package_dir}/${each.key}.zip") ? filebase64sha256("${var.lambda_package_dir}/${each.key}.zip") : (var.lambda_package_dir != "" ? null : data.archive_file.lambda_source[0].output_base64sha256)
 
   layers = var.datadog_api_key != "" ? [
     "arn:aws:lambda:${var.aws_region}:464622532012:layer:Datadog-Extension:${var.datadog_extension_version}",
