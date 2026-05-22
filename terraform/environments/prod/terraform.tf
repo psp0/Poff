@@ -76,7 +76,8 @@ provider "aws" {
 
 # Datadog Provider
 provider "datadog" {
-  api_key = var.datadog_api_key
-  app_key = var.datadog_app_key
-  api_url = var.datadog_site
+  api_key  = var.datadog_api_key
+  app_key  = var.datadog_app_key
+  api_url  = "https://api.${var.datadog_site}"
+  validate = var.datadog_api_key != ""
 }

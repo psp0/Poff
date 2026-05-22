@@ -42,6 +42,7 @@ env:
   NODE_VERSION: ${{ vars.NODE_VERSION }}
   TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
   TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_RELEASES_BUCKET: poff-infra-releases
   TF_WORKING_DIR: terraform/environments/prod
   TF_STATE_KEY: environments/prod/terraform.tfstate
   TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
@@ -373,15 +374,15 @@ jobs:
         if: steps.set-action.outputs.action == 'apply'
         run: |
           VERSION="${{ needs.pre-deployment-checks.outputs.deploy_version }}"
-          S3_BUCKET="${{ env.TF_STATE_BUCKET }}"
+          RELEASES_BUCKET="${{ env.TF_RELEASES_BUCKET }}"
           
-          echo "Archiving artifacts for version $VERSION to s3://${S3_BUCKET}/releases/${VERSION}/..."
+          echo "Archiving artifacts for version $VERSION to s3://${RELEASES_BUCKET}/releases/${VERSION}/..."
           
-          # Upload Frontend
-          aws s3 sync dist/ "s3://${S3_BUCKET}/releases/${VERSION}/frontend/" --delete
+          # Upload Frontend (Runs directly with the assumed Prod execution role credentials)
+          aws s3 sync dist/ "s3://${RELEASES_BUCKET}/releases/${VERSION}/frontend/" --delete
           
-          # Upload Lambda
-          aws s3 sync lambda/packages/ "s3://${S3_BUCKET}/releases/${VERSION}/lambda/" --delete
+          # Upload Lambda (Runs directly with the assumed Prod execution role credentials)
+          aws s3 sync lambda/packages/ "s3://${RELEASES_BUCKET}/releases/${VERSION}/lambda/" --delete
           
           echo "✅ Artifacts archived successfully"
 
