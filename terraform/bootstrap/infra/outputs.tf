@@ -36,3 +36,14 @@ output "dns_management_role_name" {
   description = "The name of the DNS management role"
   value       = aws_iam_role.dns_management.name
 }
+
+output "releases_bucket_name" {
+  description = "Name of the S3 bucket for storing releases/artifacts in the infra account"
+  value       = aws_s3_bucket.releases.id
+}
+
+output "releases_bucket_arn" {
+  description = "ARN of the S3 bucket for storing releases/artifacts in the infra account"
+  value       = aws_s3_bucket.releases.arn
+}
+
