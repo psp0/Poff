@@ -99,6 +99,34 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
   }
 }
 
+# Assets 버킷 CloudFront 접근 정책
+# 계정 내 모든 CloudFront 배포에서 접근 가능하도록 허용
+resource "aws_s3_bucket_policy" "assets_cloudfront" {
+  bucket = aws_s3_bucket.assets.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowAllProdAccountCloudFrontDistributions"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.assets.arn}/*"
+        Condition = {
+          StringLike = {
+            "AWS:SourceArn" = "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/*"
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.assets]
+}
+
 # S3 Bucket for CloudFront Logs
 resource "aws_s3_bucket" "cloudfront_logs" {
   bucket = "${var.project_name}-${var.environment}-cloudfront-logs"
