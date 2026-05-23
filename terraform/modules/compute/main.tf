@@ -60,6 +60,8 @@ locals {
     "GET /api/screen-time/status"        = "screen-time-management"
     "POST /api/screen-time/verify"       = "screen-time-management"
 
+    "GET /health"                        = "user-management"
+
     "GET /api/pokemon"                                   = "pokemon-collection"
     "GET /api/pokemon/{id}"                              = "pokemon-collection"
     "POST /api/pokemon/collect"                          = "pokemon-collection"

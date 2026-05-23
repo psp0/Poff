@@ -39,6 +39,8 @@ const handler = async (event, context) => {
         return await updateUserHabitat(event, db);
     } else if (method === 'GET' && routePath.endsWith('/habitats')) {
         return await getHabitats(event, db);
+    } else if (method === 'GET' && routePath === '/health') {
+        return createSuccessResponse({ status: 'ok', timestamp: new Date().toISOString() });
     } else {
         logger.warn('Route not found', { path, method });
         return createErrorResponse('Not Found', 404);
