@@ -499,24 +499,15 @@ jobs:
         env:
           API_URL: ${{ needs.deploy-production.outputs.api_endpoint }}
         run: |
-          echo "Running production smoke tests..."
-          
           if [ -z "$API_URL" ]; then
-            echo "❌ Error: API URL is missing"
+            echo "❌ Error: API_URL environment variable is missing"
             exit 1
           fi
 
           echo "Testing API at: $API_URL"
           
-          # Health check
-          if curl -f -s "$API_URL/health" > /dev/null; then
-            echo "✅ Health check passed"
-          else
-            echo "❌ Health check failed"
-            exit 1
-          fi
-          
-          echo "✅ All smoke tests passed"
+          # Health check & Smoke Test using the unified script
+          node scripts/smoke-test.js
 
       - name: Verify database connectivity
         run: |
