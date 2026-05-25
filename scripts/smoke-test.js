@@ -67,7 +67,7 @@ const endpoints = [
 ];
 
 async function runSmokeTest() {
-  console.log(`🚀 Starting ENHANCED smoke test for ${API_URL}...`);
+  console.log(`🚀 Starting ENHANCED smoke test for ${API_URL}...\n`);
   let failed = false;
 
   for (const endpoint of endpoints) {
@@ -78,16 +78,17 @@ async function runSmokeTest() {
         headers: { 'Content-Type': 'application/json' }
       });
       const status = response.status;
-      
-      console.log(`\n[${endpoint.method}] ${endpoint.path} - Status: ${status}`);
+
+      console.log(`▶ [${endpoint.method}] ${endpoint.path}`);
 
       if (status !== endpoint.expectedStatus) {
         if (endpoint.optional) {
-          console.warn(`   ⚠️ Optional endpoint returned ${status} (expected ${endpoint.expectedStatus})`);
+          console.log(`  ⚠️ Optional endpoint returned ${status} (expected ${endpoint.expectedStatus})`);
         } else {
-          console.error(`   ❌ Unexpected status: got ${status}, expected ${endpoint.expectedStatus}`);
+          console.log(`  ❌ Unexpected status: got ${status}, expected ${endpoint.expectedStatus}`);
           failed = true;
         }
+        console.log('');
         continue;
       }
 
@@ -102,31 +103,34 @@ async function runSmokeTest() {
           }
 
           if (endpoint.validate(bodyJSON)) {
-            console.log(`   ✅ Content validation passed`);
+            console.log(`  ✅ Status (${status}) & Content validation passed`);
           } else {
-            console.error(`   ❌ Content validation failed`);
-            console.error(`      Body: ${bodyText.substring(0, 150)}...`);
+            console.log(`  ❌ Content validation failed (Status: ${status})`);
+            console.log(`     └ Body: ${bodyText.substring(0, 150)}...`);
             failed = true;
           }
         } catch (e) {
-          console.error(`   ❌ Error during validation: ${e.message}`);
+          console.log(`  ❌ Error during validation: ${e.message}`);
           failed = true;
         }
       } else {
-         console.log(`   ✅ Status match passed (No specific validation rules)`);
+        console.log(`  ✅ Status (${status}) match passed (No specific validation rules)`);
       }
 
+      console.log('');
+
     } catch (error) {
-      console.error(`❌ Failed to connect to ${endpoint.path}:`, error.message);
+      console.log(`▶ [${endpoint.method}] ${endpoint.path}`);
+      console.log(`  ❌ Failed to connect: ${error.message}\n`);
       failed = true;
     }
   }
 
   if (failed) {
-    console.error('\n💥 Smoke test failed!');
+    console.log('💥 Smoke test failed!\n');
     process.exit(1);
   } else {
-    console.log('\n🌟 All smoke tests passed successfully! DB connections and routing are verified.');
+    console.log('🌟 All smoke tests passed successfully! DB connections and routing are verified.');
   }
 }
 
