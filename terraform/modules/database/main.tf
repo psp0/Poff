@@ -65,7 +65,7 @@ resource "random_password" "rds_admin_password" {
 resource "aws_db_instance" "main" {
   identifier     = "${var.project_name}-rds"
   engine         = "mysql"
-  engine_version = "8.4.5"
+  engine_version = "8.4.7"
   instance_class = var.rds_instance_class
 
   allocated_storage = var.rds_allocated_storage
@@ -91,6 +91,10 @@ resource "aws_db_instance" "main" {
   apply_immediately   = true
 
   enabled_cloudwatch_logs_exports = ["error", "slowquery"]
+
+  lifecycle {
+    ignore_changes = [engine_version]
+  }
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds"
