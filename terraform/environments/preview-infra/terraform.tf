@@ -6,24 +6,16 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
-    datadog = {
-      source  = "DataDog/datadog"
-      version = "~> 3.0"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.0"
-    }
-    archive = {
-      source  = "hashicorp/archive"
-      version = "~> 2.0"
     }
   }
 
   backend "s3" {}
 }
 
-# Default AWS Provider (Service Account - Dev)
+# Default AWS Provider (Dev Service Account)
 provider "aws" {
   region  = var.aws_region
   profile = var.aws_profile
@@ -72,12 +64,4 @@ provider "aws" {
       ManagedBy   = "terraform"
     }
   }
-}
-
-# Datadog Provider
-provider "datadog" {
-  api_key  = var.datadog_api_key
-  app_key  = var.datadog_app_key
-  api_url  = "https://api.${var.datadog_site}"
-  validate = var.datadog_api_key != ""
 }

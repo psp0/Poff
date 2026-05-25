@@ -52,6 +52,8 @@ resource "aws_iam_policy" "terraform_cross_account_backend_policy" {
             "s3:prefix" = [
               "bootstrap/*",
               "environments/dev/*",
+              "environments/preview-infra/*",
+              "environments/preview-app/*",
               "environments/prod/*"
             ]
           }
@@ -64,6 +66,8 @@ resource "aws_iam_policy" "terraform_cross_account_backend_policy" {
         Resource = [
           "${data.aws_s3_bucket.terraform_state.arn}/bootstrap/*",
           "${data.aws_s3_bucket.terraform_state.arn}/environments/dev/*",
+          "${data.aws_s3_bucket.terraform_state.arn}/environments/preview-infra/*",
+          "${data.aws_s3_bucket.terraform_state.arn}/environments/preview-app/*",
           "${data.aws_s3_bucket.terraform_state.arn}/environments/prod/*"
         ]
       },

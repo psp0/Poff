@@ -14,8 +14,37 @@ permissions:
 jobs:
   destroy-dev-pr:
     name: Destroy Dev PR Resources
-    uses: ./.github/workflows/deploy-dev.yml
+    uses: ./.github/workflows/deploy-preview-app.yml
     with:
       action: destroy
       env_suffix: pr-${{ github.event.pull_request.number }}
+    secrets: inherit
+
+  check-active-prs:
+    name: Check Active PRs
+    needs: destroy-dev-pr
+    runs-on: ubuntu-latest
+    outputs:
+      open_pr_count: ${{ steps.check.outputs.count }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        
+      - name: Count open pull requests
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # main 브랜치를 타겟으로 하는 열려있는 PR의 개수를 확인합니다.
+          PR_COUNT=$(gh pr list --state open --base main --json number --jq 'length')
+          echo "현재 열려있는 PR 개수: $PR_COUNT"
+          echo "count=$PR_COUNT" >> $GITHUB_OUTPUT
+
+  destroy-base-infra:
+    name: Destroy Base Dev Infra
+    needs: check-active-prs
+    if: needs.check-active-prs.outputs.open_pr_count == '0'
+    uses: ./.github/workflows/deploy-preview-infra.yml
+    with:
+      action: destroy
     secrets: inherit

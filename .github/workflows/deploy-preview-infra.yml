@@ -1,0 +1,322 @@
+name: Preview Infra deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to perform (apply or destroy)"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+      env_suffix:
+        description: "Environment suffix (e.g. pr-123) for dynamic environment. Leave empty for default dev"
+        required: false
+        type: string
+        default: ""
+
+  workflow_call:
+    inputs:
+      action:
+        required: false
+        type: string
+        default: "apply"
+        description: "Action to perform (apply or destroy)"
+      env_suffix:
+        required: false
+        type: string
+        default: ""
+        description: "Environment suffix (e.g. pr-123) for dynamic environment. Leave empty for default dev"
+        
+    outputs:
+      action:
+        description: "Action performed"
+        value: ${{ jobs.deploy-infra.outputs.action }}
+
+    secrets:
+      AWS_DEV_GHA_DEPLOY_ROLE_ARN:
+        required: true
+      AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN:
+        required: true
+      AWS_DEV_EXECUTION_ROLE_ARN:
+        required: true
+      AWS_INFRA_DNS_MANAGEMENT_ROLE_ARN:
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+  statuses: write
+  deployments: write
+
+concurrency:
+  group: deploy-preview-infra-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-infra:
+    name: Deploy Preview Infra
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'workflow_dispatch' || 
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+      statuses: write
+      deployments: write
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_WORKING_DIR: terraform/environments/preview-infra
+      ENV_SUFFIX_HYPHEN: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.env_suffix != '' && format('-{0}', github.event.inputs.env_suffix)) || (inputs.env_suffix != '' && format('-{0}', inputs.env_suffix)) || '' }}
+      TF_STATE_KEY: environments/preview-infra/terraform${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.env_suffix != '' && format('-{0}', github.event.inputs.env_suffix)) || (inputs.env_suffix != '' && format('-{0}', inputs.env_suffix)) || '' }}.tfstate
+      TF_VAR_environment: "dev${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.env_suffix != '' && format('-{0}', github.event.inputs.env_suffix)) || (inputs.env_suffix != '' && format('-{0}', inputs.env_suffix)) || '' }}"
+      TF_VAR_aws_infra_role_arn: ${{ secrets.AWS_INFRA_DNS_MANAGEMENT_ROLE_ARN }}
+
+    outputs:
+      action: ${{ steps.set-variables.outputs.action }}
+      infra_duration: ${{ steps.apply.outputs.infra_duration }}
+      failure_log: ${{ steps.capture-log.outputs.failure_log }}
+      env_suffix_hyphen: ${{ steps.set-variables.outputs.env_suffix_hyphen }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate branch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          if [ "$BRANCH_NAME" != "main" ]; then
+            echo "## ❌ Wrong Branch Selected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**deploy-preview-infra.yml** can only be run from the \`main\` branch." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Current branch: \`$BRANCH_NAME\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Required branch: \`main\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please select **main** from the branch dropdown and try again." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "✅ Branch validation passed: $BRANCH_NAME"
+
+      - name: Set variables
+        id: set-variables
+        run: |
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            ACTION="${{ inputs.action }}"
+          else
+            ACTION="${{ github.event.inputs.action }}"
+          fi
+          echo "action=${ACTION:-apply}" >> $GITHUB_OUTPUT
+          echo "env_suffix_hyphen=${ENV_SUFFIX_HYPHEN}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions
+          role-skip-session-tagging: true
+
+      - name: Assume second role
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-second-role
+          role-chaining: true
+          role-skip-session-tagging: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        id: terraform_init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+          TF_IN_AUTOMATION: true
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+        run: |
+          set -e
+          set -o pipefail
+          echo "::group::Terraform Init"
+          cat > backend-ci.hcl << EOF
+          bucket = "${{ env.TF_STATE_BUCKET }}"
+          key = "${{ env.TF_STATE_KEY }}"
+          region = "${{ env.AWS_REGION }}"
+          encrypt = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
+          EOF
+          cleanup() {
+            rm -f backend-ci.hcl
+            echo "Backend configuration file cleaned up"
+          }
+          trap cleanup EXIT
+          terraform init -backend-config=backend-ci.hcl -input=false -reconfigure 2>&1 | tee /tmp/step_output.log
+          echo "Terraform initialization completed successfully"
+          echo "::endgroup::"
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          set -o pipefail
+          echo "::group::Terraform Validate"
+          terraform validate 2>&1 | tee /tmp/step_output.log
+          echo "Terraform configuration is valid"
+          echo "::endgroup::"
+
+      - name: Terraform Plan
+        id: plan
+        if: steps.set-variables.outputs.action == 'apply'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+        run: |
+          set -e
+          set -o pipefail
+          echo "::group::Terraform Plan"
+          terraform plan \
+            -out=tfplan \
+            -detailed-exitcode 2>&1 | tee /tmp/step_output.log || exit_code=$?
+
+          if [ "${exit_code:-0}" -eq 0 ]; then
+            echo "No changes needed"
+            echo "plan_has_changes=false" >> $GITHUB_OUTPUT
+          elif [ "${exit_code:-0}" -eq 2 ]; then
+            echo "Changes detected"
+            echo "plan_has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "Plan failed with exit code: ${exit_code:-0}"
+            exit ${exit_code:-1}
+          fi
+          echo "::endgroup::"
+
+      - name: Terraform Apply
+        id: apply
+        if: steps.set-variables.outputs.action == 'apply' && steps.plan.outcome == 'success'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+        run: |
+          set -e
+          set -o pipefail
+          echo "::group::Terraform Apply"
+          START_TIME=$(date +%s)
+          if [ "${{ steps.plan.outputs.plan_has_changes }}" = "true" ]; then
+            terraform apply -auto-approve tfplan 2>&1 | tee /tmp/step_output.log
+            echo "apply_success=true" >> $GITHUB_OUTPUT
+            echo "Resources applied successfully"
+          else
+            echo "No changes to apply"
+            echo "apply_success=true" >> $GITHUB_OUTPUT
+          fi
+          END_TIME=$(date +%s)
+          echo "infra_duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
+          echo "::endgroup::"
+
+      - name: Terraform Plan (Destroy)
+        id: plan-destroy
+        if: steps.set-variables.outputs.action == 'destroy'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+        run: |
+          set -e
+          set -o pipefail
+          echo "::group::Terraform Plan (Destroy)"        
+          terraform plan -destroy \
+            -out=tfdestroyplan \
+            -detailed-exitcode 2>&1 | tee /tmp/step_output.log || exit_code=$?
+
+          if [ "${exit_code:-0}" -eq 0 ]; then
+            echo "No resources to destroy"
+            echo "destroy_plan_has_changes=false" >> $GITHUB_OUTPUT
+          elif [ "${exit_code:-0}" -eq 2 ]; then
+            echo "Resources to destroy detected"
+            echo "destroy_plan_has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "Destroy plan failed with exit code: ${exit_code:-0}"
+            exit ${exit_code:-1}
+          fi
+          echo "::endgroup::"
+
+      - name: Terraform Destroy
+        id: destroy
+        if: steps.set-variables.outputs.action == 'destroy' && steps.plan-destroy.outcome == 'success'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+        run: |
+          set -e
+          set -o pipefail
+          echo "::group::Terraform Destroy"
+          if [ "${{ steps.plan-destroy.outputs.destroy_plan_has_changes }}" = "true" ]; then
+            terraform apply -auto-approve tfdestroyplan 2>&1 | tee /tmp/step_output.log
+            echo "destroy_success=true" >> $GITHUB_OUTPUT
+            echo "Resources destroyed successfully"
+          else
+            echo "No resources to destroy"
+            echo "destroy_success=true" >> $GITHUB_OUTPUT
+          fi
+          echo "::endgroup::"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Action: ${{ steps.set-variables.outputs.action }}" >> $GITHUB_STEP_SUMMARY          
+
+          if [ "${{ steps.set-variables.outputs.action }}" = "apply" ]; then
+            if [ "${{ steps.apply.outcome }}" = "success" ]; then
+              echo "✅ Apply completed successfully." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Apply failed." >> $GITHUB_STEP_SUMMARY
+            fi
+          elif [ "${{ steps.set-variables.outputs.action }}" = "destroy" ]; then
+            if [ "${{ steps.destroy.outcome }}" = "success" ]; then
+              echo "✅ Destroy completed successfully." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Destroy failed." >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+      - name: Cleanup tfplan file
+        if: always()
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          for plan_file in tfplan tfdestroyplan; do
+            if [ -f "$plan_file" ]; then
+              rm "$plan_file"
+              echo "Removed $plan_file"
+            fi
+          done
+
+      - name: Capture Failure Log
+        id: capture-log
+        if: failure()
+        run: |
+          echo "failure_log<<EOF" >> $GITHUB_OUTPUT
+          if [ -f /tmp/step_output.log ]; then
+            (grep -iC 5 "error" /tmp/step_output.log || tail -n 20 /tmp/step_output.log) | tail -n 20 >> $GITHUB_OUTPUT
+          else
+            echo "Log file not found" >> $GITHUB_OUTPUT
+          fi
+          echo "EOF" >> $GITHUB_OUTPUT
