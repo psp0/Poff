@@ -155,8 +155,10 @@ jobs:
     outputs:
       failure_log: ${{ steps.capture-log.outputs.failure_log }}
     env:
-      TF_WORKING_DIR: terraform/environments/dev
-      TF_STATE_KEY: environments/dev/terraform.tfstate
+      TF_INFRA_WORKING_DIR: terraform/environments/preview-infra
+      TF_APP_WORKING_DIR: terraform/environments/preview-app
+      TF_INFRA_STATE_KEY: environments/preview-infra/terraform.tfstate
+      TF_APP_STATE_KEY: environments/preview-app/terraform.tfstate
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -181,49 +183,64 @@ jobs:
         run: |
           cd terraform
           terraform fmt -check -recursive modules/
-          terraform fmt -check -recursive environments/
+          terraform fmt -check -recursive environments/preview-infra/
+          terraform fmt -check -recursive environments/preview-app/
           terraform fmt -check -recursive bootstrap/
 
-      - name: Terraform Init and Validate (Dev)
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Terraform Init and Validate (Dev Infra)
+        working-directory: ${{ env.TF_INFRA_WORKING_DIR }}
         env:
           TF_LOG: ERROR
           TF_IN_AUTOMATION: true
           BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
           if [ "${{ github.actor }}" == "dependabot[bot]" ]; then
-            echo "Running in Dependabot mode - skipping backend configuration"
             terraform init -backend=false -input=false
           else
             set -e
-            echo "::group::Creating temporary backend configuration"
             cat > backend-ci.hcl <<EOF
           bucket  = "${{ env.TF_STATE_BUCKET }}"
-          key     = "${{ env.TF_STATE_KEY }}"
+          key     = "${{ env.TF_INFRA_STATE_KEY }}"
           region  = "${{ env.AWS_REGION }}"
           encrypt = true
           assume_role = {
             role_arn = "${BACKEND_ROLE_ARN}"
           }
           EOF
-            
-            # Cleanup function to remove temporary backend config
-            cleanup() {
-              rm -f backend-ci.hcl
-              echo "Backend configuration file cleaned up"
-            }
+            cleanup() { rm -f backend-ci.hcl; }
             trap cleanup EXIT
-            echo "::endgroup::"
-            
-            echo "::group::Terraform Init"
             terraform init -backend-config=backend-ci.hcl -input=false 2>&1 | tee /tmp/step_output.log
-            echo "Terraform initialization completed successfully"
-            echo "::endgroup::"
           fi
-          
-          echo "::group::Terraform Validate"
+          echo "::group::Terraform Validate (Dev Infra)"
           terraform validate 2>&1 | tee -a /tmp/step_output.log
-          echo "Terraform validation completed successfully"
+          echo "::endgroup::"
+
+      - name: Terraform Init and Validate (Dev App)
+        working-directory: ${{ env.TF_APP_WORKING_DIR }}
+        env:
+          TF_LOG: ERROR
+          TF_IN_AUTOMATION: true
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+        run: |
+          if [ "${{ github.actor }}" == "dependabot[bot]" ]; then
+            terraform init -backend=false -input=false
+          else
+            set -e
+            cat > backend-ci.hcl <<EOF
+          bucket  = "${{ env.TF_STATE_BUCKET }}"
+          key     = "${{ env.TF_APP_STATE_KEY }}"
+          region  = "${{ env.AWS_REGION }}"
+          encrypt = true
+          assume_role = {
+            role_arn = "${BACKEND_ROLE_ARN}"
+          }
+          EOF
+            cleanup() { rm -f backend-ci.hcl; }
+            trap cleanup EXIT
+            terraform init -backend-config=backend-ci.hcl -input=false 2>&1 | tee /tmp/step_output.log
+          fi
+          echo "::group::Terraform Validate (Dev App)"
+          terraform validate 2>&1 | tee -a /tmp/step_output.log
           echo "::endgroup::"
 
       - name: Capture Failure Log
@@ -321,12 +338,79 @@ jobs:
           fi
           echo "EOF" >> $GITHUB_OUTPUT
 
-  # Deploy to Dev (on PR to main)
+  # Check if preview-infra state exists in S3 (on PR to main)
+  check-preview-infra:
+    name: Check Dev Infra State
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.actor != 'dependabot[bot]'
+    outputs:
+      needed: ${{ steps.check.outputs.needed }}
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-infra-check
+          role-skip-session-tagging: true
+
+      - name: Assume execution role
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-infra-check-exec
+          role-chaining: true
+          role-skip-session-tagging: true
+
+      - name: Check if preview-infra tfstate exists
+        id: check
+        env:
+          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
+        run: |
+          ASSUME_ROLE_OUTPUT=$(aws sts assume-role \
+            --role-arn "${BACKEND_ROLE_ARN}" \
+            --role-session-name "github-actions-s3-check" \
+            --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
+            --output text)
+          S3_KEY_ID=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $1}')
+          S3_SECRET_KEY=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $2}')
+          S3_TOKEN=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $3}')
+
+          if AWS_ACCESS_KEY_ID="$S3_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" AWS_SESSION_TOKEN="$S3_TOKEN" \
+            aws s3api head-object --bucket "${{ env.TF_STATE_BUCKET }}" --key "environments/preview-infra/terraform.tfstate" > /dev/null 2>&1; then
+            echo "✅ preview-infra state found — skipping infra deploy"
+            echo "needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ preview-infra state not found — will deploy infra first"
+            echo "needed=true" >> $GITHUB_OUTPUT
+          fi
+
+  # Deploy preview-infra only when it doesn't exist yet
+  deploy-preview-infra-if-needed:
+    name: Deploy Dev Infra (if needed)
+    needs: [check-preview-infra]
+    if: needs.check-preview-infra.outputs.needed == 'true'
+    uses: ./.github/workflows/deploy-preview-infra.yml
+    with:
+      action: apply
+    secrets: inherit
+
+  # Deploy to Dev (on PR to main) — always runs after infra is guaranteed
   deploy-dev:
     name: Deploy to Dev
-    needs: [build-frontend, build-lambda, validate-terraform-dev, call-security]
-    if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.actor != 'dependabot[bot]'
-    uses: ./.github/workflows/deploy-dev.yml
+    needs: [build-frontend, build-lambda, validate-terraform-dev, call-security, check-preview-infra, deploy-preview-infra-if-needed]
+    if: |
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.base_ref == 'main' &&
+      github.actor != 'dependabot[bot]' &&
+      needs.build-frontend.result == 'success' &&
+      needs.build-lambda.result == 'success' &&
+      needs.validate-terraform-dev.result == 'success' &&
+      needs.call-security.result == 'success' &&
+      (needs.deploy-preview-infra-if-needed.result == 'success' || needs.deploy-preview-infra-if-needed.result == 'skipped')
+    uses: ./.github/workflows/deploy-preview-app.yml
     with:
       action: apply
       seed_data: true

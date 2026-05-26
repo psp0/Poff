@@ -170,6 +170,7 @@ jobs:
     outputs:
       vpc_id: ${{ steps.set-outputs.outputs.vpc_id }}
       rds_endpoint: ${{ steps.set-outputs.outputs.rds_endpoint }}
+      rds_port: ${{ steps.set-outputs.outputs.rds_port }}
       database_name: ${{ steps.set-outputs.outputs.database_name }}
       api_endpoint: ${{ steps.set-outputs.outputs.api_endpoint }}
       cloudfront_url: ${{ steps.set-outputs.outputs.cloudfront_url }}
@@ -476,10 +477,43 @@ jobs:
             rm -f "tfplan"
           fi
 
+  # Database Migration with backup
+  run-migration:
+    name: Run Production Migration
+    needs: [deploy-production]
+    if: needs.deploy-production.outputs.rds_endpoint != ''
+    uses: ./.github/workflows/db-migration.yml
+    with:
+      environment: 'prod'
+      migration_action: 'up'
+      skip_notifications: true
+    secrets: inherit
+
+  seed-database:
+    name: Seed Database
+    needs: [deploy-production, run-migration]
+    if: needs.deploy-production.outputs.rds_endpoint != '' && (github.event_name == 'workflow_dispatch' && github.event.inputs.seed_data == 'true')
+    uses: ./.github/workflows/seed-rds.yml
+    with:
+      environment: 'prod'
+      seed_holidays: true
+      rds_endpoint: ${{ needs.deploy-production.outputs.rds_endpoint }}
+      rds_port: ${{ needs.deploy-production.outputs.rds_port }}
+      database_name: ${{ needs.deploy-production.outputs.database_name }}
+      nat_instance_id: ${{ needs.deploy-production.outputs.nat_instance_id }}
+      assets_bucket_name: "poff-prod-assets"
+    secrets: inherit
+
   # Production smoke tests
   smoke-tests:
     name: Production Smoke Tests
-    needs: deploy-production
+    needs: [deploy-production, run-migration, seed-database]
+    if: |
+      always() &&
+      needs.deploy-production.result == 'success' && 
+      needs.deploy-production.outputs.api_endpoint != '' &&
+      (needs.run-migration.result == 'success' || needs.run-migration.result == 'skipped') &&
+      (needs.seed-database.result == 'success' || needs.seed-database.result == 'skipped')
     runs-on: ubuntu-latest
     
     steps:
@@ -525,33 +559,6 @@ jobs:
       target_tag: ${{ needs.pre-deployment-checks.outputs.previous_tag }}
       reason: '🚨 Automatic Rollback: E2E Tests Failed immediately after deployment.'
       rollback_migration: false
-    secrets: inherit
-
-  # Database Migration with backup
-  run-migration:
-    name: Run Production Migration
-    needs: [deploy-production, smoke-tests]
-    if: needs.deploy-production.outputs.rds_endpoint != ''
-    uses: ./.github/workflows/db-migration.yml
-    with:
-      environment: 'prod'
-      migration_action: 'up'
-      skip_notifications: true
-    secrets: inherit
-
-  seed-database:
-    name: Seed Database
-    needs: [deploy-production, run-migration]
-    if: needs.deploy-production.outputs.rds_endpoint != '' && (github.event_name == 'workflow_dispatch' && github.event.inputs.seed_data == 'true')
-    uses: ./.github/workflows/seed-rds.yml
-    with:
-      environment: 'prod'
-      seed_holidays: true
-      rds_endpoint: ${{ needs.deploy-production.outputs.rds_endpoint }}
-      rds_port: ${{ needs.deploy-production.outputs.rds_port }}
-      database_name: ${{ needs.deploy-production.outputs.database_name }}
-      nat_instance_id: ${{ needs.deploy-production.outputs.nat_instance_id }}
-      assets_bucket_name: "poff-prod-assets"
     secrets: inherit
 
 
