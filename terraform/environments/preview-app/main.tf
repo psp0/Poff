@@ -5,7 +5,9 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 locals {
-  cloudfront_domain = var.cloudfront_custom_domain_name
+  # PR 환경(e.g., dev-pr-123)일 때는 도메인을 비워 기본 CloudFront URL 사용, dev 본 환경일 때만 커스텀 도메인 사용
+  is_pr             = var.environment != "dev"
+  cloudfront_domain = local.is_pr ? "" : var.cloudfront_custom_domain_name
   # We always assume the base infrastructure is named "dev"
   base_env = "dev"
 }
