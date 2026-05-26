@@ -10,6 +10,7 @@ permissions:
   actions: read
   statuses: write
   deployments: write
+  pull-requests: read
 
 jobs:
   destroy-dev-pr:
