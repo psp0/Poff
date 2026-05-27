@@ -124,8 +124,8 @@ variable "datadog_lambda_layer_version" {
 
 
 
-variable "firebase_service_account" {
-  description = "Firebase Service Account JSON (Base64 encoded)"
+variable "firebase_service_account_key" {
+  description = "Firebase Service Account Key JSON (Raw JSON string)"
   type        = string
   sensitive   = true
 }

@@ -246,7 +246,7 @@ resource "aws_lambda_function" "functions" {
       DD_LOGS_INJECTION     = "true" # 로그와 트레이스 자동 연결
 
       # Firebase Configuration
-      FIREBASE_SERVICE_ACCOUNT = var.firebase_service_account
+      FIREBASE_SERVICE_ACCOUNT = var.firebase_service_account_key
 
       # Firebase Client Configuration (for /api/config)
       FIREBASE_API_KEY             = var.firebase_api_key
