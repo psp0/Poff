@@ -282,8 +282,8 @@ variable "enable_waf" {
 # External Services Configuration
 ################################################################################
 
-variable "firebase_service_account" {
-  description = "Firebase Service Account JSON (Base64 encoded)"
+variable "firebase_service_account_key_base64" {
+  description = "Firebase Service Account Key JSON (Must be Base64 encoded)"
   type        = string
   sensitive   = true
 }

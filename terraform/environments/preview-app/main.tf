@@ -88,7 +88,7 @@ module "compute" {
   datadog_extension_version    = var.datadog_extension_version
   datadog_lambda_layer_version = var.datadog_lambda_layer_version
 
-  firebase_service_account     = base64decode(var.firebase_service_account)
+  firebase_service_account_key = base64decode(var.firebase_service_account_key_base64)
   firebase_api_key             = var.firebase_api_key
   firebase_auth_domain         = var.firebase_auth_domain
   firebase_project_id          = var.firebase_project_id
