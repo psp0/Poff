@@ -3,6 +3,9 @@ name: Cleanup PR Environment
 on:
   pull_request:
     types: [closed]
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,6 +18,7 @@ permissions:
 jobs:
   destroy-dev-pr:
     name: Destroy Dev PR Resources
+    if: github.event_name == 'pull_request'
     uses: ./.github/workflows/deploy-preview-app.yml
     with:
       action: destroy
@@ -23,8 +27,12 @@ jobs:
 
   check-active-prs:
     name: Check Active PRs
+    if: always()
     needs: destroy-dev-pr
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: read
     outputs:
       open_pr_count: ${{ steps.check.outputs.count }}
     steps:
@@ -34,7 +42,7 @@ jobs:
       - name: Count open pull requests (Excluding Bots)
         id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           # 1. --json author 를 추가해 작성자 정보를 가져옵니다.
           # 2. jq의 test() 함수를 이용해 대소문자 구분 없이 'bot'이 들어간 계정을 필터링(not)합니다.
