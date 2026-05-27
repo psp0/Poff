@@ -377,10 +377,18 @@ jobs:
           S3_SECRET_KEY=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $2}')
           S3_TOKEN=$(echo "${ASSUME_ROLE_OUTPUT}" | awk '{print $3}')
 
-          if AWS_ACCESS_KEY_ID="$S3_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" AWS_SESSION_TOKEN="$S3_TOKEN" \
-            aws s3api head-object --bucket "${{ env.TF_STATE_BUCKET }}" --key "environments/preview-infra/terraform.tfstate" > /dev/null 2>&1; then
-            echo "✅ preview-infra state found — skipping infra deploy"
-            echo "needed=false" >> $GITHUB_OUTPUT
+          AWS_ACCESS_KEY_ID="$S3_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" AWS_SESSION_TOKEN="$S3_TOKEN" \
+            aws s3api get-object --bucket "${{ env.TF_STATE_BUCKET }}" --key "environments/preview-infra/terraform.tfstate" /tmp/state.json > /dev/null 2>&1 || true
+
+          if [ -f /tmp/state.json ] && [ -s /tmp/state.json ]; then
+            RESOURCE_COUNT=$(jq '.resources | length' /tmp/state.json)
+            if [ "$RESOURCE_COUNT" -gt 0 ]; then
+              echo "✅ preview-infra state found and has resources ($RESOURCE_COUNT) — skipping infra deploy"
+              echo "needed=false" >> $GITHUB_OUTPUT
+            else
+              echo "⚠️ preview-infra state found but is empty — will deploy infra first"
+              echo "needed=true" >> $GITHUB_OUTPUT
+            fi
           else
             echo "⚠️ preview-infra state not found — will deploy infra first"
             echo "needed=true" >> $GITHUB_OUTPUT
