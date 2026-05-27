@@ -31,14 +31,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         
-      - name: Count open pull requests
+      - name: Count open pull requests (Excluding Bots)
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # main 브랜치를 타겟으로 하는 열려있는 PR의 개수를 확인합니다.
-          PR_COUNT=$(gh pr list --state open --base main --json number --jq 'length')
-          echo "현재 열려있는 PR 개수: $PR_COUNT"
+          # 1. --json author 를 추가해 작성자 정보를 가져옵니다.
+          # 2. jq의 test() 함수를 이용해 대소문자 구분 없이 'bot'이 들어간 계정을 필터링(not)합니다.
+          PR_COUNT=$(gh pr list -R "${{ github.repository }}" \
+            --state open \
+            --base main \
+            --json author \
+            --jq '[.[] | select(.author.login | test("bot"; "i") | not)] | length')
+          
+          echo "현재 열려있는 (봇 제외) 인간 개발자의 PR 개수: $PR_COUNT"
           echo "count=$PR_COUNT" >> $GITHUB_OUTPUT
 
   destroy-base-infra:
