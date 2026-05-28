@@ -106,7 +106,7 @@ variable "rds_admin_username" {
 variable "rds_multi_az" {
   description = "Whether to enable Multi-AZ deployment for high availability"
   type        = bool
-  default     = true # Enable Multi-AZ for production
+  default     = false
 }
 
 variable "rds_backup_retention_period" {
