@@ -567,44 +567,17 @@ jobs:
     secrets: inherit
 
 
-  # Post-deployment monitoring
-  post-deployment-monitoring:
-    name: Post-Deployment Monitoring
-    needs: [deploy-production, smoke-tests, run-migration, seed-database]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-      - name: Monitor deployment for 5 minutes
-        run: |
-          echo "Monitoring production deployment..."
-          echo "Checking for errors and anomalies..."
-          
-          # Monitor for 5 minutes
-          END_TIME=$(($(date +%s) + 300))
-          while [ $(date +%s) -lt $END_TIME ]; do
-            echo "Monitoring... $(date)"
-            # Add CloudWatch metrics check here
-            sleep 30
-          done
-          
-          echo "✅ Monitoring period completed - no critical issues detected"
 
-      - name: Check error rates
-        run: |
-          echo "Checking error rates in production..."
-          # Add error rate checking logic
 
   # Create release tag if deployment successful
   create-release:
     name: Create Release
-    needs: [deploy-production, smoke-tests, run-migration, post-deployment-monitoring, seed-database, pre-deployment-checks]
+    needs: [deploy-production, smoke-tests, run-migration, seed-database, pre-deployment-checks]
     if: |
       always() &&
       needs.deploy-production.result == 'success' &&
       needs.smoke-tests.result == 'success' &&
       needs.run-migration.result == 'success' &&
-      needs.post-deployment-monitoring.result == 'success' &&
       (needs.seed-database.result == 'success' || needs.seed-database.result == 'skipped') &&
       !startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -671,7 +644,7 @@ jobs:
   # Notification
   notify:
     name: Notify Deployment Status
-    needs: [deploy-production, smoke-tests, run-migration, post-deployment-monitoring, seed-database, pre-deployment-checks]
+    needs: [deploy-production, smoke-tests, run-migration, seed-database, pre-deployment-checks]
     if: always()
     runs-on: ubuntu-latest
     
@@ -707,7 +680,6 @@ jobs:
           if [[ "${{ needs.deploy-production.result }}" == "success" && \
                 "${{ needs.smoke-tests.result }}" == "success" && \
                 "${{ needs.run-migration.result }}" == "success" && \
-                "${{ needs.post-deployment-monitoring.result }}" == "success" && \
                 ("${{ needs.seed-database.result }}" == "success" || "${{ needs.seed-database.result }}" == "skipped") ]]; then
             DEPLOYMENT_STATUS="success"
           else
@@ -730,7 +702,6 @@ jobs:
           needs.deploy-production.result == 'success' &&
           needs.smoke-tests.result == 'success' &&
           needs.run-migration.result == 'success' &&
-          needs.post-deployment-monitoring.result == 'success' &&
           (needs.seed-database.result == 'success' || needs.seed-database.result == 'skipped')
         uses: 8398a7/action-slack@v3
         with:
@@ -753,7 +724,6 @@ jobs:
             인프라 배포 완료
             스모크 테스트 통과
             데이터베이스 마이그레이션 완료
-            배포 후 모니터링 완료
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DEPLOY }}
 
@@ -763,7 +733,6 @@ jobs:
           needs.deploy-production.result == 'failure' ||
           needs.smoke-tests.result == 'failure' ||
           needs.run-migration.result == 'failure' ||
-          needs.post-deployment-monitoring.result == 'failure' ||
           needs.seed-database.result == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -783,9 +752,6 @@ jobs:
           elif [ "${{ needs.seed-database.result }}" == "failure" ]; then
             FAILED_JOB="Seed Database"
             FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Seed Database")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
-          elif [ "${{ needs.post-deployment-monitoring.result }}" == "failure" ]; then
-            FAILED_JOB="Post-Deployment Monitoring"
-            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Post-Deployment Monitoring")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
           else
             FAILED_JOB="Unknown Job"
             FAILED_STEP="Unknown Step"
@@ -805,14 +771,12 @@ jobs:
           echo "smoke_status=$(get_status_text ${{ needs.smoke-tests.result }})" >> $GITHUB_OUTPUT
           echo "migration_status=$(get_status_text ${{ needs.run-migration.result }})" >> $GITHUB_OUTPUT
           echo "seed_status=$(get_status_text ${{ needs.seed-database.result }})" >> $GITHUB_OUTPUT
-          echo "monitor_status=$(get_status_text ${{ needs.post-deployment-monitoring.result }})" >> $GITHUB_OUTPUT
 
       - name: Notify Slack on Failure
         if: |
           needs.deploy-production.result == 'failure' ||
           needs.smoke-tests.result == 'failure' ||
           needs.run-migration.result == 'failure' ||
-          needs.post-deployment-monitoring.result == 'failure' ||
           needs.seed-database.result == 'failure'
         uses: 8398a7/action-slack@v3
         with:
@@ -834,7 +798,6 @@ jobs:
             스모크 테스트: ${{ steps.failure_details.outputs.smoke_status }}
             마이그레이션: ${{ steps.failure_details.outputs.migration_status }}
             시딩: ${{ steps.failure_details.outputs.seed_status }}
-            • 모니터링: ${{ steps.failure_details.outputs.monitor_status }}
             
             ⚠️ *조치 필요:* 즉각적인 확인이 필요합니다!
             
