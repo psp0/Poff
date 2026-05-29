@@ -55,6 +55,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  actions: read
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
