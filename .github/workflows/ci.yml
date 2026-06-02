@@ -25,6 +25,7 @@ permissions:
   statuses: write
   deployments: write
   security-events: write
+  pull-requests: read
 
 env:
   NODE_VERSION: ${{ vars.NODE_VERSION }}
