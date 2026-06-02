@@ -25,6 +25,7 @@ permissions:
   statuses: write
   deployments: write
   security-events: write
+  pull-requests: read
 
 env:
   NODE_VERSION: ${{ vars.NODE_VERSION }}
@@ -37,6 +38,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Detect which files changed
+  changes:
+    name: Determine Changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+      infra: ${{ steps.filter.outputs.infra }}
+      shared: ${{ steps.filter.outputs.shared }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Paths Filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'public/**'
+              - 'fonts/**'
+              - 'poff-assets/**'
+              - 'index.html'
+              - 'index.css'
+              - 'index.js'
+              - 'vite.config.js'
+              - 'pwa.js'
+            backend:
+              - 'lambda/**'
+              - 'ecs-server/**'
+            infra:
+              - 'terraform/**'
+            shared:
+              - 'package*.json'
+              - 'jest.config.cjs'
+              - '.github/workflows/**'
+              - 'scripts/**'
+
   # Security Scan (Reusable Workflow)
   call-security:
     name: Security Scan
@@ -46,6 +84,8 @@ jobs:
   # PR Checks: Unit Tests, Linting, Static Analysis
   pr-checks:
     name: Fast Checks (Test & Lint)
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.shared == 'true'
     runs-on: ubuntu-latest
     outputs:
       failure_log: ${{ steps.capture-log.outputs.failure_log }}
@@ -109,7 +149,11 @@ jobs:
   # Build and validate frontend
   build-frontend:
     name: Build Frontend
-    needs: [pr-checks]
+    needs: [changes, pr-checks]
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      (needs.pr-checks.result == 'success' || needs.pr-checks.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       failure_log: ${{ steps.capture-log.outputs.failure_log }}
@@ -117,16 +161,49 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      # Case 1: frontend or shared changed -> Build from source
       - name: Setup Node.js
+        if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.shared == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install dependencies
+        if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.shared == 'true'
         run: npm ci
 
       - name: Build frontend
+        if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.shared == 'true'
+        run: npm run build 2>&1 | tee /tmp/step_output.log
+
+      # Case 2: No changes to frontend -> Download from main
+      - name: Download Frontend Artifact from main
+        id: download-fallback
+        if: needs.changes.outputs.frontend != 'true' && needs.changes.outputs.shared != 'true'
+        uses: dawidd6/action-download-artifact@v11
+        continue-on-error: true
+        with:
+          workflow: ci.yml
+          name: frontend-dist
+          branch: main
+          workflow_conclusion: success
+          path: dist
+
+      # Case 2.1: If download failed -> Build from source as fallback
+      - name: Setup Node.js (Fallback)
+        if: (needs.changes.outputs.frontend != 'true' && needs.changes.outputs.shared != 'true') && steps.download-fallback.outcome == 'failure'
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies (Fallback)
+        if: (needs.changes.outputs.frontend != 'true' && needs.changes.outputs.shared != 'true') && steps.download-fallback.outcome == 'failure'
+        run: npm ci
+
+      - name: Build frontend (Fallback)
+        if: (needs.changes.outputs.frontend != 'true' && needs.changes.outputs.shared != 'true') && steps.download-fallback.outcome == 'failure'
         run: npm run build 2>&1 | tee /tmp/step_output.log
 
       - name: Capture Failure Log
@@ -151,6 +228,8 @@ jobs:
   # Validate Terraform configuration (Dev)
   validate-terraform-dev:
     name: Validate Terraform (Dev)
+    needs: [changes]
+    if: needs.changes.outputs.infra == 'true' || needs.changes.outputs.shared == 'true'
     runs-on: ubuntu-latest
     outputs:
       failure_log: ${{ steps.capture-log.outputs.failure_log }}
@@ -258,6 +337,8 @@ jobs:
   # Validate Terraform configuration (Prod)
   validate-terraform-prod:
     name: Validate Terraform (Prod)
+    needs: [changes]
+    if: needs.changes.outputs.infra == 'true' || needs.changes.outputs.shared == 'true'
     runs-on: ubuntu-latest
     outputs:
       failure_log: ${{ steps.capture-log.outputs.failure_log }}
@@ -413,10 +494,10 @@ jobs:
       github.event_name == 'pull_request' &&
       github.base_ref == 'main' &&
       github.actor != 'dependabot[bot]' &&
-      needs.build-frontend.result == 'success' &&
-      needs.build-lambda.result == 'success' &&
-      needs.validate-terraform-dev.result == 'success' &&
-      needs.call-security.result == 'success' &&
+      (needs.build-frontend.result == 'success') &&
+      (needs.build-lambda.result == 'success') &&
+      (needs.validate-terraform-dev.result == 'success' || needs.validate-terraform-dev.result == 'skipped') &&
+      (needs.call-security.result == 'success' || needs.call-security.result == 'skipped') &&
       (needs.deploy-preview-infra-if-needed.result == 'success' || needs.deploy-preview-infra-if-needed.result == 'skipped')
     uses: ./.github/workflows/deploy-preview-app.yml
     with:
@@ -430,13 +511,39 @@ jobs:
   # Build Lambda packages
   build-lambda:
     name: Build Lambda Packages
-    needs: [pr-checks]
+    needs: [changes, pr-checks]
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      (needs.pr-checks.result == 'success' || needs.pr-checks.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      # Case 1: backend or shared changed -> Build from source
       - name: Build Lambda Packages
+        if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.shared == 'true'
+        uses: ./.github/actions/build-lambda
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Case 2: No changes to backend -> Download from main
+      - name: Download Lambda Artifact from main
+        id: download-fallback
+        if: needs.changes.outputs.backend != 'true' && needs.changes.outputs.shared != 'true'
+        uses: dawidd6/action-download-artifact@v11
+        continue-on-error: true
+        with:
+          workflow: ci.yml
+          name: lambda-packages
+          branch: main
+          workflow_conclusion: success
+          path: lambda/packages
+
+      # Case 2.1: If download failed -> Build from source as fallback
+      - name: Build Lambda Packages (Fallback)
+        if: (needs.changes.outputs.backend != 'true' && needs.changes.outputs.shared != 'true') && steps.download-fallback.outcome == 'failure'
         uses: ./.github/actions/build-lambda
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -451,27 +558,25 @@ jobs:
   # CI Failure Notification (main only)
   notify-ci-failure:
     name: Notify CI Failure
-    needs: [pr-checks, build-frontend, build-lambda, validate-terraform-dev, validate-terraform-prod, call-security]
+    needs: [changes, pr-checks, build-frontend, build-lambda, validate-terraform-dev, validate-terraform-prod, call-security]
     if: |
       always() &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
-      (needs.pr-checks.result == 'failure' ||
+      (needs.changes.result == 'failure' ||
+       needs.pr-checks.result == 'failure' ||
        needs.build-frontend.result == 'failure' || 
        needs.build-lambda.result == 'failure' || 
        needs.validate-terraform-dev.result == 'failure' || 
        needs.validate-terraform-prod.result == 'failure' ||
        needs.call-security.result == 'failure')
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
       - name: Get Time and Duration
         id: time
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           echo "time=$(TZ='Asia/Seoul' date '+%d일 %H시 %M분')" >> $GITHUB_OUTPUT
           
@@ -489,7 +594,10 @@ jobs:
           FAILED_JOB=""
           FAILED_STEP=""
 
-          if [ "${{ needs.pr-checks.result }}" == "failure" ]; then
+          if [ "${{ needs.changes.result }}" == "failure" ]; then
+            FAILED_JOB="Determine Changes"
+            FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Determine Changes")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
+          elif [ "${{ needs.pr-checks.result }}" == "failure" ]; then
             FAILED_JOB="Fast Checks (Test & Lint)"
             FAILED_STEP=$(gh run view ${{ github.run_id }} --json jobs --jq '.jobs[] | select(.name | contains("Fast Checks")) | .steps[] | select(.conclusion == "failure") | .name' | head -1)
           elif [ "${{ needs.build-frontend.result }}" == "failure" ]; then
