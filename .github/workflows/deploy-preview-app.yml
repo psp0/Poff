@@ -185,7 +185,7 @@ jobs:
           echo "env_suffix_hyphen=${ENV_SUFFIX_HYPHEN}" >> $GITHUB_OUTPUT
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEV_GHA_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -193,7 +193,7 @@ jobs:
           role-skip-session-tagging: true
 
       - name: Assume second role
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEV_EXECUTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -202,14 +202,14 @@ jobs:
           role-skip-session-tagging: true
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
           terraform_wrapper: false
 
       - name: Download Frontend Artifact (Workflow Dispatch)
         if: github.event_name == 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
-        uses: dawidd6/action-download-artifact@v11
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: ci.yml
           name: frontend-dist
@@ -218,21 +218,21 @@ jobs:
 
       - name: Download Frontend Artifact (Workflow Call)
         if: github.event_name != 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: dist
 
       - name: Download Lambda Artifact (Workflow Call)
         if: github.event_name != 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: lambda-packages
           path: lambda/packages
 
       - name: Download Lambda Artifact (Workflow Dispatch)
         if: github.event_name == 'workflow_dispatch' && steps.set-variables.outputs.action == 'apply'
-        uses: dawidd6/action-download-artifact@v11
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: ci.yml
           name: lambda-packages
