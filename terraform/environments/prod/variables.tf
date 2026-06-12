@@ -279,6 +279,18 @@ variable "enable_waf" {
 }
 
 ################################################################################
+# Cloudflare Configuration
+################################################################################
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token with DNS, WAF edit permissions for the zone"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+
+################################################################################
 # External Services Configuration
 ################################################################################
 

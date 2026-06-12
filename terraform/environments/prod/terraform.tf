@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.0"
+    }
     datadog = {
       source  = "DataDog/datadog"
       version = "~> 3.0"
@@ -80,4 +84,9 @@ provider "datadog" {
   app_key  = var.datadog_app_key
   api_url  = "https://api.${var.datadog_site}"
   validate = var.datadog_api_key != ""
+}
+
+# Cloudflare Provider
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }
