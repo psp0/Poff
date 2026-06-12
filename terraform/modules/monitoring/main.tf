@@ -289,6 +289,119 @@ resource "aws_iam_role_policy" "metric_stream_to_firehose" {
   })
 }
 
+# IAM Role for Kinesis Firehose (us-east-1) to write to S3
+resource "aws_iam_role" "firehose_to_datadog_us_east_1" {
+  provider = aws.us_east_1
+  name     = "${var.project_name}-firehose-datadog-role-use1"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "firehose.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "firehose_to_datadog_us_east_1" {
+  provider = aws.us_east_1
+  name     = "${var.project_name}-firehose-datadog-policy-use1"
+  role     = aws_iam_role.firehose_to_datadog_us_east_1.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:AbortMultipartUpload",
+          "s3:GetBucketLocation",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:ListBucketMultipartUploads",
+          "s3:PutObject"
+        ]
+        Resource = [
+          aws_s3_bucket.firehose_backup.arn,
+          "${aws_s3_bucket.firehose_backup.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Kinesis Firehose Delivery Stream (us-east-1) to Datadog
+resource "aws_kinesis_firehose_delivery_stream" "datadog_metrics_us_east_1" {
+  provider    = aws.us_east_1
+  name        = "${var.project_name}-datadog-metrics-stream-use1"
+  destination = "http_endpoint"
+
+  http_endpoint_configuration {
+    url                = "https://awsmetrics-intake.${var.datadog_site}/v1/input"
+    name               = "Datadog"
+    access_key         = var.datadog_api_key
+    buffering_size     = 4
+    buffering_interval = 60
+    role_arn           = aws_iam_role.firehose_to_datadog_us_east_1.arn
+
+    s3_backup_mode = "FailedDataOnly"
+
+    s3_configuration {
+      role_arn           = aws_iam_role.firehose_to_datadog_us_east_1.arn
+      bucket_arn         = aws_s3_bucket.firehose_backup.arn
+      buffering_size     = 5
+      buffering_interval = 300
+      compression_format = "GZIP"
+    }
+  }
+}
+
+# IAM Role for CloudWatch Metric Stream (us-east-1)
+resource "aws_iam_role" "metric_stream_to_firehose_us_east_1" {
+  provider = aws.us_east_1
+  name     = "${var.project_name}-metric-stream-firehose-role-use1"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "streams.metrics.cloudwatch.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "metric_stream_to_firehose_us_east_1" {
+  provider = aws.us_east_1
+  name     = "${var.project_name}-metric-stream-firehose-policy-use1"
+  role     = aws_iam_role.metric_stream_to_firehose_us_east_1.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "firehose:PutRecord",
+          "firehose:PutRecordBatch"
+        ]
+        Resource = [
+          aws_kinesis_firehose_delivery_stream.datadog_metrics_us_east_1.arn
+        ]
+      }
+    ]
+  })
+}
+
 # CloudWatch Metric Stream (Active in default region: ap-northeast-2)
 resource "aws_cloudwatch_metric_stream" "datadog" {
   name          = "${var.project_name}-datadog-metric-stream"
@@ -316,8 +429,8 @@ resource "aws_cloudwatch_metric_stream" "datadog_us_east_1" {
   provider = aws.us_east_1
 
   name          = "${var.project_name}-datadog-metric-stream-us-east-1"
-  role_arn      = aws_iam_role.metric_stream_to_firehose.arn
-  firehose_arn  = aws_kinesis_firehose_delivery_stream.datadog_metrics.arn
+  role_arn      = aws_iam_role.metric_stream_to_firehose_us_east_1.arn
+  firehose_arn  = aws_kinesis_firehose_delivery_stream.datadog_metrics_us_east_1.arn
   output_format = "json"
 
   include_filter {
