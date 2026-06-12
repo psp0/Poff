@@ -18,13 +18,14 @@ resource "datadog_integration_aws_account" "main" {
   }
 
   aws_regions {
+    # us-east-1 is included because CloudFront custom domain ACM certificates must be created in us-east-1
     include_only = ["ap-northeast-2", "us-east-1"]
   }
 
   metrics_config {
-    enabled = true
+    enabled = false
     namespace_filters {
-      include_only = ["AWS/Lambda", "AWS/RDS", "AWS/ApiGateway"]
+      include_only = ["AWS/Lambda", "AWS/RDS", "AWS/ApiGateway", "AWS/CloudFront"]
     }
   }
 
@@ -142,7 +143,9 @@ resource "aws_iam_policy" "datadog_integration" {
           "rds:DescribeEvents",
           "rds:ListTagsForResource",
           "rds:DescribeDBClusters",
-          "apigateway:GET"
+          "apigateway:GET",
+          "cloudfront:GetDistributionConfig",
+          "cloudfront:ListDistributions"
         ]
         Resource = "*"
       }
@@ -157,4 +160,175 @@ resource "aws_iam_policy" "datadog_integration" {
 resource "aws_iam_role_policy_attachment" "datadog_integration" {
   role       = aws_iam_role.datadog_integration.name
   policy_arn = aws_iam_policy.datadog_integration.arn
+}
+
+# ==============================================================================
+# CloudWatch Metric Streams to Datadog (Cost-Efficient Alternative to API Polling)
+# ==============================================================================
+
+# S3 Bucket for Kinesis Firehose backup (Failed deliveries only)
+resource "aws_s3_bucket" "firehose_backup" {
+  bucket        = "${var.project_name}-${var.environment}-datadog-firehose-backup"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_public_access_block" "firehose_backup" {
+  bucket = aws_s3_bucket.firehose_backup.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# IAM Role for Kinesis Firehose to write to S3
+resource "aws_iam_role" "firehose_to_datadog" {
+  name = "${var.project_name}-firehose-datadog-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "firehose.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "firehose_to_datadog" {
+  name = "${var.project_name}-firehose-datadog-policy"
+  role = aws_iam_role.firehose_to_datadog.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:AbortMultipartUpload",
+          "s3:GetBucketLocation",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:ListBucketMultipartUploads",
+          "s3:PutObject"
+        ]
+        Resource = [
+          aws_s3_bucket.firehose_backup.arn,
+          "${aws_s3_bucket.firehose_backup.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Kinesis Firehose Delivery Stream to Datadog
+resource "aws_kinesis_firehose_delivery_stream" "datadog_metrics" {
+  name        = "${var.project_name}-datadog-metrics-stream"
+  destination = "http_endpoint"
+
+  http_endpoint_configuration {
+    url                = "https://awsmetrics-intake.${var.datadog_site}/v1/input"
+    name               = "Datadog"
+    access_key         = var.datadog_api_key
+    buffering_size     = 4  # MB (Datadog recommended)
+    buffering_interval = 60 # Seconds (Datadog recommended)
+    role_arn           = aws_iam_role.firehose_to_datadog.arn
+
+    s3_backup_mode = "FailedDataOnly"
+
+    s3_configuration {
+      role_arn           = aws_iam_role.firehose_to_datadog.arn
+      bucket_arn         = aws_s3_bucket.firehose_backup.arn
+      buffering_size     = 5
+      buffering_interval = 300
+      compression_format = "GZIP"
+    }
+  }
+}
+
+# IAM Role for CloudWatch Metric Stream
+resource "aws_iam_role" "metric_stream_to_firehose" {
+  name = "${var.project_name}-metric-stream-to-firehose-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "streams.metrics.cloudwatch.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "metric_stream_to_firehose" {
+  name = "${var.project_name}-metric-stream-to-firehose-policy"
+  role = aws_iam_role.metric_stream_to_firehose.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "firehose:PutRecord",
+          "firehose:PutRecordBatch"
+        ]
+        Resource = [
+          aws_kinesis_firehose_delivery_stream.datadog_metrics.arn
+        ]
+      }
+    ]
+  })
+}
+
+# CloudWatch Metric Stream (Active in default region: ap-northeast-2)
+resource "aws_cloudwatch_metric_stream" "datadog" {
+  name          = "${var.project_name}-datadog-metric-stream"
+  role_arn      = aws_iam_role.metric_stream_to_firehose.arn
+  firehose_arn  = aws_kinesis_firehose_delivery_stream.datadog_metrics.arn
+  output_format = "json"
+
+  # Stream only the required namespaces to optimize cost and data transfer
+  include_filter {
+    namespace = "AWS/Lambda"
+  }
+  include_filter {
+    namespace = "AWS/RDS"
+  }
+  include_filter {
+    namespace = "AWS/ApiGateway"
+  }
+  include_filter {
+    namespace = "AWS/S3"
+  }
+}
+
+# CloudWatch Metric Stream (Active in us-east-1 for global metrics like CloudFront)
+resource "aws_cloudwatch_metric_stream" "datadog_us_east_1" {
+  provider = aws.us_east_1
+
+  name          = "${var.project_name}-datadog-metric-stream-us-east-1"
+  role_arn      = aws_iam_role.metric_stream_to_firehose.arn
+  firehose_arn  = aws_kinesis_firehose_delivery_stream.datadog_metrics.arn
+  output_format = "json"
+
+  include_filter {
+    namespace = "AWS/CloudFront"
+  }
+}
+
+# Datadog Cloudflare Integration
+resource "datadog_integration_cloudflare_account" "main" {
+  count   = var.cloudflare_api_token != "" ? 1 : 0
+  api_key = var.cloudflare_api_token
+  name    = "${var.project_name}-cloudflare"
+  email   = var.cloudflare_email != "" ? var.cloudflare_email : null
 }

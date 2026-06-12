@@ -183,6 +183,11 @@ module "monitoring" {
   # 모듈 전체를 조건부로 생성 (Datadog 안 쓸 거면 아예 로드하지 않음)
   count = var.enable_datadog_monitoring ? 1 : 0
 
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
+
   project_name   = var.project_name
   environment    = var.environment
   aws_account_id = data.aws_caller_identity.current.account_id
@@ -190,4 +195,7 @@ module "monitoring" {
   aws_region      = data.aws_region.current.id
   datadog_api_key = var.datadog_api_key
   datadog_site    = var.datadog_site
+
+  cloudflare_api_token = var.cloudflare_api_token
 }
+

@@ -170,6 +170,11 @@ module "monitoring" {
 
   count = var.enable_datadog_monitoring ? 1 : 0
 
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
+
   project_name    = var.project_name
   environment     = var.environment
   aws_account_id  = data.aws_caller_identity.current.account_id

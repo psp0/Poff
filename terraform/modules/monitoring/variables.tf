@@ -29,3 +29,16 @@ variable "datadog_site" {
   type        = string
   default     = "datadoghq.com"
 }
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for Datadog integration"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "cloudflare_email" {
+  description = "Cloudflare email (if using API key instead of token)"
+  type        = string
+  default     = ""
+}
