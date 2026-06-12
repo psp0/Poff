@@ -305,6 +305,37 @@ resource "aws_iam_policy" "terraform_execution_misc_policy" {
         Effect   = "Allow"
         Action   = "serverlessrepo:*"
         Resource = "*"
+      },
+      {
+        Sid    = "CloudWatchMetricsPermissions"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:GetMetricStream",
+          "cloudwatch:ListMetricStreams",
+          "cloudwatch:PutMetricStream",
+          "cloudwatch:DeleteMetricStream",
+          "cloudwatch:StartMetricStreams",
+          "cloudwatch:StopMetricStreams",
+          "cloudwatch:TagResource",
+          "cloudwatch:UntagResource",
+          "cloudwatch:ListTagsForResource"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "FirehosePermissions"
+        Effect = "Allow"
+        Action = [
+          "firehose:CreateDeliveryStream",
+          "firehose:DeleteDeliveryStream",
+          "firehose:DescribeDeliveryStream",
+          "firehose:ListDeliveryStreams",
+          "firehose:UpdateDestination",
+          "firehose:TagDeliveryStream",
+          "firehose:UntagDeliveryStream",
+          "firehose:ListTagsForDeliveryStream"
+        ]
+        Resource = "*"
       }
     ]
   })
