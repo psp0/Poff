@@ -234,11 +234,15 @@ resource "aws_kinesis_firehose_delivery_stream" "datadog_metrics" {
     url                = "https://aws-kinesis-http-intake.logs.${var.datadog_site}/v1/input"
     name               = "Datadog"
     access_key         = var.datadog_api_key
-    buffering_size     = 4  # MB (Datadog recommended)
-    buffering_interval = 60 # Seconds (Datadog recommended)
+    buffering_size     = 2 # MiB (Datadog max 권장값 2 MiB)
+    buffering_interval = 60
     role_arn           = aws_iam_role.firehose_to_datadog.arn
 
     s3_backup_mode = "FailedDataOnly"
+
+    request_configuration {
+      content_encoding = "GZIP"
+    }
 
     s3_configuration {
       role_arn           = aws_iam_role.firehose_to_datadog.arn
@@ -345,11 +349,15 @@ resource "aws_kinesis_firehose_delivery_stream" "datadog_metrics_us_east_1" {
     url                = "https://aws-kinesis-http-intake.logs.${var.datadog_site}/v1/input"
     name               = "Datadog"
     access_key         = var.datadog_api_key
-    buffering_size     = 4
+    buffering_size     = 2 # MiB (Datadog max 권장값 2 MiB)
     buffering_interval = 60
     role_arn           = aws_iam_role.firehose_to_datadog_us_east_1.arn
 
     s3_backup_mode = "FailedDataOnly"
+
+    request_configuration {
+      content_encoding = "GZIP"
+    }
 
     s3_configuration {
       role_arn           = aws_iam_role.firehose_to_datadog_us_east_1.arn
