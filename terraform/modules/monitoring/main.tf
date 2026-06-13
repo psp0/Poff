@@ -231,7 +231,7 @@ resource "aws_kinesis_firehose_delivery_stream" "datadog_metrics" {
   destination = "http_endpoint"
 
   http_endpoint_configuration {
-    url                = "https://aws-kinesis-http-intake.logs.${var.datadog_site}/v1/input"
+    url                = "https://aws-kinesis-http-intake.${var.datadog_site}/v1/input"
     name               = "Datadog"
     access_key         = var.datadog_api_key
     buffering_size     = 2 # MiB (Datadog max 권장값 2 MiB)
@@ -346,7 +346,7 @@ resource "aws_kinesis_firehose_delivery_stream" "datadog_metrics_us_east_1" {
   destination = "http_endpoint"
 
   http_endpoint_configuration {
-    url                = "https://aws-kinesis-http-intake.logs.${var.datadog_site}/v1/input"
+    url                = "https://aws-kinesis-http-intake.${var.datadog_site}/v1/input"
     name               = "Datadog"
     access_key         = var.datadog_api_key
     buffering_size     = 2 # MiB (Datadog max 권장값 2 MiB)
@@ -415,7 +415,7 @@ resource "aws_cloudwatch_metric_stream" "datadog" {
   name          = "${var.project_name}-datadog-metric-stream"
   role_arn      = aws_iam_role.metric_stream_to_firehose.arn
   firehose_arn  = aws_kinesis_firehose_delivery_stream.datadog_metrics.arn
-  output_format = "json"
+  output_format = "opentelemetry0.7"
 
   # Stream only the required namespaces to optimize cost and data transfer
   include_filter {
@@ -439,7 +439,7 @@ resource "aws_cloudwatch_metric_stream" "datadog_us_east_1" {
   name          = "${var.project_name}-datadog-metric-stream-us-east-1"
   role_arn      = aws_iam_role.metric_stream_to_firehose_us_east_1.arn
   firehose_arn  = aws_kinesis_firehose_delivery_stream.datadog_metrics_us_east_1.arn
-  output_format = "json"
+  output_format = "opentelemetry0.7"
 
   include_filter {
     namespace = "AWS/CloudFront"
