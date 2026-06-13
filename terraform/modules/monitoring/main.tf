@@ -231,10 +231,10 @@ resource "aws_kinesis_firehose_delivery_stream" "datadog_metrics" {
   destination = "http_endpoint"
 
   http_endpoint_configuration {
-    url                = "https://aws-kinesis-http-intake.${var.datadog_site}/v1/input"
+    url                = "https://event-platform-intake.us5.datadoghq.com/api/v2/awsmetrics?dd-protocol=aws-kinesis-firehose"
     name               = "Datadog"
     access_key         = var.datadog_api_key
-    buffering_size     = 2 # MiB (Datadog max 권장값 2 MiB)
+    buffering_size     = 4 # MiB
     buffering_interval = 60
     role_arn           = aws_iam_role.firehose_to_datadog.arn
 
@@ -346,10 +346,10 @@ resource "aws_kinesis_firehose_delivery_stream" "datadog_metrics_us_east_1" {
   destination = "http_endpoint"
 
   http_endpoint_configuration {
-    url                = "https://aws-kinesis-http-intake.${var.datadog_site}/v1/input"
+    url                = "https://event-platform-intake.us5.datadoghq.com/api/v2/awsmetrics?dd-protocol=aws-kinesis-firehose"
     name               = "Datadog"
     access_key         = var.datadog_api_key
-    buffering_size     = 2 # MiB (Datadog max 권장값 2 MiB)
+    buffering_size     = 4 # MiB
     buffering_interval = 60
     role_arn           = aws_iam_role.firehose_to_datadog_us_east_1.arn
 
