@@ -197,5 +197,6 @@ module "monitoring" {
   datadog_site    = var.datadog_site
 
   cloudflare_api_token = var.cloudflare_api_token
+  cloudflare_email     = var.cloudflare_email
 }
 

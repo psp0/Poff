@@ -448,8 +448,9 @@ resource "aws_cloudwatch_metric_stream" "datadog_us_east_1" {
 
 # Datadog Cloudflare Integration
 resource "datadog_integration_cloudflare_account" "main" {
-  count   = var.cloudflare_api_token != "" ? 1 : 0
-  api_key = var.cloudflare_api_token
-  name    = "${var.project_name}-cloudflare"
-  email   = var.cloudflare_email != "" ? var.cloudflare_email : null
+  count     = var.cloudflare_api_token != "" ? 1 : 0
+  api_key   = var.cloudflare_api_token
+  name      = "${var.project_name}-cloudflare"
+  email     = var.cloudflare_email != "" ? var.cloudflare_email : null
+  resources = ["web", "dns"]
 }

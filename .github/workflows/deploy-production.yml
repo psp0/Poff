@@ -56,6 +56,7 @@ env:
   TF_VAR_firebase_messaging_sender_id: ${{ secrets.VITE_PROD_FIREBASE_MESSAGING_SENDER_ID }}
   TF_VAR_firebase_app_id: ${{ secrets.VITE_PROD_FIREBASE_APP_ID }}
   TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  TF_VAR_cloudflare_email: ${{ secrets.CLOUDFLARE_EMAIL }}
 
 jobs:
   pre-deployment-checks:
