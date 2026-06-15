@@ -126,7 +126,7 @@ resource "aws_ssm_parameter" "rds_admin_username" {
   type        = "String"
   value       = var.rds_admin_username
   description = "Admin username for RDS instance (${var.environment})"
-
+  overwrite   = true
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-admin-username-${var.environment}"
   })
@@ -137,6 +137,7 @@ resource "aws_ssm_parameter" "rds_admin_password" {
   type        = "SecureString"
   value       = random_password.rds_admin_password.result
   description = "Admin password for RDS instance (${var.environment})"
+  overwrite   = true
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-admin-password-${var.environment}"
@@ -148,6 +149,7 @@ resource "aws_ssm_parameter" "rds_endpoint" {
   type        = "String"
   value       = aws_db_instance.main.endpoint
   description = "RDS endpoint (${var.environment})"
+  overwrite   = true
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-endpoint-${var.environment}"
