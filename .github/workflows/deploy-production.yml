@@ -239,7 +239,9 @@ jobs:
         with:
           workflow: ci.yml
           name: frontend-dist
-          commit: ${{ github.sha }}
+          run_id: ${{ github.event.workflow_run.id }}
+          branch: ${{ github.event.workflow_run.id == '' && github.ref_name || '' }}
+          search_artifacts: true
           path: dist
 
       - name: Download Lambda Artifact
@@ -247,7 +249,9 @@ jobs:
         with:
           workflow: ci.yml
           name: lambda-packages
-          commit: ${{ github.sha }}
+          run_id: ${{ github.event.workflow_run.id }}
+          branch: ${{ github.event.workflow_run.id == '' && github.ref_name || '' }}
+          search_artifacts: true
           path: lambda/packages
 
       - name: Terraform Init

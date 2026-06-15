@@ -213,7 +213,8 @@ jobs:
         with:
           workflow: ci.yml
           name: frontend-dist
-          commit: ${{ github.sha }}
+          branch: ${{ github.ref_name }}
+          search_artifacts: true
           path: dist
 
       - name: Download Frontend Artifact (Workflow Call)
@@ -236,7 +237,8 @@ jobs:
         with:
           workflow: ci.yml
           name: lambda-packages
-          commit: ${{ github.sha }}
+          branch: ${{ github.ref_name }}
+          search_artifacts: true
           path: lambda/packages
 
       - name: Create Dummy Lambda Artifacts (Destroy)
