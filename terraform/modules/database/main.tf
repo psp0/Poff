@@ -126,7 +126,7 @@ resource "aws_ssm_parameter" "rds_admin_username" {
   type        = "String"
   value       = var.rds_admin_username
   description = "Admin username for RDS instance (${var.environment})"
-
+  overwrite   = true
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-admin-username-${var.environment}"
   })
