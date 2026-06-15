@@ -234,25 +234,26 @@ jobs:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
           terraform_wrapper: false
 
-      - name: Download Frontend Artifact
-        uses: dawidd6/action-download-artifact@v11
+      # Rebuild frontend with prod API URL injected at build time.
+      # We do NOT reuse the CI artifact because VITE_API_BASE_URL must be
+      # baked into the bundle as an absolute URL (Vite replaces import.meta.env
+      # at compile time, so runtime injection is not possible).
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          workflow: ci.yml
-          name: frontend-dist
-          run_id: ${{ github.event.workflow_run.id }}
-          branch: ${{ github.event.workflow_run.id == '' && github.ref_name || '' }}
-          search_artifacts: true
-          path: dist
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
-      - name: Download Lambda Artifact
-        uses: dawidd6/action-download-artifact@v11
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Frontend
+        run: npm run build
+
+      - name: Build Lambda Packages
+        uses: ./.github/actions/build-lambda
         with:
-          workflow: ci.yml
-          name: lambda-packages
-          run_id: ${{ github.event.workflow_run.id }}
-          branch: ${{ github.event.workflow_run.id == '' && github.ref_name || '' }}
-          search_artifacts: true
-          path: lambda/packages
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Terraform Init
         id: terraform_init
