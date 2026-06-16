@@ -561,6 +561,20 @@ jobs:
           fi
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Delete Frontend Artifact
+        uses: geekyeggo/delete-artifact@v5
+        if: success() && steps.set-variables.outputs.action == 'apply'
+        with:
+          name: frontend-dist
+          failOnError: false
+
+      - name: Delete Lambda Artifact
+        uses: geekyeggo/delete-artifact@v5
+        if: success() && steps.set-variables.outputs.action == 'apply'
+        with:
+          name: lambda-packages
+          failOnError: false
+
   run-migration:
     name: Run Database Migration
     needs: deploy-dev
