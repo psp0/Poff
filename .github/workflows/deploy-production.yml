@@ -372,20 +372,6 @@ jobs:
             fi
           done
 
-      - name: Store Parameters in SSM
-        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success'
-        run: |
-          ENV="prod"
-          echo "Storing infrastructure parameters in SSM for environment: $ENV"
-          
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/rds_endpoint" --value "${{ steps.set-outputs.outputs.rds_endpoint }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/rds_port" --value "${{ steps.set-outputs.outputs.rds_port }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/database_name" --value "${{ steps.set-outputs.outputs.database_name }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/nat_instance_id" --value "${{ steps.set-outputs.outputs.nat_instance_id }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/s3_bucket" --value "${{ steps.set-outputs.outputs.s3_bucket }}" --type "String" --overwrite
-          
-          echo "✅ Parameters stored successfully"
-
       # Artifacts (Frontend and Lambda) are already downloaded in previous steps
 
       - name: Archive Artifacts to S3

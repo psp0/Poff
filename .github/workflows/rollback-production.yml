@@ -134,41 +134,20 @@ jobs:
           role-chaining: true
           role-skip-session-tagging: true
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-          terraform_wrapper: false
-
-      - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        env:
-          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
-        run: |
-          cat > backend-ci.hcl << EOF
-          bucket         = "${{ env.TF_STATE_BUCKET }}"
-          key            = "${{ env.TF_STATE_KEY }}"
-          region         = "${{ env.AWS_REGION }}"
-          encrypt        = true
-          assume_role = {
-            role_arn = "${BACKEND_ROLE_ARN}"
-          }
-          EOF
-          
-          terraform init -backend-config=backend-ci.hcl -input=false
-          
-          # Cleanup backend config
-          rm -f backend-ci.hcl
-
       - name: Get Infrastructure Details
         id: get-bucket
-        working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          echo "Fetching infrastructure details from Terraform state..."
-          
-          S3_BUCKET=$(terraform output -raw s3_bucket)
-          CF_DIST_ID=$(terraform output -raw cloudfront_distribution_id)
-          
+          echo "Fetching infrastructure details from SSM..."
+          PROJECT="poff"
+          ENV="prod"
+
+          S3_BUCKET=$(aws ssm get-parameter \
+            --name "/${PROJECT}/${ENV}/infrastructure/s3_bucket" \
+            --query "Parameter.Value" --output text)
+          CF_DIST_ID=$(aws ssm get-parameter \
+            --name "/${PROJECT}/${ENV}/infrastructure/cloudfront_distribution_id" \
+            --query "Parameter.Value" --output text 2>/dev/null || echo "")
+
           echo "s3_bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
           echo "cf_dist_id=$CF_DIST_ID" >> $GITHUB_OUTPUT
 

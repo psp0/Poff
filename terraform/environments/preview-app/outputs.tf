@@ -33,12 +33,12 @@ output "cloudfront_distribution_id" {
 
 output "rds_endpoint" {
   description = "RDS endpoint address (without port) for migrations and seeding"
-  value       = data.aws_db_instance.dev.address
+  value       = local.rds_address
 }
 
 output "rds_port" {
   description = "RDS port number for migrations and seeding"
-  value       = data.aws_db_instance.dev.port
+  value       = local.rds_port
 }
 
 output "database_name" {
