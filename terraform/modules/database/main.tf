@@ -58,6 +58,8 @@ resource "random_password" "rds_admin_password" {
   keepers = {
     project     = var.project_name
     environment = var.environment
+    # Force password rotation to sync out-of-sync credentials
+    rotation = "1"
   }
 }
 
