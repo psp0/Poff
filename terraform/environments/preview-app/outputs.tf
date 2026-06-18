@@ -34,11 +34,13 @@ output "cloudfront_distribution_id" {
 output "rds_endpoint" {
   description = "RDS endpoint address (without port) for migrations and seeding"
   value       = local.rds_address
+  sensitive   = true
 }
 
 output "rds_port" {
   description = "RDS port number for migrations and seeding"
   value       = local.rds_port
+  sensitive   = true
 }
 
 output "database_name" {
