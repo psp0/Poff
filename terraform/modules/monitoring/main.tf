@@ -427,9 +427,6 @@ resource "aws_cloudwatch_metric_stream" "datadog" {
   include_filter {
     namespace = "AWS/ApiGateway"
   }
-  include_filter {
-    namespace = "AWS/S3"
-  }
 }
 
 # CloudWatch Metric Stream (Active in us-east-1 for global metrics like CloudFront)
