@@ -13,44 +13,39 @@ locals {
 }
 
 # -----------------------------------------------------------------------------
-# Data Sources for Shared Dev Infrastructure
+# Data Sources for Shared Dev Infrastructure (resolved via SSM — not tag-based
+# discovery, which breaks when duplicate resources exist from interrupted runs)
 # -----------------------------------------------------------------------------
-data "aws_vpc" "dev" {
-  filter {
-    name   = "tag:Name"
-    values = ["${var.project_name}-vpc"]
-  }
-  filter {
-    name   = "tag:Environment"
-    values = [local.base_env]
-  }
+data "aws_ssm_parameter" "vpc_id" {
+  name = "/${var.project_name}/${local.base_env}/infrastructure/vpc_id"
 }
 
-data "aws_subnets" "private" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.dev.id]
-  }
-  filter {
-    name   = "tag:Name"
-    values = ["${var.project_name}-private-subnet-*"]
-  }
+data "aws_ssm_parameter" "private_subnet_ids" {
+  name = "/${var.project_name}/${local.base_env}/infrastructure/private_subnet_ids"
 }
 
-data "aws_security_group" "lambda" {
-  vpc_id = data.aws_vpc.dev.id
-  filter {
-    name   = "tag:Name"
-    values = ["${var.project_name}-lambda-sg"]
-  }
+data "aws_ssm_parameter" "lambda_security_group_id" {
+  name = "/${var.project_name}/${local.base_env}/infrastructure/lambda_security_group_id"
 }
 
-data "aws_db_instance" "dev" {
-  db_instance_identifier = "${var.project_name}-rds"
+data "aws_ssm_parameter" "rds_endpoint" {
+  name = "/${var.project_name}/${local.base_env}/infrastructure/rds_endpoint"
+}
+
+data "aws_ssm_parameter" "rds_port" {
+  name = "/${var.project_name}/${local.base_env}/infrastructure/rds_port"
 }
 
 data "aws_ssm_parameter" "nat_instance_id" {
   name = "/${var.project_name}/${local.base_env}/infrastructure/nat_instance_id"
+}
+
+locals {
+  vpc_id                   = data.aws_ssm_parameter.vpc_id.value
+  private_subnet_ids       = split(",", data.aws_ssm_parameter.private_subnet_ids.value)
+  lambda_security_group_id = data.aws_ssm_parameter.lambda_security_group_id.value
+  rds_address              = data.aws_ssm_parameter.rds_endpoint.value
+  rds_port                 = tonumber(data.aws_ssm_parameter.rds_port.value)
 }
 
 # -----------------------------------------------------------------------------
@@ -66,11 +61,11 @@ module "compute" {
   aws_region     = data.aws_region.current.id
   aws_account_id = data.aws_caller_identity.current.account_id
 
-  private_subnet_ids       = data.aws_subnets.private.ids
-  lambda_security_group_id = data.aws_security_group.lambda.id
+  private_subnet_ids       = local.private_subnet_ids
+  lambda_security_group_id = local.lambda_security_group_id
 
-  rds_address   = data.aws_db_instance.dev.address
-  rds_port      = data.aws_db_instance.dev.port
+  rds_address   = local.rds_address
+  rds_port      = local.rds_port
   database_name = replace(var.project_name, "-", "_")
 
   lambda_source_path        = var.lambda_source_path
@@ -107,8 +102,10 @@ module "storage_cdn" {
   enable_cloudfront             = var.enable_cloudfront
   cloudfront_custom_domain_name = local.cloudfront_domain
 
-  # For preview-app, fetch the ACM certificate ARN created by preview-infra.
-  cloudfront_certificate_arn = local.cloudfront_domain != "" ? data.aws_acm_certificate.dev[0].arn : ""
+  # Fetch ACM certificate ARN from SSM — published by preview-infra after ACM issues it.
+  # This replaces a domain-based data "aws_acm_certificate" lookup, which breaks when
+  # two certs share the same domain after an interrupted/retried deploy.
+  cloudfront_certificate_arn = local.cloudfront_domain != "" ? data.aws_ssm_parameter.cloudfront_certificate_arn[0].value : ""
 
   cloudfront_price_class = var.cloudfront_price_class
 
@@ -117,12 +114,10 @@ module "storage_cdn" {
   waf_web_acl_id     = ""
 }
 
-# Fetch ACM certificate created by preview-infra
-data "aws_acm_certificate" "dev" {
-  provider = aws.us_east_1
-  count    = local.cloudfront_domain != "" ? 1 : 0
-  domain   = local.cloudfront_domain
-  statuses = ["ISSUED"]
+# Fetch ACM certificate ARN written by preview-infra into SSM
+data "aws_ssm_parameter" "cloudfront_certificate_arn" {
+  count = local.cloudfront_domain != "" ? 1 : 0
+  name  = "/${var.project_name}/${local.base_env}/infrastructure/cloudfront_certificate_arn"
 }
 
 # 3. Route53 Records - Domain Aliases

@@ -113,8 +113,8 @@ jobs:
         with:
           name: coverage-report
           path: coverage/
-          retention-days: 7
-        if: always()
+          retention-days: 1
+        if: always() && github.event_name == 'pull_request'
 
       - name: Coverage Summary
         if: always()
@@ -220,10 +220,11 @@ jobs:
 
       - name: Upload frontend build
         uses: actions/upload-artifact@v6
+        if: github.event_name == 'pull_request'
         with:
           name: frontend-dist
           path: dist/
-          retention-days: 7
+          retention-days: 1
 
   # Validate Terraform configuration (Dev)
   validate-terraform-dev:
@@ -550,10 +551,11 @@ jobs:
 
       - name: Upload Lambda packages
         uses: actions/upload-artifact@v6
+        if: github.event_name == 'pull_request'
         with:
           name: lambda-packages
           path: lambda/packages/*.zip
-          retention-days: 30
+          retention-days: 1
 
   # CI Failure Notification (main only)
   notify-ci-failure:

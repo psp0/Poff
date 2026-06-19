@@ -134,47 +134,29 @@ jobs:
             echo "available=false" >> $GITHUB_OUTPUT
           fi
 
-      # Setup Terraform only if we need to fetch infrastructure outputs
-      - name: Setup Terraform
+      - name: Get infrastructure outputs (SSM)
+        id: infra-ssm
         if: steps.check-inputs.outputs.available == 'false'
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-          terraform_wrapper: false
-
-      - name: Get infrastructure outputs (Terraform)
-        id: infra-tf
-        if: steps.check-inputs.outputs.available == 'false'
-        env:
-          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
-          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
         run: |
           ENV="${{ steps.set-env.outputs.environment }}"
-          cd terraform/environments/$ENV
-          
-          # Generate backend config for CI
-          cat > backend-ci.hcl << EOF
-          bucket         = "$TF_STATE_BUCKET"
-          key            = "environments/$ENV/terraform.tfstate"
-          region         = "$AWS_REGION"
-          encrypt        = true
-          assume_role = {
-            role_arn = "$BACKEND_ROLE_ARN"
-          }
-          EOF
-          
-          terraform init -backend-config=backend-ci.hcl -input=false
-          
-          # Cleanup backend config
-          rm -f backend-ci.hcl
-          
-          # Get NAT instance details, RDS endpoint, and database name
-          NAT_INSTANCE_ID=$(terraform output -raw nat_instance_id 2>/dev/null || echo "")
-          RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
-          DATABASE_NAME=$(terraform output -raw database_name)
-          ASSETS_BUCKET_NAME="poff-${ENV}-assets"
-          RDS_PORT=$(terraform output -raw rds_port)
-          
+          PROJECT="poff"
+
+          echo "Fetching infrastructure parameters from SSM for environment: $ENV"
+
+          NAT_INSTANCE_ID=$(aws ssm get-parameter \
+            --name "/${PROJECT}/${ENV}/infrastructure/nat_instance_id" \
+            --query "Parameter.Value" --output text 2>/dev/null || echo "")
+          RDS_ENDPOINT=$(aws ssm get-parameter \
+            --name "/${PROJECT}/${ENV}/infrastructure/rds_endpoint" \
+            --query "Parameter.Value" --output text)
+          RDS_PORT=$(aws ssm get-parameter \
+            --name "/${PROJECT}/${ENV}/infrastructure/rds_port" \
+            --query "Parameter.Value" --output text 2>/dev/null || echo "3306")
+          DATABASE_NAME=$(aws ssm get-parameter \
+            --name "/${PROJECT}/${ENV}/infrastructure/database_name" \
+            --query "Parameter.Value" --output text)
+          ASSETS_BUCKET_NAME="${PROJECT}-${ENV}-assets"
+
           echo "nat_instance_id=$NAT_INSTANCE_ID" >> $GITHUB_OUTPUT
           echo "rds_endpoint=$RDS_ENDPOINT" >> $GITHUB_OUTPUT
           echo "rds_port=$RDS_PORT" >> $GITHUB_OUTPUT
@@ -192,12 +174,12 @@ jobs:
             echo "database_name=${{ inputs.database_name }}" >> $GITHUB_OUTPUT
             echo "assets_bucket_name=${{ inputs.assets_bucket_name }}" >> $GITHUB_OUTPUT
           else
-            echo "Using Terraform outputs..."
-            echo "nat_instance_id=${{ steps.infra-tf.outputs.nat_instance_id }}" >> $GITHUB_OUTPUT
-            echo "rds_endpoint=${{ steps.infra-tf.outputs.rds_endpoint }}" >> $GITHUB_OUTPUT
-            echo "rds_port=${{ steps.infra-tf.outputs.rds_port }}" >> $GITHUB_OUTPUT
-            echo "database_name=${{ steps.infra-tf.outputs.database_name }}" >> $GITHUB_OUTPUT
-            echo "assets_bucket_name=${{ steps.infra-tf.outputs.assets_bucket_name }}" >> $GITHUB_OUTPUT
+            echo "Using SSM outputs..."
+            echo "nat_instance_id=${{ steps.infra-ssm.outputs.nat_instance_id }}" >> $GITHUB_OUTPUT
+            echo "rds_endpoint=${{ steps.infra-ssm.outputs.rds_endpoint }}" >> $GITHUB_OUTPUT
+            echo "rds_port=${{ steps.infra-ssm.outputs.rds_port }}" >> $GITHUB_OUTPUT
+            echo "database_name=${{ steps.infra-ssm.outputs.database_name }}" >> $GITHUB_OUTPUT
+            echo "assets_bucket_name=${{ steps.infra-ssm.outputs.assets_bucket_name }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Validate NAT Instance

@@ -234,21 +234,26 @@ jobs:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
           terraform_wrapper: false
 
-      - name: Download Frontend Artifact
-        uses: dawidd6/action-download-artifact@v11
+      # Rebuild frontend with prod API URL injected at build time.
+      # We do NOT reuse the CI artifact because VITE_API_BASE_URL must be
+      # baked into the bundle as an absolute URL (Vite replaces import.meta.env
+      # at compile time, so runtime injection is not possible).
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          workflow: ci.yml
-          name: frontend-dist
-          commit: ${{ github.sha }}
-          path: dist
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
-      - name: Download Lambda Artifact
-        uses: dawidd6/action-download-artifact@v11
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Frontend
+        run: npm run build
+
+      - name: Build Lambda Packages
+        uses: ./.github/actions/build-lambda
         with:
-          workflow: ci.yml
-          name: lambda-packages
-          commit: ${{ github.sha }}
-          path: lambda/packages
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Terraform Init
         id: terraform_init
@@ -366,20 +371,6 @@ jobs:
               echo "${output}=" >> $GITHUB_OUTPUT
             fi
           done
-
-      - name: Store Parameters in SSM
-        if: steps.set-action.outputs.action == 'apply' && steps.apply.outcome == 'success'
-        run: |
-          ENV="prod"
-          echo "Storing infrastructure parameters in SSM for environment: $ENV"
-          
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/rds_endpoint" --value "${{ steps.set-outputs.outputs.rds_endpoint }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/rds_port" --value "${{ steps.set-outputs.outputs.rds_port }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/database_name" --value "${{ steps.set-outputs.outputs.database_name }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/nat_instance_id" --value "${{ steps.set-outputs.outputs.nat_instance_id }}" --type "String" --overwrite
-          aws ssm put-parameter --name "/poff/$ENV/infrastructure/s3_bucket" --value "${{ steps.set-outputs.outputs.s3_bucket }}" --type "String" --overwrite
-          
-          echo "✅ Parameters stored successfully"
 
       # Artifacts (Frontend and Lambda) are already downloaded in previous steps
 

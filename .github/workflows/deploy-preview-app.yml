@@ -213,7 +213,8 @@ jobs:
         with:
           workflow: ci.yml
           name: frontend-dist
-          commit: ${{ github.sha }}
+          branch: ${{ github.ref_name }}
+          search_artifacts: true
           path: dist
 
       - name: Download Frontend Artifact (Workflow Call)
@@ -236,7 +237,8 @@ jobs:
         with:
           workflow: ci.yml
           name: lambda-packages
-          commit: ${{ github.sha }}
+          branch: ${{ github.ref_name }}
+          search_artifacts: true
           path: lambda/packages
 
       - name: Create Dummy Lambda Artifacts (Destroy)
@@ -558,6 +560,20 @@ jobs:
             echo "Log file not found" >> $GITHUB_OUTPUT
           fi
           echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Delete Frontend Artifact
+        uses: geekyeggo/delete-artifact@v5
+        if: success() && steps.set-variables.outputs.action == 'apply'
+        with:
+          name: frontend-dist
+          failOnError: false
+
+      - name: Delete Lambda Artifact
+        uses: geekyeggo/delete-artifact@v5
+        if: success() && steps.set-variables.outputs.action == 'apply'
+        with:
+          name: lambda-packages
+          failOnError: false
 
   run-migration:
     name: Run Database Migration
