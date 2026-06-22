@@ -289,6 +289,24 @@ variable "cloudflare_api_token" {
   default     = ""
 }
 
+variable "cloudflare_email" {
+  description = "Cloudflare email (if using API key instead of token)"
+  type        = string
+  default     = ""
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare Zone ID for the domain (found in Cloudflare dashboard)"
+  type        = string
+  default     = ""
+}
+
+variable "cloudflare_domain" {
+  description = "Root domain managed by Cloudflare (e.g., psp0.tech). Set via GHA vars.CLOUDFLARE_DOMAIN."
+  type        = string
+  default     = ""
+}
+
 
 ################################################################################
 # External Services Configuration

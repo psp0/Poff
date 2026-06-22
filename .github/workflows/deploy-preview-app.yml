@@ -434,6 +434,7 @@ jobs:
       - name: Upload Frontend Files to S3
         if: steps.set-variables.outputs.action == 'apply' && steps.apply.outcome == 'success'
         run: |
+          set -eo pipefail
           {
             echo "Uploading Vite build output to S3..."
             S3_BUCKET="${{ steps.set-outputs.outputs.s3_bucket }}"
@@ -498,6 +499,7 @@ jobs:
       - name: Invalidate CloudFront Cache
         if: steps.set-variables.outputs.action == 'apply' && steps.apply.outcome == 'success'
         run: |
+          set -eo pipefail
           DIST_ID="${{ steps.set-outputs.outputs.cloudfront_distribution_id }}"
           if [ ! -z "$DIST_ID" ]; then
             echo "Invalidating CloudFront cache for distribution: $DIST_ID"

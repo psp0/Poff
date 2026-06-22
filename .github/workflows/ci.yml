@@ -102,11 +102,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install shared dependencies
+        run: |
+          cd lambda/shared
+          npm ci
+
       - name: Run Linting
         run: npm run lint
 
       - name: Run Unit Tests with Coverage
-        run: npm run test:ci 2>&1 | tee /tmp/test_output.log
+        run: |
+          set -eo pipefail
+          npm run test:ci 2>&1 | tee /tmp/test_output.log
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v6
@@ -175,7 +182,9 @@ jobs:
 
       - name: Build frontend
         if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.shared == 'true'
-        run: npm run build 2>&1 | tee /tmp/step_output.log
+        run: |
+          set -eo pipefail
+          npm run build 2>&1 | tee /tmp/step_output.log
 
       # Case 2: No changes to frontend -> Download from main
       - name: Download Frontend Artifact from main
@@ -204,7 +213,9 @@ jobs:
 
       - name: Build frontend (Fallback)
         if: (needs.changes.outputs.frontend != 'true' && needs.changes.outputs.shared != 'true') && steps.download-fallback.outcome == 'failure'
-        run: npm run build 2>&1 | tee /tmp/step_output.log
+        run: |
+          set -eo pipefail
+          npm run build 2>&1 | tee /tmp/step_output.log
 
       - name: Capture Failure Log
         id: capture-log
@@ -272,25 +283,12 @@ jobs:
         env:
           TF_LOG: ERROR
           TF_IN_AUTOMATION: true
-          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
-          if [ "${{ github.actor }}" == "dependabot[bot]" ]; then
-            terraform init -backend=false -input=false
-          else
-            set -e
-            cat > backend-ci.hcl <<EOF
-          bucket  = "${{ env.TF_STATE_BUCKET }}"
-          key     = "${{ env.TF_INFRA_STATE_KEY }}"
-          region  = "${{ env.AWS_REGION }}"
-          encrypt = true
-          assume_role = {
-            role_arn = "${BACKEND_ROLE_ARN}"
-          }
-          EOF
-            cleanup() { rm -f backend-ci.hcl; }
-            trap cleanup EXIT
-            terraform init -backend-config=backend-ci.hcl -input=false 2>&1 | tee /tmp/step_output.log
-          fi
+          set -eo pipefail
+          # terraform validate only checks syntax - no backend access needed.
+          # The dev deploy role cannot assume the cross-account backend role,
+          # so we skip backend init entirely here.
+          terraform init -backend=false -input=false 2>&1 | tee /tmp/step_output.log
           echo "::group::Terraform Validate (Dev Infra)"
           terraform validate 2>&1 | tee -a /tmp/step_output.log
           echo "::endgroup::"
@@ -300,25 +298,10 @@ jobs:
         env:
           TF_LOG: ERROR
           TF_IN_AUTOMATION: true
-          BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
-          if [ "${{ github.actor }}" == "dependabot[bot]" ]; then
-            terraform init -backend=false -input=false
-          else
-            set -e
-            cat > backend-ci.hcl <<EOF
-          bucket  = "${{ env.TF_STATE_BUCKET }}"
-          key     = "${{ env.TF_APP_STATE_KEY }}"
-          region  = "${{ env.AWS_REGION }}"
-          encrypt = true
-          assume_role = {
-            role_arn = "${BACKEND_ROLE_ARN}"
-          }
-          EOF
-            cleanup() { rm -f backend-ci.hcl; }
-            trap cleanup EXIT
-            terraform init -backend-config=backend-ci.hcl -input=false 2>&1 | tee /tmp/step_output.log
-          fi
+          set -eo pipefail
+          # terraform validate only checks syntax - no backend access needed.
+          terraform init -backend=false -input=false 2>&1 | tee /tmp/step_output.log
           echo "::group::Terraform Validate (Dev App)"
           terraform validate 2>&1 | tee -a /tmp/step_output.log
           echo "::endgroup::"
@@ -373,11 +356,11 @@ jobs:
           TF_IN_AUTOMATION: true
           BACKEND_ROLE_ARN: ${{ secrets.AWS_INFRA_CROSS_ACCOUNT_BACKEND_ROLE_ARN }}
         run: |
+          set -eo pipefail
           if [ "${{ github.actor }}" == "dependabot[bot]" ]; then
             echo "Running in Dependabot mode - skipping backend configuration"
             terraform init -backend=false -input=false
           else
-            set -e
             echo "::group::Creating temporary backend configuration"
             cat > backend-ci.hcl <<EOF
           bucket  = "${{ env.TF_STATE_BUCKET }}"
@@ -479,8 +462,13 @@ jobs:
   # Deploy preview-infra only when it doesn't exist yet
   deploy-preview-infra-if-needed:
     name: Deploy Dev Infra (if needed)
-    needs: [check-preview-infra]
-    if: needs.check-preview-infra.outputs.needed == 'true'
+    needs: [check-preview-infra, pr-checks, validate-terraform-dev]
+    if: |
+      always() &&
+      needs.check-preview-infra.result == 'success' &&
+      needs.check-preview-infra.outputs.needed == 'true' &&
+      (needs.pr-checks.result == 'success' || needs.pr-checks.result == 'skipped') &&
+      (needs.validate-terraform-dev.result == 'success' || needs.validate-terraform-dev.result == 'skipped')
     uses: ./.github/workflows/deploy-preview-infra.yml
     with:
       action: apply
