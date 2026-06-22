@@ -457,8 +457,13 @@ jobs:
   # Deploy preview-infra only when it doesn't exist yet
   deploy-preview-infra-if-needed:
     name: Deploy Dev Infra (if needed)
-    needs: [check-preview-infra]
-    if: needs.check-preview-infra.outputs.needed == 'true'
+    needs: [check-preview-infra, pr-checks, validate-terraform-dev]
+    if: |
+      always() &&
+      needs.check-preview-infra.result == 'success' &&
+      needs.check-preview-infra.outputs.needed == 'true' &&
+      (needs.pr-checks.result == 'success' || needs.pr-checks.result == 'skipped') &&
+      (needs.validate-terraform-dev.result == 'success' || needs.validate-terraform-dev.result == 'skipped')
     uses: ./.github/workflows/deploy-preview-infra.yml
     with:
       action: apply
