@@ -31,22 +31,22 @@ describe('Screen Time Rewards Module', () => {
         expect(tier.rareCandyCount).toBe(6);
         expect(tier.basePokemonCount).toBe(3);
         expect(tier.ovalCharmCount).toBe(2);
-        expect(tier.giveLegendary).toBe(true);
-        expect(tier.giveParadoxMythical).toBe(true);
+        expect(tier.legendaryCount).toBeGreaterThan(0);
+        expect(tier.mythicalCount).toBeGreaterThan(0);
       });
 
       it('2시간대 이하 사용 시 최고 보상', () => {
         const tier = calculateRewardTier(0, 2);
 
-        expect(tier.giveLegendary).toBe(true);
-        expect(tier.giveParadoxMythical).toBe(true);
+        expect(tier.legendaryCount).toBeGreaterThan(0);
+        expect(tier.mythicalCount).toBeGreaterThan(0);
       });
 
       it('1시간 사용도 최고 보상', () => {
         const tier = calculateRewardTier(50, 1);
 
-        expect(tier.giveLegendary).toBe(true);
-        expect(tier.giveParadoxMythical).toBe(true);
+        expect(tier.legendaryCount).toBeGreaterThan(0);
+        expect(tier.mythicalCount).toBeGreaterThan(0);
       });
     });
 
@@ -57,15 +57,15 @@ describe('Screen Time Rewards Module', () => {
         expect(tier.mysticCharmCount).toBe(5);
         expect(tier.rareCandyCount).toBe(6);
         expect(tier.basePokemonCount).toBe(3);
-        expect(tier.giveLegendary).toBe(true);
-        expect(tier.giveParadoxMythical).toBe(false);
+        expect(tier.legendaryCount).toBeGreaterThan(0);
+        expect(tier.mythicalCount).toBeGreaterThan(0); // tier 2: mythicalCount = 1
       });
 
       it('3시간대 사용 시 전설급 보상', () => {
         const tier = calculateRewardTier(0, 3);
 
-        expect(tier.giveLegendary).toBe(true);
-        expect(tier.giveParadoxMythical).toBe(false);
+        expect(tier.legendaryCount).toBeGreaterThan(0);
+        expect(tier.mythicalCount).toBeGreaterThan(0); // tier 2 by hour: mythicalCount = 1
       });
     });
 
@@ -77,7 +77,7 @@ describe('Screen Time Rewards Module', () => {
         expect(tier.rareCandyCount).toBe(5);
         expect(tier.basePokemonCount).toBe(3);
         expect(tier.ovalCharmCount).toBe(1);
-        expect(tier.giveLegendary).toBe(false);
+        expect(tier.legendaryCount).toBeGreaterThan(0); // tier 3: legendaryCount = 1
       });
 
       it('-10%~-20% 감소', () => {
@@ -136,8 +136,8 @@ describe('Screen Time Rewards Module', () => {
         expect(tier.rareCandyCount).toBe(0);
         expect(tier.basePokemonCount).toBe(0);
         expect(tier.ovalCharmCount).toBe(0);
-        expect(tier.giveLegendary).toBe(false);
-        expect(tier.giveParadoxMythical).toBe(false);
+        expect(tier.legendaryCount).toBe(0);
+        expect(tier.mythicalCount).toBe(0);
         expect(tier.comparisonResult).toContain('보상 없음');
       });
     });
@@ -325,8 +325,9 @@ describe('Screen Time Rewards Module', () => {
 
     it('사용 가능한 포켓몬이 있으면 지급', async () => {
       mockClient.query
-        .mockResolvedValueOnce({ rows: [{ stable_id: 'BULBASAUR' }] }) // SELECT random pokemon
-        .mockResolvedValueOnce({ rows: [] }); // INSERT
+        .mockResolvedValueOnce({ rows: [] })              // 1. 서식지 조회 (없음 → global fallback)
+        .mockResolvedValueOnce({ rows: [{ stable_id: 'BULBASAUR' }] }) // 2. global pokemon SELECT
+        .mockResolvedValueOnce({ rows: [] });              // 3. INSERT
 
       const result = await grantRandomPokemon(
         mockClient,
@@ -336,16 +337,17 @@ describe('Screen Time Rewards Module', () => {
         1
       );
 
-      expect(result).toEqual(['BULBASAUR']);
-      expect(mockClient.query).toHaveBeenCalledTimes(2);
+      expect(result).toEqual([{ stable_id: 'BULBASAUR', obtained_reason: '스크린타임 보상' }]);
+      expect(mockClient.query).toHaveBeenCalledTimes(3);
     });
 
     it('여러 마리 지급 시 이미 지급된 포켓몬 제외', async () => {
       mockClient.query
-        .mockResolvedValueOnce({ rows: [{ stable_id: 'BULBASAUR' }] })
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ stable_id: 'CHARMANDER' }] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce({ rows: [] })              // 서식지 조회
+        // global query: LIMIT 2 → 두 마리 한 번에 반환
+        .mockResolvedValueOnce({ rows: [{ stable_id: 'BULBASAUR' }, { stable_id: 'CHARMANDER' }] })
+        .mockResolvedValueOnce({ rows: [] })              // INSERT BULBASAUR
+        .mockResolvedValueOnce({ rows: [] });             // INSERT CHARMANDER
 
       const result = await grantRandomPokemon(
         mockClient,
@@ -355,11 +357,16 @@ describe('Screen Time Rewards Module', () => {
         2
       );
 
-      expect(result).toEqual(['BULBASAUR', 'CHARMANDER']);
+      expect(result).toEqual([
+        { stable_id: 'BULBASAUR', obtained_reason: '스크린타임 보상' },
+        { stable_id: 'CHARMANDER', obtained_reason: '스크린타임 보상' }
+      ]);
     });
 
     it('사용 가능한 포켓몬이 없으면 빈 배열 반환', async () => {
-      mockClient.query.mockResolvedValueOnce({ rows: [] });
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })  // 서식지 조회
+        .mockResolvedValueOnce({ rows: [] }); // global pokemon (없음)
 
       const result = await grantRandomPokemon(
         mockClient,
@@ -374,8 +381,9 @@ describe('Screen Time Rewards Module', () => {
 
     it('excludeIds로 특정 포켓몬 제외', async () => {
       mockClient.query
-        .mockResolvedValueOnce({ rows: [{ stable_id: 'CHARMANDER' }] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce({ rows: [] })              // 서식지 조회
+        .mockResolvedValueOnce({ rows: [{ stable_id: 'CHARMANDER' }] }) // pokemon
+        .mockResolvedValueOnce({ rows: [] });             // INSERT
 
       const result = await grantRandomPokemon(
         mockClient,
@@ -386,15 +394,16 @@ describe('Screen Time Rewards Module', () => {
         ['BULBASAUR'] // 제외
       );
 
-      // Query should include BULBASAUR in NOT IN clause
-      expect(mockClient.query.mock.calls[0][1]).toContain('BULBASAUR');
-      expect(result).toEqual(['CHARMANDER']);
+      // global query params should include BULBASAUR in NOT IN clause
+      expect(mockClient.query.mock.calls[1][1]).toContain('BULBASAUR');
+      expect(result).toEqual([{ stable_id: 'CHARMANDER', obtained_reason: '스크린타임 보상' }]);
     });
 
     it('excludeForms가 true면 폼 제외', async () => {
       mockClient.query
-        .mockResolvedValueOnce({ rows: [{ stable_id: 'GIRATINA' }] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce({ rows: [] })              // 서식지 조회
+        .mockResolvedValueOnce({ rows: [{ stable_id: 'GIRATINA' }] }) // pokemon
+        .mockResolvedValueOnce({ rows: [] });             // INSERT
 
       await grantRandomPokemon(
         mockClient,
@@ -406,8 +415,8 @@ describe('Screen Time Rewards Module', () => {
         true // excludeForms
       );
 
-      // Query should include REGEXP exclusion for forms
-      expect(mockClient.query.mock.calls[0][0]).toContain('NOT REGEXP');
+      // global query (2nd call) should include REGEXP exclusion for forms
+      expect(mockClient.query.mock.calls[1][0]).toContain('NOT REGEXP');
     });
   });
 });

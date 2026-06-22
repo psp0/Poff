@@ -108,7 +108,12 @@ async function getUserPokemonCollection(event, db) {
 
   let collection = [];
   if (result.rows && result.rows.length > 0) {
-    collection = result.rows;
+    // MySQL JSON_ARRAYAGG path: rows: [{ collection: [...] }]
+    if (result.rows[0].collection !== undefined) {
+      collection = result.rows[0].collection || [];
+    } else {
+      collection = result.rows;
+    }
   } else if (Array.isArray(result) && result.length > 0) {
     collection = result;
   }
@@ -196,7 +201,12 @@ async function getFavoritePokemon(event, db) {
 
   let favorites = [];
   if (result.rows && result.rows.length > 0) {
-    favorites = result.rows;
+    // MySQL JSON_ARRAYAGG path: rows: [{ favorites: [...] }]
+    if (result.rows[0].favorites !== undefined) {
+      favorites = result.rows[0].favorites || [];
+    } else {
+      favorites = result.rows;
+    }
   } else if (Array.isArray(result) && result.length > 0) {
     favorites = result;
   }

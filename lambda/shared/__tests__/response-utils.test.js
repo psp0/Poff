@@ -1,6 +1,8 @@
 const {
   createSuccessResponse,
   createErrorResponse,
+  createPaginatedResponse,
+  withErrorHandling,
 } = require('../response-utils');
 
 describe('Response Utils', () => {
