@@ -54,6 +54,7 @@ permissions:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
+  ENVIRONMENT_NAME: prod
   NODE_VERSION: ${{ vars.NODE_VERSION }}
   TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
   TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -64,6 +65,14 @@ env:
   TF_VAR_datadog_app_key: ${{ secrets.DATADOG_APP_KEY }}
   TF_VAR_lambda_package_dir: "../../../lambda/packages"
   TF_VAR_aws_infra_role_arn: ${{ secrets.AWS_INFRA_DNS_MANAGEMENT_ROLE_ARN }}
+  TF_VAR_firebase_service_account_key_base64: ${{ secrets.PROD_FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 }}
+  TF_VAR_firebase_api_key: ${{ secrets.VITE_PROD_FIREBASE_API_KEY }}
+  TF_VAR_firebase_auth_domain: ${{ secrets.VITE_PROD_FIREBASE_AUTH_DOMAIN }}
+  TF_VAR_firebase_project_id: ${{ secrets.VITE_PROD_FIREBASE_PROJECT_ID }}
+  TF_VAR_firebase_messaging_sender_id: ${{ secrets.VITE_PROD_FIREBASE_MESSAGING_SENDER_ID }}
+  TF_VAR_firebase_app_id: ${{ secrets.VITE_PROD_FIREBASE_APP_ID }}
+  TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  TF_VAR_cloudflare_email: ${{ secrets.CLOUDFLARE_EMAIL }}
 
 jobs:
   validate-rollback:
