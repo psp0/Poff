@@ -385,6 +385,9 @@ jobs:
           # Upload Frontend (Runs directly with the assumed Prod execution role credentials)
           aws s3 sync dist/ "s3://${RELEASES_BUCKET}/releases/${VERSION}/frontend/" --delete
           
+          # Delete temporary unzipped folders containing node_modules to avoid syncing thousands of tiny files
+          find lambda/packages/ -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+          
           # Upload Lambda (Runs directly with the assumed Prod execution role credentials)
           aws s3 sync lambda/packages/ "s3://${RELEASES_BUCKET}/releases/${VERSION}/lambda/" --delete
           
