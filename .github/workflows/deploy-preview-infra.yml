@@ -135,6 +135,18 @@ jobs:
           role-chaining: true
           role-skip-session-tagging: true
 
+      - name: Clean up orphaned RDS log groups
+        if: steps.set-variables.outputs.action == 'apply'
+        run: |
+          echo "Checking if RDS instance exists..."
+          if ! aws rds describe-db-instances --db-instance-identifier "poff-rds" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+            echo "RDS instance poff-rds does not exist. Deleting leftover log groups to avoid conflicts."
+            aws logs delete-log-group --log-group-name "/aws/rds/instance/poff-rds/error" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+            aws logs delete-log-group --log-group-name "/aws/rds/instance/poff-rds/slowquery" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+          else
+            echo "RDS instance poff-rds exists. Skipping log group deletion."
+          fi
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:

@@ -101,6 +101,11 @@ resource "aws_db_instance" "main" {
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds"
   })
+
+  depends_on = [
+    aws_cloudwatch_log_group.rds_error,
+    aws_cloudwatch_log_group.rds_slowquery
+  ]
 }
 
 # CloudWatch Log Groups for RDS (pre-create to control retention)
