@@ -37,7 +37,7 @@ jobs:
       open_pr_count: ${{ steps.check.outputs.count }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         
       - name: Count open pull requests (Excluding Bots)
         id: check
